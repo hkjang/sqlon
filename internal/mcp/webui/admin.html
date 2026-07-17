@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon 데이터셋 관리 콘솔</title>
+<style>
+  :root {
+    --bg:#f5f7fa; --card:#ffffff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
+    --blue:#2563eb; --blue-soft:#e8efff; --green:#15803d; --green-soft:#e6f6ec;
+    --red:#b91c1c; --red-soft:#fdeaea; --amber:#b45309; --amber-soft:#fdf3e2;
+    --gray-soft:#eef1f5; --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.6 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
+  a { color:var(--blue); }
+  header { background:#101a2e; color:#e8eefc; padding:14px 22px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+  header h1 { font-size:17px; margin:0 14px 0 0; }
+  .chip { display:inline-block; padding:2px 10px; border-radius:20px; font-size:12px; background:#243654; color:#cfe0ff; }
+  .chip.err { background:#5b1d1d; color:#ffc9c9; }
+  .chip.warn { background:#54401a; color:#ffe1a6; }
+  header .grow { flex:1; }
+  header input { background:#1d2b47; border:1px solid #35507f; color:#e8eefc; border-radius:6px; padding:6px 10px; width:220px; }
+  .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px;
+         padding:7px 14px; cursor:pointer; font-size:13px; }
+  .btn:hover { border-color:var(--blue); color:var(--blue); }
+  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .btn.primary:hover { opacity:.9; color:#fff; }
+  .btn.danger { color:var(--red); border-color:#efc4c4; }
+  .btn.danger:hover { background:var(--red-soft); }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+  main { max-width:1500px; margin:0 auto; padding:18px 22px 60px; }
+  .hero { margin-bottom:16px; background:linear-gradient(135deg,#fff 45%,#edf3ff); display:grid; grid-template-columns:1fr auto; gap:18px; align-items:center; }
+  .hero h2 { margin:0 0 4px; font-size:20px; }.hero p{margin:0;color:var(--sub)}
+  .flow { display:flex; gap:7px; flex-wrap:wrap; }.flow span{border:1px solid #c9d7f2;background:#fff;border-radius:18px;padding:6px 10px;color:var(--sub);font-size:12px}.flow b{color:var(--blue)}
+  .summary { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:10px 0 12px; }
+  .summary div { padding:9px 10px;border-radius:8px;background:#f7f9fc;border:1px solid var(--line); }.summary span{display:block;color:var(--sub);font-size:11px}.summary b{font-size:16px}
+  .filters { display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.filters button{border:1px solid var(--line);background:#fff;border-radius:16px;padding:4px 9px;cursor:pointer;color:var(--sub)}.filters button.on{background:var(--blue-soft);border-color:#9db9f6;color:var(--blue);font-weight:700}
+  #dsSearch { width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  /* guide */
+  details.guide { margin-bottom:18px; }
+  details.guide > summary { cursor:pointer; font-weight:700; font-size:15px; padding:12px 18px;
+    background:var(--card); border:1px solid var(--line); border-radius:12px; list-style:none; }
+  details.guide[open] > summary { border-radius:12px 12px 0 0; border-bottom:0; }
+  details.guide .card { border-radius:0 0 12px 12px; }
+  .guide-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:14px; margin-top:6px; }
+  .guide-step { border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:#fbfcfe; }
+  .guide-step h3 { margin:0 0 6px; font-size:14px; }
+  .guide-step h3 .no { display:inline-block; width:22px; height:22px; border-radius:50%; background:var(--blue);
+    color:#fff; text-align:center; line-height:22px; font-size:12px; margin-right:7px; }
+  .guide-step p, .guide-step ul { margin:4px 0; color:var(--sub); font-size:13px; }
+  .guide-step ul { padding-left:18px; }
+  .guide-step code, td code, .mini code { background:var(--gray-soft); border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
+  table.map { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
+  table.map th, table.map td { border:1px solid var(--line); padding:6px 9px; text-align:left; vertical-align:top; }
+  table.map th { background:var(--gray-soft); }
+  /* layout */
+  .cols { display:grid; grid-template-columns:minmax(430px,46%) 1fr; gap:18px; align-items:start; }
+  @media (max-width:1100px){ .cols { grid-template-columns:1fr; } }
+  @media (max-width:700px){main{padding:10px}.hero{grid-template-columns:1fr}.summary{grid-template-columns:1fr 1fr}.cols{display:block}.cols>.card{margin-bottom:12px}header input{width:150px;flex:1}}
+  /* dataset table */
+  table.ds { width:100%; border-collapse:collapse; font-size:13px; }
+  table.ds th { text-align:left; color:var(--sub); font-weight:600; padding:7px 9px; border-bottom:2px solid var(--line); }
+  table.ds td { padding:8px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.ds tr.row { cursor:pointer; }
+  table.ds tr.row:hover { background:var(--blue-soft); }
+  table.ds tr.row.sel { background:var(--blue-soft); outline:2px solid var(--blue); outline-offset:-2px; }
+  .b { display:inline-block; font-size:11px; font-weight:700; border-radius:5px; padding:1px 7px; margin:1px 2px 1px 0; }
+  .b.req   { background:var(--red-soft);  color:var(--red); }
+  .b.opt   { background:var(--gray-soft); color:var(--sub); }
+  .b.edit  { background:var(--green-soft);color:var(--green); }
+  .b.sys   { background:var(--amber-soft);color:var(--amber); }
+  .b.on    { background:var(--green-soft);color:var(--green); }
+  .b.off   { background:var(--gray-soft); color:var(--sub); }
+  .b.issue { background:var(--red-soft);  color:var(--red); }
+  .dsname { font-family:var(--mono); font-weight:700; }
+  .dsfile { color:var(--sub); font-size:12px; font-family:var(--mono); }
+  .dsdesc { color:var(--sub); font-size:12px; }
+  /* detail */
+  #detail h2 { margin:0 0 4px; font-size:17px; }
+  #detail h2 .dsfile { font-weight:400; margin-left:8px; }
+  .sect { margin-top:16px; }
+  .sect > h4 { margin:0 0 8px; font-size:13px; color:var(--sub); text-transform:uppercase; letter-spacing:.4px;
+    border-bottom:1px solid var(--line); padding-bottom:5px; }
+  pre.schema, pre.sample { background:#0f1729; color:#d5e2ff; border-radius:8px; padding:12px; overflow:auto;
+    font-family:var(--mono); font-size:12px; max-height:260px; margin:0; white-space:pre-wrap; word-break:break-all; }
+  .kv { display:grid; grid-template-columns:130px 1fr; gap:4px 12px; font-size:13px; }
+  .kv dt { color:var(--sub); } .kv dd { margin:0; }
+  textarea#editor { width:100%; min-height:300px; font-family:var(--mono); font-size:12.5px; border:1px solid var(--line);
+    border-radius:8px; padding:10px; resize:vertical; background:#fbfcfe; }
+  textarea#editor.bad { border-color:var(--red); background:#fff7f7; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }
+  .toolbar label { font-size:13px; color:var(--sub); display:flex; align-items:center; gap:5px; }
+  .result { border-radius:8px; padding:12px 14px; margin-top:8px; font-size:13px; display:none; white-space:pre-wrap; }
+  .result.ok   { display:block; background:var(--green-soft); border:1px solid #bfe4cc; }
+  .result.bad  { display:block; background:var(--red-soft);   border:1px solid #efc4c4; }
+  .result.info { display:block; background:var(--blue-soft);  border:1px solid #c4d6f7; }
+  .mini { font-size:12px; color:var(--sub); }
+  ul.issues { margin:6px 0; padding-left:18px; font-size:12.5px; color:var(--red); }
+  .empty { color:var(--sub); padding:40px 0; text-align:center; }
+  #toast { position:fixed; right:18px; bottom:18px; background:#101a2e; color:#e8eefc; border-radius:10px;
+    padding:12px 18px; font-size:13px; display:none; max-width:480px; box-shadow:0 6px 24px rgba(0,0,0,.25); z-index:50;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🗂 sqlon 데이터셋 관리 콘솔</h1>
+  <span id="healthChips"></span>
+  <span class="grow"></span>
+  <input id="adminToken" type="password" placeholder="관리 토큰 (미설정 시 비워두기)" title="서버가 -admin-token으로 기동된 경우에만 필요합니다. 브라우저에만 저장됩니다.">
+  <button class="btn" onclick="reloadCatalog()">🔄 카탈로그 리로드</button>
+  <button class="btn" onclick="refreshAll()">새로고침</button>
+</header>
+
+<main>
+  <div class="card hero"><div><h2>데이터 품질을 한 화면에서 관리하세요</h2><p>상태를 먼저 확인하고, 영향 기능과 스키마를 검토한 뒤 안전하게 편집·복원합니다.</p></div><div class="flow"><span><b>1</b> 찾기</span><span><b>2</b> 영향 확인</span><span><b>3</b> 검증·적용</span><span><b>4</b> 복원</span></div></div>
+  <div class="cols">
+    <div class="card">
+      <div class="toolbar" style="justify-content:space-between">
+        <b>데이터셋 목록</b><span class="mini" id="dataDir"></span>
+      </div>
+      <div class="summary" id="summary"></div>
+      <input id="dsSearch" type="search" placeholder="데이터셋 이름, 파일, 용도 검색" oninput="renderRows()">
+      <div class="filters" id="filters"><button class="on" data-filter="all">전체</button><button data-filter="issue">이슈</button><button data-filter="editable">편집 가능</button><button data-filter="missing">파일 없음</button></div>
+      <table class="ds">
+        <thead><tr><th>데이터셋</th><th>속성</th><th>상태</th><th>로드</th></tr></thead>
+        <tbody id="dsRows"><tr><td colspan="4" class="empty">불러오는 중…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="card" id="detail">
+      <div class="empty">왼쪽 목록에서 데이터셋을 선택하세요.<br><br>
+      선택하면 이 자리에 <b>용도 설명 · 기대 스키마 · 사용 도구 · 내용 샘플 · 편집기 · 백업/복원 · 제거</b>가 표시됩니다.</div>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let DATASETS = [], SELECTED = null;
+let FILTER = 'all';
+
+const tokenInput = $('#adminToken');
+tokenInput.value = localStorage.getItem('jasqlAdminToken') || '';
+tokenInput.addEventListener('change', () => localStorage.setItem('jasqlAdminToken', tokenInput.value));
+
+function headers(json) {
+  const h = {};
+  if (json) h['Content-Type'] = 'application/json';
+  if (tokenInput.value) h['X-Admin-Token'] = tokenInput.value;
+  return h;
+}
+async function api(method, path, body) {
+  const res = await fetch(path, { method, headers: headers(body !== undefined), body });
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+  if (!res.ok) throw new Error((data && data.error) ? data.error : method + ' ' + path + ' → HTTP ' + res.status);
+  return data;
+}
+function toast(msg, ms = 3500) {
+  const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', ms);
+}
+
+/* ---------- health + list ---------- */
+async function refreshHealth() {
+  try {
+    const h = await api('GET', '/api/health');
+    const s = h.summary || {};
+    $('#healthChips').innerHTML =
+      '<span class="chip">테이블 ' + esc(s.table_count) + '</span> ' +
+      '<span class="chip">조인관계 ' + esc(s.relation_count) + '</span> ' +
+      '<span class="chip">예제 ' + esc(s.sample_count) + '</span> ' +
+      '<span class="chip">지표 ' + esc(h.metric_definitions) + '</span> ' +
+      (h.error_count ? '<span class="chip err">오류 ' + esc(h.error_count) + '</span> ' : '') +
+      (h.warning_count ? '<span class="chip warn">경고 ' + esc(h.warning_count) + '</span>' : '');
+  } catch (e) { $('#healthChips').innerHTML = '<span class="chip err">헬스 조회 실패</span>'; }
+}
+async function refreshList(keepSel = true) {
+  const data = await api('GET', '/api/datasets');
+  DATASETS = data.datasets;
+  $('#dataDir').textContent = '경로: ' + data.data_dir;
+  $('#summary').innerHTML = '<div><span>전체</span><b>'+DATASETS.length+'</b></div><div><span>정상 파일</span><b>'+DATASETS.filter(d=>d.present).length+'</b></div><div><span>확인 필요</span><b>'+DATASETS.filter(d=>d.issues&&d.issues.length).length+'</b></div><div><span>편집 가능</span><b>'+DATASETS.filter(d=>d.editable).length+'</b></div>';
+  renderRows();
+  if (keepSel && SELECTED) renderDetail();
+}
+function renderRows() {
+  const q = ($('#dsSearch').value || '').trim().toLowerCase();
+  const list = DATASETS.filter(d => (!q || [d.name,d.file,d.description,(d.used_by||[]).join(' ')].join(' ').toLowerCase().includes(q)) &&
+    (FILTER==='all' || (FILTER==='issue' && d.issues&&d.issues.length) || (FILTER==='editable'&&d.editable) || (FILTER==='missing'&&!d.present)));
+  const rows = list.map(d => {
+    const badges =
+      (d.required ? '<span class="b req">필수</span>' : '<span class="b opt">선택</span>') +
+      (d.editable ? '<span class="b edit">편집가능</span>' : '<span class="b sys">시스템</span>');
+    const status = d.present
+      ? '<span class="b on">있음</span>' + (d.size_bytes != null ? '<div class="mini">' + (d.size_bytes/1024).toFixed(1) + ' KB</div>' : (d.files != null ? '<div class="mini">' + d.files + '개 파일</div>' : ''))
+      : '<span class="b off">없음</span>';
+    const issues = (d.issues && d.issues.length) ? '<span class="b issue">이슈 ' + d.issues.length + '</span>' : '';
+    const loaded = d.loaded == null ? '' :
+      (typeof d.loaded === 'object' ? esc(d.loaded.tables + '테이블/' + d.loaded.columns + '컬럼') : esc(d.loaded) + '건');
+    return '<tr class="row' + (SELECTED === d.name ? ' sel' : '') + '" data-name="' + esc(d.name) + '">' +
+      '<td><span class="dsname">' + esc(d.name) + '</span><div class="dsfile">' + esc(d.file) + '</div>' +
+      '<div class="dsdesc">' + esc(d.description.split('.')[0]) + '.</div></td>' +
+      '<td>' + badges + '</td><td>' + status + ' ' + issues + '</td><td class="mini">' + loaded + '</td></tr>';
+  }).join('');
+  $('#dsRows').innerHTML = rows || '<tr><td colspan="4" class="empty">데이터셋 없음</td></tr>';
+  document.querySelectorAll('#dsRows tr.row').forEach(tr =>
+    tr.addEventListener('click', () => select(tr.dataset.name)));
+}
+document.querySelectorAll('#filters button').forEach(btn => btn.addEventListener('click', () => { FILTER=btn.dataset.filter; document.querySelectorAll('#filters button').forEach(b=>b.classList.toggle('on',b===btn)); renderRows(); }));
+async function refreshAll() { await Promise.all([refreshHealth(), refreshList()]); toast('새로고침 완료'); }
+
+/* ---------- detail ---------- */
+async function select(name) {
+  SELECTED = name;
+  document.querySelectorAll('#dsRows tr.row').forEach(tr => tr.classList.toggle('sel', tr.dataset.name === name));
+  await renderDetail();
+  if (innerWidth < 1100) $('#detail').scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function renderDetail() {
+  const d = DATASETS.find(x => x.name === SELECTED);
+  if (!d) return;
+  let sample = null;
+  try { sample = await api('GET', '/api/datasets/' + encodeURIComponent(d.name) + '?sample_rows=3'); } catch {}
+  const issuesHTML = (d.issues && d.issues.length)
+    ? '<div class="sect"><h4>이 파일의 로드 이슈</h4><ul class="issues">' +
+      d.issues.map(i => '<li>[' + esc(i.level) + '] ' + esc(i.message) + ' ' + esc(i.table || '') + ' ' + esc(i.column || '') + '</li>').join('') +
+      '</ul></div>' : '';
+  const editorDisabled = !d.editable;
+  const removeDisabled = d.required || !d.editable;
+  const removeReason = d.required ? '필수 데이터셋은 제거할 수 없습니다 (서버 기동에 필요)'
+                    : !d.editable ? '시스템 관리 데이터셋은 제거할 수 없습니다' : '';
+  $('#detail').innerHTML =
+    '<h2><span class="dsname">' + esc(d.name) + '</span><span class="dsfile">' + esc(d.file) + '</span></h2>' +
+    '<div>' + (d.required ? '<span class="b req">필수</span>' : '<span class="b opt">선택</span>') +
+      (d.editable ? '<span class="b edit">편집가능</span>' : '<span class="b sys">시스템 관리</span>') +
+      '<span class="b opt">' + esc(d.format) + '</span></div>' +
+    '<div class="sect"><h4>용도와 변경 영향</h4><div>' + esc(d.description) + '</div><div class="result info" style="display:block;margin-top:8px">이 데이터는 아래 기능에서 즉시 사용됩니다. 적용 전에 샘플과 이슈를 확인하고, 이상 시 백업에서 복원하세요.</div></div>' +
+    '<div class="sect"><h4>이 데이터를 사용하는 기능</h4><div>' +
+      d.used_by.map(u => '<span class="b opt">' + esc(u) + '</span>').join(' ') + '</div></div>' +
+    '<div class="sect"><h4>기대 스키마 — 이 구조 그대로 작성하세요</h4><pre class="schema">' + esc(d.schema) + '</pre></div>' +
+    issuesHTML +
+    '<div class="sect"><h4>내용 샘플 (앞 3건)</h4><pre class="sample">' +
+      esc(sample && sample.sample !== undefined ? JSON.stringify(sample.sample, null, 2) : (sample && sample.files ? 'JSONL 파일: ' + sample.files.join(', ') : '파일 없음')) +
+      '</pre></div>' +
+    (editorDisabled ? '<div class="sect"><h4>편집</h4><div class="result info">시스템 관리 데이터셋은 서버가 자동 기록합니다. 조회만 가능합니다.</div></div>' :
+    '<div class="sect"><h4>내용 편집 — 아래 절차대로 진행하세요</h4>' +
+      ((d.format === 'json-array' || d.name === 'glossary') && d.name !== 'overrides'
+        ? '<div class="mini" style="margin-bottom:6px">📋 JSON이 익숙하지 않다면 <a href="/admin/editor?ds=' + encodeURIComponent(d.name) + '"><b>테이블 편집기</b></a>에서 행/컬럼 단위로 편집할 수 있습니다.</div>' : '') +
+      '<div class="mini">💡 편집기 내용이 파일의 <b>새 전체 내용</b>이 됩니다. 기존 항목을 유지하려면 반드시 먼저 불러온 뒤 수정하세요.</div>' +
+      '<div class="toolbar">' +
+        '<button class="btn" onclick="loadContent()">📥 현재 내용 불러오기</button>' +
+        '<button class="btn" onclick="checkJSON()">① JSON 검사</button>' +
+        '<button class="btn primary" onclick="applyContent()">② 적용 (백업 후 교체 + 핫스왑)</button>' +
+        '<label><input type="checkbox" id="forceChk"> 강제 적용 (신규 오류가 있어도 반영)</label>' +
+      '</div>' +
+      '<textarea id="editor" placeholder="위 [현재 내용 불러오기]를 누르거나, 기대 스키마에 맞는 JSON을 직접 붙여넣으세요."></textarea>' +
+      '<div id="editResult" class="result"></div>' +
+    '</div>') +
+    '<div class="sect"><h4>백업 / 복원</h4>' +
+      '<div class="mini">모든 교체/제거 직전 상태가 자동 백업됩니다. 복원 시 현재 파일도 다시 백업되므로 복원도 되돌릴 수 있습니다.</div>' +
+      '<div id="backupList" class="mini" style="margin-top:8px">불러오는 중…</div></div>' +
+    '<div class="sect"><h4>제거</h4>' +
+      '<div class="toolbar">' +
+        '<button class="btn danger" ' + (removeDisabled ? 'disabled' : '') + ' onclick="removeDataset()">🗑 데이터셋 제거 (백업 후 삭제)</button>' +
+        '<span class="mini">' + esc(removeReason) + '</span></div>' +
+      '<div id="removeResult" class="result"></div></div>';
+  loadBackups();
+}
+
+/* ---------- editor actions ---------- */
+async function loadContent() {
+  const r = await fetch('/api/datasets/' + encodeURIComponent(SELECTED) + '/content', { headers: headers(false) });
+  if (r.status === 204) { $('#editor').value = ''; showEdit('info', '파일이 아직 없습니다. 기대 스키마에 맞는 JSON을 작성해 [적용]하면 새로 생성됩니다.'); return; }
+  if (!r.ok) { showEdit('bad', '불러오기 실패: HTTP ' + r.status); return; }
+  const text = await r.text();
+  try { $('#editor').value = JSON.stringify(JSON.parse(text), null, 2); }
+  catch { $('#editor').value = text; }
+  showEdit('info', '현재 내용 로드 완료 (' + (text.length/1024).toFixed(1) + ' KB). 수정 후 [① JSON 검사] → [② 적용] 순서로 진행하세요.');
+}
+function checkJSON() {
+  const d = DATASETS.find(x => x.name === SELECTED);
+  const ta = $('#editor');
+  try {
+    const v = JSON.parse(ta.value);
+    if (d.format === 'json-array' && !Array.isArray(v)) throw new Error('이 데이터셋은 JSON 배열([ ... ])이어야 합니다.');
+    if (d.format === 'json-object' && (Array.isArray(v) || typeof v !== 'object' || v === null)) throw new Error('이 데이터셋은 JSON 객체({ ... })여야 합니다.');
+    ta.classList.remove('bad');
+    const n = Array.isArray(v) ? v.length + '개 항목' : Object.keys(v).length + '개 키';
+    showEdit('ok', '✔ JSON 형식 검사 통과 (' + n + '). 이제 [② 적용]을 누르세요.\n적용 시 서버가 추가로 카탈로그 컴파일 검증을 수행하며, 문제가 있으면 자동 롤백됩니다.');
+    return true;
+  } catch (e) { ta.classList.add('bad'); showEdit('bad', '✘ JSON 검사 실패: ' + e.message); return false; }
+}
+async function applyContent() {
+  if (!checkJSON()) return;
+  const force = $('#forceChk').checked;
+  if (!confirm('[' + SELECTED + '] 데이터셋을 교체합니다.\n\n· 기존 파일은 backups/에 백업됩니다\n· 카탈로그가 재컴파일되어 즉시 반영됩니다(핫스왑)\n· 문제가 생기면 자동 롤백됩니다' + (force ? '\n· ⚠ 강제 적용: 신규 오류가 있어도 반영됩니다' : '') + '\n\n계속할까요?')) return;
+  try {
+    const res = await api('PUT', '/api/datasets/' + encodeURIComponent(SELECTED) + (force ? '?force=true' : ''), $('#editor').value);
+    if (res.applied) {
+      showEdit('ok', '✅ 적용 완료 — 카탈로그가 핫스왑되었습니다 (재기동 불필요).\n백업: ' + (res.backup || '(신규 파일)') +
+        (res.warning ? '\n⚠ ' + res.warning + '\n' + JSON.stringify(res.issues, null, 2) : ''));
+      toast('적용 완료: ' + SELECTED);
+    } else {
+      showEdit('bad', '↩ 자동 롤백됨 — 원본 파일과 이전 카탈로그가 유지됩니다.\n사유: ' + res.reason +
+        (res.issues ? '\n발견된 오류:\n' + JSON.stringify(res.issues, null, 2) : '') + '\n\n' + (res.hint || ''));
+    }
+    await Promise.all([refreshHealth(), refreshList()]);
+    loadBackups();
+  } catch (e) { showEdit('bad', '✘ 요청 실패: ' + e.message); }
+}
+function showEdit(cls, msg) { const el = $('#editResult'); el.className = 'result ' + cls; el.textContent = msg; }
+
+/* ---------- backups ---------- */
+async function loadBackups() {
+  try {
+    const data = await api('GET', '/api/datasets/' + encodeURIComponent(SELECTED) + '/backups');
+    const list = data.backups || [];
+    $('#backupList').innerHTML = list.length === 0 ? '백업 없음 (첫 교체/제거 시 자동 생성됩니다)' :
+      '<table class="map"><tr><th>백업 파일</th><th>크기</th><th>시각</th><th></th></tr>' +
+      list.map(b => '<tr><td><code>' + esc(b.name) + '</code></td><td>' + (b.size_bytes/1024).toFixed(1) + ' KB</td>' +
+        '<td>' + esc(b.modified) + '</td><td><button class="btn" onclick="restoreBackup(\'' + esc(b.name) + '\')">이 백업으로 복원</button></td></tr>').join('') +
+      '</table>';
+  } catch (e) { $('#backupList').textContent = '백업 조회 실패: ' + e.message; }
+}
+async function restoreBackup(name) {
+  if (!confirm('[' + SELECTED + ']를 백업 시점으로 복원합니다:\n' + name + '\n\n복원 직전의 현재 파일도 백업되므로 되돌릴 수 있습니다. 계속할까요?')) return;
+  try {
+    await api('POST', '/api/datasets/' + encodeURIComponent(SELECTED) + '/restore', JSON.stringify({ backup: name }));
+    toast('복원 완료: ' + name);
+    await Promise.all([refreshHealth(), refreshList()]); loadBackups();
+  } catch (e) { alert('복원 실패: ' + e.message); }
+}
+
+/* ---------- remove / reload ---------- */
+async function removeDataset() {
+  if (!confirm('[' + SELECTED + '] 데이터셋 파일을 제거합니다.\n\n· 제거 전 backups/에 백업됩니다\n· 카탈로그가 즉시 재컴파일됩니다\n· 백업/복원 또는 [적용]으로 언제든 되살릴 수 있습니다\n\n계속할까요?')) return;
+  try {
+    const res = await api('DELETE', '/api/datasets/' + encodeURIComponent(SELECTED));
+    const el = $('#removeResult'); el.className = 'result ok';
+    el.textContent = '🗑 제거 완료. 백업: ' + res.backup + '\n' + res.status;
+    toast('제거 완료: ' + SELECTED);
+    await Promise.all([refreshHealth(), refreshList()]); loadBackups();
+  } catch (e) { const el = $('#removeResult'); el.className = 'result bad'; el.textContent = '제거 실패: ' + e.message; }
+}
+async function reloadCatalog() {
+  if (!confirm('디스크의 파일들로 카탈로그를 재컴파일하고 핫스왑합니다.\n(파일을 직접 수정한 경우 사용하세요. 실패 시 이전 카탈로그가 유지됩니다)\n\n계속할까요?')) return;
+  try {
+    const res = await api('POST', '/api/reload');
+    toast('리로드 완료 — 오류 ' + res.errors + ', 경고 ' + res.warnings);
+    await refreshAll();
+  } catch (e) { alert('리로드 실패 (이전 카탈로그 유지됨): ' + e.message); }
+}
+
+JASQL.mount({ page: 'datasets', onReady() { refreshAll(); } });
+</script>
+</body>
+</html>

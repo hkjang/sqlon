@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>JAMYPG NL2SQL 시스템 도입 성과 및 향후 로드맵 보고</title>
+    <style>
+        
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Fira+Code:wght@400;500&display=swap');
+
+body {
+    font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    line-height: 1.8;
+    color: #334155;
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 840px;
+    margin: 0 auto;
+    padding: 50px;
+}
+
+/* Cover page style for A4 PDF */
+.cover-page {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-sizing: border-box;
+    padding: 100px 50px;
+    border-bottom: 2px solid #e2e8f0;
+    page-break-after: always;
+}
+
+.cover-header {
+    font-size: 14px;
+    font-weight: 700;
+    color: #4f46e5;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.cover-body {
+    margin-top: 100px;
+    flex-grow: 1;
+}
+
+.cover-title {
+    font-size: 34px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.3;
+    margin-bottom: 20px;
+    word-break: keep-all;
+}
+
+.cover-subtitle {
+    font-size: 18px;
+    color: #475569;
+    font-weight: 400;
+    margin-bottom: 50px;
+    word-break: keep-all;
+}
+
+.cover-footer {
+    border-top: 2px solid #f1f5f9;
+    padding-top: 30px;
+}
+
+.cover-meta-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+}
+
+.cover-meta-table td {
+    padding: 8px 0;
+    border: none;
+    font-size: 14px;
+    color: #475569;
+}
+
+.cover-meta-table td.label {
+    font-weight: 700;
+    color: #0f172a;
+    width: 120px;
+}
+
+/* Typography */
+h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-top: 50px;
+    margin-bottom: 24px;
+    border-bottom: 2px solid #f1f5f9;
+    padding-bottom: 10px;
+    page-break-before: always;
+}
+
+h1:first-of-type {
+    page-break-before: avoid;
+}
+
+h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-top: 36px;
+    margin-bottom: 18px;
+}
+
+h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #334155;
+    margin-top: 28px;
+    margin-bottom: 12px;
+}
+
+p {
+    margin-top: 0;
+    margin-bottom: 18px;
+    text-align: justify;
+    word-break: keep-all;
+}
+
+/* Lists */
+ul, ol {
+    margin-top: 0;
+    margin-bottom: 18px;
+    padding-left: 24px;
+}
+
+li {
+    margin-bottom: 8px;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    margin-bottom: 28px;
+    font-size: 14px;
+}
+
+th, td {
+    padding: 12px 16px;
+    border: 1px solid #cbd5e1;
+    text-align: left;
+}
+
+th {
+    background-color: #f1f5f9;
+    color: #0f172a;
+    font-weight: 700;
+}
+
+tr:nth-child(even) {
+    background-color: #f8fafc;
+}
+
+/* Code & Pre */
+code {
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    background-color: #f1f5f9;
+    color: #0f172a;
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
+pre {
+    background-color: #0f172a;
+    color: #f8fafc;
+    padding: 18px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin-top: 20px;
+    margin-bottom: 28px;
+}
+
+pre code {
+    background-color: transparent;
+    color: inherit;
+    padding: 0;
+    font-size: 13px;
+}
+
+/* Alerts */
+.alert {
+    padding: 16px 20px;
+    border-left: 5px solid #cbd5e1;
+    background-color: #f8fafc;
+    border-radius: 0 8px 8px 0;
+    margin-top: 20px;
+    margin-bottom: 28px;
+}
+
+.alert p:last-child {
+    margin-bottom: 0;
+}
+
+.alert-note {
+    border-left-color: #3b82f6;
+    background-color: #eff6ff;
+}
+
+.alert-tip {
+    border-left-color: #10b981;
+    background-color: #ecfdf5;
+}
+
+.alert-important {
+    border-left-color: #6366f1;
+    background-color: #eef2ff;
+}
+
+.alert-warning {
+    border-left-color: #f59e0b;
+    background-color: #fffbeb;
+}
+
+.alert-caution {
+    border-left-color: #ef4444;
+    background-color: #fef2f2;
+}
+
+.alert-title {
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #0f172a;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+/* Dividers */
+hr {
+    border: 0;
+    border-top: 1px solid #e2e8f0;
+    margin: 40px 0;
+}
+
+/* Mermaid Diagrams */
+.mermaid {
+    display: flex;
+    justify-content: center;
+    margin: 30px 0;
+    background-color: #f8fafc;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+/* Print optimizations */
+@media print {
+    body {
+        padding: 0;
+        font-size: 11pt;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .container {
+        padding: 0;
+    }
+    
+    h1, h2, h3 {
+        page-break-after: avoid;
+    }
+    
+    tr, pre, blockquote, .alert, .mermaid {
+        page-break-inside: avoid;
+    }
+}
+
+    </style>
+    <!-- Load Mermaid.js for rendering charts -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: { useMaxWidth: true, htmlLabels: true }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        
+    <div class="cover-page">
+        <div class="cover-header">AI 인프라실 기술 보고서</div>
+        <div class="cover-body">
+            <h1 class="cover-title">JAMYPG NL2SQL 시스템 도입 성과 및 향후 로드맵 보고</h1>
+            <p class="cover-subtitle">메타데이터 그라운딩 기반 자연어 질의 안전성 확보 및 도입 효과 (PostgreSQL·MySQL·MariaDB)</p>
+        </div>
+        <div class="cover-footer">
+            <table class="cover-meta-table">
+                <tr>
+                    <td class="label">작성 부서</td>
+                    <td>AI 인프라실</td>
+                </tr>
+                <tr>
+                    <td class="label">발행 일자</td>
+                    <td>2026년 7월 10일</td>
+                </tr>
+                <tr>
+                    <td class="label">문서 버전</td>
+                    <td>v0.1.0</td>
+                </tr>
+                <tr>
+                    <td class="label">보안 구분</td>
+                    <td>대외비 (Confidential)</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    
+        <div class="document-content">
+            <p><strong>보고 부서</strong>: AI 인프라실<br/>
+<strong>보고 일자</strong>: 2026년 7월 8일<br/>
+<strong>문서 버전</strong>: v1.1.0<br/>
+<strong>비밀 등급</strong>: 대외비 (Confidential)</p>
+<hr/>
+<h2>1. Executive Summary (요약 보고)</h2>
+<p>본 보고서는 금융데이터의 안전한 탐색과 생성형 AI 기반 대화형 질의 채널 구축을 위해 AI 인프라실에서 연구·개발한 <strong>JAMYPG NL2SQL MCP(Model Context Protocol)</strong> 시스템의 도입 성과 및 전사 확산 로드맵을 기술합니다. JAMYPG는 기존 Oracle 전용 jasql 프로젝트를 PostgreSQL·MySQL·MariaDB 3종 오픈소스 DBMS 대상으로 전환·확장한 후속 시스템입니다.</p>
+<p>JAMYPG는 기존 Text2SQL 기술이 가진 보안 한계와 할루시네이션(환각) 리스크를 원천 차단하기 위해 <strong>"LLM에게 데이터베이스 스키마 전체를 전달하지 않는다"</strong>는 원칙 하에 설계되었습니다. 메타데이터 카탈로그 컴파일, 다층 정적 가드레일, 실측 실행계획 분석을 통합 가동하여 금융권 컴플라이언스를 만족하는 무결한 데이터 조회 체계를 완성하였습니다.</p>
+<p>최근 버전(v0.12.0+)에 탑재된 <strong>GraphRAG 기반 컨텍스트 검색 계층(<code>retrieve_context</code>)</strong>을 활용한 골든셋 80개 케이스 실측 결과, <strong>테이블 검색 Recall@5 정확도 95.0%, 컬럼 재현율 91.0%, 조인 경로 정합성 72.0%, 값 증거 매칭률 84.0%</strong>를 확보하며 업계 최상위권 데이터 그라운딩 성과를 확인하였습니다. 이를 통해 데이터 추출 리드타임을 기존 평균 48시간에서 <strong>5분 이내</strong>로 단축시켜 전사 데이터 활용 생산성을 혁신할 준비를 마쳤습니다.</p>
+<hr/>
+<h2>2. 도입 배경 및 비즈니스 목적</h2>
+<h3>2.1. 기존 생성형 AI Text2SQL 기술의 한계</h3>
+<p>생성형 AI(LLM)의 출현으로 자연어 질문을 SQL 쿼리로 자동 변환하는 시도가 활발하나, 금융 도메인의 복잡성과 정보 보호 규제 하에서는 다음과 같은 세 가지 심각한 리스크가 존재합니다.</p>
+<ol>
+<li><strong>스키마 과부하 및 높은 토큰 비용</strong>:
+데이터베이스의 수백 개 테이블 구조를 프롬프트에 직접 주입할 시 토큰 비용이 기하급수적으로 증가하며, 관련 없는 스키마 정보가 섞여 모델의 집중력이 저하되고 쿼리 품질이 크게 하락합니다.</li>
+<li><strong>금융 데이터 보안(PII) 유출 위험</strong>:
+고객명, 계좌번호, 주민등록번호 등 개인식별정보(PII) 컬럼이 정제 없이 LLM으로 유입되거나 쿼리 결과에 직접 노출되는 등 개인정보 보호법 위반 가능성이 항상 상존합니다.</li>
+<li><strong>할루시네이션에 의한 쿼리 오작동 및 시스템 부하</strong>:
+모델이 존재하지 않는 테이블/컬럼명을 조작하여 질의하거나, 비효율적인 다중 조인(Join) 또는 Full Table Scan을 유발하는 폭주성 쿼리를 가동하여 데이터베이스 서버 장해를 유발할 수 있습니다.</li>
+</ol>
+<h3>2.2. JAMYPG 도입의 목적</h3>
+<ul>
+<li><strong>거버넌스 확립</strong>: 카탈로그 기반의 정적 검증 계층을 두어 비인가/위험 쿼리를 실행 전에 차단합니다.</li>
+<li><strong>의사결정 속도 단축</strong>: 현업 담당자가 데이터 추출 요건을 분석가에게 의뢰하고 대기하는 병목 구간을 제거하여 실시간 데이터 드리븐 의사결정을 실현합니다.</li>
+<li><strong>인프라 비용 효율화</strong>: 별도의 고비용 벡터 데이터베이스(Vector DB) 서버 구축 없이, 경량화된 인메모리 컴파일 기술을 통해 신속하고 가볍게 구동 가능한 고성능 NL2SQL 허브를 확보합니다. 아울러 순수 Go 단일 바이너리 구조로 상용 DB 클라이언트 라이브러리 의존을 제거하여 배포 비용을 절감합니다.</li>
+</ul>
+<hr/>
+<h2>3. JAMYPG 핵심 기술 강점 (5대 기술적 축)</h2>
+<p>JAMYPG는 AI 인프라실이 개발한 5대 핵심 축을 바탕으로 정밀하고 안전한 그라운딩(Grounding) 환경을 제공합니다.</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                            JAMYPG 5대 핵심 아키텍처                          │
+├─────────────────┬─────────────────┬─────────────────┬───────────┬───────────┤
+│    그라운딩     │    사전 우선    │  압축 컨텍스트  │ 다층 검증 │ 환류 학습 │
+│  (Catalog-only) │ (Dict-priority) │   (Compress)    │  (Guard)  │  (Loop)   │
+└─────────────────┴─────────────────┴─────────────────┴───────────┴───────────┘
+</code></pre>
+<ol>
+<li><strong>카탈로그 및 GraphRAG 그라운딩 (Grounding)</strong>
+<ul>
+<li>LLM은 내부 카탈로그 엔진에 컴파일되어 존재하는 개체명만을 사용하며, 검색 시 <strong>시드 검색 → 1-hop 조인그래프 확장 → 데이터 값 증거 및 usage prior 하이브리드 재정렬</strong> 과정을 거치는 GraphRAG 기술을 연계 구동하여 스키마 맥락을 완벽히 복원합니다.</li>
+</ul>
+</li>
+<li><strong>비즈니스 지표 사전 우선 적용 (Dictionary First)</strong>
+<ul>
+<li>연체율, 평균 신용점수 등 금융 통계의 분모·분자 구성이 복잡한 지표는 LLM이 임의로 식을 생성하지 못하도록 차단합니다. 지표 사전(<code>metrics.json</code>)에 등록된 공인 수식(<code>Expression</code>)을 강제 바인딩하여 수치의 일관성을 확보합니다.</li>
+</ul>
+</li>
+<li><strong>컨텍스트 압축 (Compressed Context)</strong>
+<ul>
+<li>질문과 연관된 테이블과 컬럼만을 다중 스코어링으로 추려내어, 수십 바이트 수준으로 압축된 컴팩트 스키마 정보만을 LLM에 제공함으로써 할루시네이션 발생 여지를 원천 제어합니다.</li>
+</ul>
+</li>
+<li><strong>다층 보안 가드레일 (Multi-layered Guardrails)</strong>
+<ul>
+<li>SELECT/WITH 문 외의 DML/DDL 유입 차단, PII 컬럼 탐지 및 마스킹, 카티션 조인 위험 제어 등 33종의 정적 룰 검증을 수행하고, 실패 시 에러 코드와 자가 수정용 피드백 힌트(<code>fix_hints</code>)를 제공합니다. 실행 계층에서는 DSN 수준 read-only 세션 강제(PostgreSQL <code>default_transaction_read_only=on</code> 등)가 이중으로 가동됩니다.</li>
+</ul>
+</li>
+<li><strong>환류 자동 학습 루프 (Feedback Learning Loop)</strong>
+<ul>
+<li>사용자가 되묻기(Clarification)에 답변하여 성공적으로 해소되면 해당 결과를 즉시 학습 피드백으로 원자적 적재하여 다음 카탈로그 리로드 시 검색 Usage Prior 가중치로 환류시킵니다.</li>
+<li>반복적으로 느린 쿼리를 유발하는 테이블에 검색 감점을 적용하고, 오류가 잦은 컬럼의 대체재 힌트를 learned 룰로 자동 승격 적용합니다.</li>
+</ul>
+</li>
+</ol>
+<hr/>
+<h2>4. 정량적/정성적 도입 성과</h2>
+<h3>4.1. 정확도 지표 평가 (80개 기준 케이스 검증 결과)</h3>
+<p>AI 인프라실은 대표적인 데이터셋 질문-SQL 80개 세트를 구축하여 정확도 회귀 평가를 가동했습니다. 실측된 정확도 성과는 사전에 설정한 파이프라인 통과 임계치를 대폭 상회합니다.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">평가 지표명</th>
+<th style="text-align:left">지표 정의</th>
+<th style="text-align:center">목표 기준</th>
+<th style="text-align:center"><strong>실측 성과</strong></th>
+<th style="text-align:center">달성도</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>테이블 검색 정확도 (Recall@5)</strong></td>
+<td style="text-align:left">기대 테이블이 GraphRAG 검색 탑 5위 풀 내에 포함된 비율</td>
+<td style="text-align:center">≥ 85.0%</td>
+<td style="text-align:center"><strong>95.0%</strong></td>
+<td style="text-align:center"><strong>초과 달성</strong></td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>컬럼 매칭 재현율</strong></td>
+<td style="text-align:left">필요한 컬럼들이 매칭 리스트 상에 노출된 평균 비율</td>
+<td style="text-align:center">≥ 80.0%</td>
+<td style="text-align:center"><strong>91.0%</strong></td>
+<td style="text-align:center"><strong>초과 달성</strong></td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>지표 정의 조회율</strong></td>
+<td style="text-align:left">질문 내 지표 어휘가 사전에 완벽히 매핑되어 출력된 비율</td>
+<td style="text-align:center">= 100%</td>
+<td style="text-align:center"><strong>100%</strong></td>
+<td style="text-align:center"><strong>목표 달성</strong></td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>조인 경로 매칭률 (Recall)</strong></td>
+<td style="text-align:left">다중 테이블 연결 시 최적 조인 경로를 획득한 비율</td>
+<td style="text-align:center">≥ 85.0%</td>
+<td style="text-align:center"><strong>72.0%</strong></td>
+<td style="text-align:center"><strong>조인 갭 보강 중</strong></td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>SQL 정적 유효성</strong></td>
+<td style="text-align:left">최종 조립된 SQL이 33종 검증 가이드를 통과한 비율</td>
+<td style="text-align:center">= 100%</td>
+<td style="text-align:center"><strong>100%</strong></td>
+<td style="text-align:center"><strong>목표 달성</strong></td>
+</tr>
+</tbody>
+</table>
+<div class="alert alert-note"><div class="alert-title">NOTE</div>
+<p>조인 경로 매칭률의 갭(28%)은 v0.13.0에 추가된 <strong><code>suggest_join_relations</code> (조인 갭 분석 도구)</strong>를 가동하여, 골든셋 단절 테이블 쌍에 대한 relations.json 보정용 엣지 후보를 자동 추출 및 밀어넣기(hot-swap) 처리하여 실시간 튜닝 및 보강 작업이 진행 중입니다.</p>
+</div>
+<h3>4.2. 인프라 운영성 및 자원 효율성</h3>
+<ul>
+<li><strong>초고속 응답성</strong>: 모든 메타데이터를 기동 시 메모리에 적재 및 인덱싱하므로, 도구 호출 연산 소요 시간이 <strong>평균 수십 밀리초(ms) 이내</strong>로 완료되어 대화형 실시간 AI 에이전트에 최적입니다.</li>
+<li><strong>인프라 비용 혁신</strong>: 실시간 검색을 위한 값비싼 외산 벡터 DB 및 그래픽 연산 장치(GPU) 없이 가볍게 구동 가능한 자립형 아키텍처로 인프라 유지 비용을 획기적으로 낮췄으며, CGO·상용 클라이언트 라이브러리 없는 순수 Go 단일 이미지 배포로 폐쇄망 반입 절차도 대폭 간소화하였습니다.</li>
+</ul>
+<hr/>
+<h2>5. 거버넌스 및 금융 컴플라이언스 관리 체계</h2>
+<p>JAMYPG는 전자금융거래법 및 개인정보보호법 등 엄격한 금융 보안 가이드를 완벽하게 수행할 수 있도록 감시 통제 장치를 포함하고 있습니다.</p>
+<ul>
+<li><strong>읽기 전용 정책의 물리적 강제 (3중 방어)</strong>:
+SELECT 및 WITH로 기동되는 질의만 통과시키며, INSERT, UPDATE, DELETE, ALTER 등 데이터 오염 위험이 있는 키워드 발견 시 즉각 기각 처리합니다. 여기에 접속 세션 자체를 read-only로 강제(PostgreSQL <code>default_transaction_read_only=on</code>, MySQL <code>transaction_read_only=1</code>, MariaDB <code>tx_read_only=1</code>)하고, SELECT 전용 DB 계정 사용을 권고하여 3중 방어선을 구축합니다.</li>
+<li><strong>PII 민감 정보의 안전한 제어</strong>:
+주민등록번호, 고객명, 계좌번호 등 마스킹 대상 속성이 SELECT에 탐지되면 검증기(<code>validate_sql</code>)가 즉각 <code>PII_COLUMN</code> 에러를 반환하여 쿼리 발행을 가로막고, 집계 형태(Count 등)로 변환하거나 마스킹을 부과하도록 힌트를 출력합니다.</li>
+<li><strong>실측 실행계획 분석 게이트 (JSON EXPLAIN 연동)</strong>:
+접속 계정의 정책과 별개로, 쿼리가 유발할 데이터베이스 시스템 부하를 실행 전에 실측합니다. <code>explain_sql</code>이 PostgreSQL은 <code>EXPLAIN (FORMAT JSON)</code>, MySQL/MariaDB는 <code>EXPLAIN FORMAT=JSON</code>을 가동하여 Full Scan, Cartesian Product 의심 조인, 대형 정렬, Cost 지수 폭증 등 고위험 요인 탐지 시 실행을 원천 차단합니다.</li>
+<li><strong>실시간 감사 이력 적재</strong>:
+모든 MCP 도구 호출 이력과 SQL 해시, 소요 시간, 예외 코드 등을 <code>audit/</code> 내에 일자별 감사 파일(<code>query-YYYYMMDD.jsonl</code>)로 영속 적재하여 완벽한 사후 추적성을 보장합니다.</li>
+</ul>
+<hr/>
+<h2>6. 비즈니스 파급 효과 (ROI)</h2>
+<ol>
+<li><strong>데이터 분석 리드타임 혁신</strong>:
+기존 업무 부서의 요건 정의 ➜ IT 부서 접수 ➜ 개발자 작성 ➜ 검증 및 추출 프로세스로 최소 48시간 이상 대기하던 리드타임을 자연어 질의를 통해 <strong>5분 이내 즉시 추출</strong>로 변환하여 실시간 비즈니스 의사결정이 가능합니다.</li>
+<li><strong>IT 데이터 전담 인력 생산성 향상</strong>:
+분석가들이 단순 반복성 데이터 추출 쿼리 수작업 요청에서 해방되어, AI 모델링 및 가치 중심의 비즈니스 분석 업무에 집중할 수 있는 환경을 유도합니다 (생산성 약 40% 이상 향상 기대).</li>
+<li><strong>거버넌스 위반 리스크 Zero화</strong>:
+수작업 추출 과정에서 발생할 수 있는 개인정보의 부주의한 노출, 비가드로 인한 대형 쿼리 폭주 사고 위험을 사전에 격리 통제하여 보안 규제 위반에 따른 손실 리스크를 차단합니다.</li>
+</ol>
+<hr/>
+<h2>7. AI 인프라실 확산 제언 및 로드맵</h2>
+<p>AI 인프라실은 JAMYPG NL2SQL MCP 시스템의 파일럿 성공을 기초로 다음과 같은 단계별 전사 확산 마스터 플랜을 제언합니다.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">단계</th>
+<th style="text-align:left">추진 과제</th>
+<th style="text-align:center">기간</th>
+<th style="text-align:left">핵심 목표</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>1단계: 운영 연동 및 전사 확산</strong></td>
+<td style="text-align:left">사내 AI 포털 및 LLM 게이트웨이 연동<br/>현업 부서 데이터 요구 지표(Metrics) 조사 및 사전 전수 확충</td>
+<td style="text-align:center">2026.07 - 2026.10</td>
+<td style="text-align:left">실 운영 환경 파일럿 검증 및 비즈니스 적합성 향상</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>2단계: 성능 및 보안 고도화</strong></td>
+<td style="text-align:left">PostgreSQL/MySQL 리드 레플리카(Read Replica) 장애조치 이중화 배선<br/>실측 계획 분석 엔진 및 환류 학습 자동 스케줄링 구축</td>
+<td style="text-align:center">2026.10 - 2027.01</td>
+<td style="text-align:left">시스템 실 운영계 이중화 및 오류 교정 자동 학습체계 안착</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>3단계: 이기종 DBMS 확장</strong></td>
+<td style="text-align:left">Greenplum, Hive 등 전사 분석계 데이터베이스 통합<br/>통합 데이터 레이크 탐색용 단일 자연어 쿼리 허브 실현</td>
+<td style="text-align:center">2027.01 - 2027.06</td>
+<td style="text-align:left">전사 분산 데이터 자원의 단일 대화형 탐색 체계 완성</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>[단기: 2026 Q3] 전사 대화형 AI 포털 배선 및 부서별 지표 확충</strong>
+<ul>
+<li>표준 MCP 게이트웨이를 사내 AI 대화 포털 백엔드에 통합하여 현업 사용자의 실 운영 데이터 조회 테스트를 전개합니다.</li>
+<li>리스크관리부, 상품개발부 등 부서별 데이터 요구 사양을 받아 <code>metrics.json</code> 표준 공식을 전수 확충합니다.</li>
+</ul>
+</li>
+<li><strong>[중기: 2026 Q4] 이중화 환경 연결 및 자동 피드백 강화</strong>
+<ul>
+<li>운영계 PostgreSQL 스트리밍 복제 및 MySQL/MariaDB 리드 레플리카 구성에 보안 연동을 확정하고, 실측 실행계획 게이트를 운영에 본격 투입합니다.</li>
+<li>사용자 피드백 피처링 및 <code>learn_from_feedback</code> 잡(Job)을 스케줄러에 배선하여 오류 교정 룰의 영속 학습 체계를 완전 자동화합니다.</li>
+</ul>
+</li>
+<li><strong>[장기: 2027] 이기종 분석용 DBMS 통합 지능형 쿼리 허브 구축</strong>
+<ul>
+<li>PostgreSQL·MySQL·MariaDB 3종 연결을 넘어 Greenplum, 하이브 등 전사에 흩어진 다기종 분석용 데이터베이스의 스키마 카탈로그를 컴파일 파이프라인으로 통합하여, 하나의 자연어 채널로 통합 데이터 레이크를 넘나드는 완성형 데이터 허브를 실현할 것입니다.</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+    </div>
+</body>
+</html>

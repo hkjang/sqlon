@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>JAMYPG NL2SQL MCP 사용자 가이드</title>
+    <style>
+        
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Fira+Code:wght@400;500&display=swap');
+
+body {
+    font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    line-height: 1.8;
+    color: #334155;
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 840px;
+    margin: 0 auto;
+    padding: 50px;
+}
+
+/* Cover page style for A4 PDF */
+.cover-page {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-sizing: border-box;
+    padding: 100px 50px;
+    border-bottom: 2px solid #e2e8f0;
+    page-break-after: always;
+}
+
+.cover-header {
+    font-size: 14px;
+    font-weight: 700;
+    color: #4f46e5;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.cover-body {
+    margin-top: 100px;
+    flex-grow: 1;
+}
+
+.cover-title {
+    font-size: 34px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.3;
+    margin-bottom: 20px;
+    word-break: keep-all;
+}
+
+.cover-subtitle {
+    font-size: 18px;
+    color: #475569;
+    font-weight: 400;
+    margin-bottom: 50px;
+    word-break: keep-all;
+}
+
+.cover-footer {
+    border-top: 2px solid #f1f5f9;
+    padding-top: 30px;
+}
+
+.cover-meta-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+}
+
+.cover-meta-table td {
+    padding: 8px 0;
+    border: none;
+    font-size: 14px;
+    color: #475569;
+}
+
+.cover-meta-table td.label {
+    font-weight: 700;
+    color: #0f172a;
+    width: 120px;
+}
+
+/* Typography */
+h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-top: 50px;
+    margin-bottom: 24px;
+    border-bottom: 2px solid #f1f5f9;
+    padding-bottom: 10px;
+    page-break-before: always;
+}
+
+h1:first-of-type {
+    page-break-before: avoid;
+}
+
+h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-top: 36px;
+    margin-bottom: 18px;
+}
+
+h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #334155;
+    margin-top: 28px;
+    margin-bottom: 12px;
+}
+
+p {
+    margin-top: 0;
+    margin-bottom: 18px;
+    text-align: justify;
+    word-break: keep-all;
+}
+
+/* Lists */
+ul, ol {
+    margin-top: 0;
+    margin-bottom: 18px;
+    padding-left: 24px;
+}
+
+li {
+    margin-bottom: 8px;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    margin-bottom: 28px;
+    font-size: 14px;
+}
+
+th, td {
+    padding: 12px 16px;
+    border: 1px solid #cbd5e1;
+    text-align: left;
+}
+
+th {
+    background-color: #f1f5f9;
+    color: #0f172a;
+    font-weight: 700;
+}
+
+tr:nth-child(even) {
+    background-color: #f8fafc;
+}
+
+/* Code & Pre */
+code {
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    background-color: #f1f5f9;
+    color: #0f172a;
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
+pre {
+    background-color: #0f172a;
+    color: #f8fafc;
+    padding: 18px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin-top: 20px;
+    margin-bottom: 28px;
+}
+
+pre code {
+    background-color: transparent;
+    color: inherit;
+    padding: 0;
+    font-size: 13px;
+}
+
+/* Alerts */
+.alert {
+    padding: 16px 20px;
+    border-left: 5px solid #cbd5e1;
+    background-color: #f8fafc;
+    border-radius: 0 8px 8px 0;
+    margin-top: 20px;
+    margin-bottom: 28px;
+}
+
+.alert p:last-child {
+    margin-bottom: 0;
+}
+
+.alert-note {
+    border-left-color: #3b82f6;
+    background-color: #eff6ff;
+}
+
+.alert-tip {
+    border-left-color: #10b981;
+    background-color: #ecfdf5;
+}
+
+.alert-important {
+    border-left-color: #6366f1;
+    background-color: #eef2ff;
+}
+
+.alert-warning {
+    border-left-color: #f59e0b;
+    background-color: #fffbeb;
+}
+
+.alert-caution {
+    border-left-color: #ef4444;
+    background-color: #fef2f2;
+}
+
+.alert-title {
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #0f172a;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+/* Dividers */
+hr {
+    border: 0;
+    border-top: 1px solid #e2e8f0;
+    margin: 40px 0;
+}
+
+/* Mermaid Diagrams */
+.mermaid {
+    display: flex;
+    justify-content: center;
+    margin: 30px 0;
+    background-color: #f8fafc;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+/* Print optimizations */
+@media print {
+    body {
+        padding: 0;
+        font-size: 11pt;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .container {
+        padding: 0;
+    }
+    
+    h1, h2, h3 {
+        page-break-after: avoid;
+    }
+    
+    tr, pre, blockquote, .alert, .mermaid {
+        page-break-inside: avoid;
+    }
+}
+
+    </style>
+    <!-- Load Mermaid.js for rendering charts -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: { useMaxWidth: true, htmlLabels: true }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        
+    <div class="cover-page">
+        <div class="cover-header">AI 인프라실 기술 보고서</div>
+        <div class="cover-body">
+            <h1 class="cover-title">JAMYPG NL2SQL MCP 사용자 가이드</h1>
+            <p class="cover-subtitle">자연어-SQL 변환 및 안전 실행을 위한 연동 가이드라인</p>
+        </div>
+        <div class="cover-footer">
+            <table class="cover-meta-table">
+                <tr>
+                    <td class="label">작성 부서</td>
+                    <td>AI 인프라실</td>
+                </tr>
+                <tr>
+                    <td class="label">발행 일자</td>
+                    <td>2026년 7월 10일</td>
+                </tr>
+                <tr>
+                    <td class="label">문서 버전</td>
+                    <td>v0.1.0</td>
+                </tr>
+                <tr>
+                    <td class="label">보안 구분</td>
+                    <td>대외비 (Confidential)</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    
+        <div class="document-content">
+            <p><strong>보고 부서</strong>: AI 인프라실<br/>
+<strong>작성 일자</strong>: 2026년 7월 8일<br/>
+<strong>문서 버전</strong>: v1.1.0</p>
+<hr/>
+<h2>1. 개요 및 핵심 개념</h2>
+<p>본 가이드는 JAMYPG NL2SQL MCP 서버를 활용하여 자연어 질문을 PostgreSQL·MySQL·MariaDB SQL로 안전하게 변환하고 실행하려는 개발자, 데이터 엔지니어 및 LLM 연동 담당자를 위해 작성되었습니다.</p>
+<p>JAMYPG는 <strong>Model Context Protocol (MCP)</strong> 규격을 탑재하여 대화형 언어 모델(LLM)이 직접 사내 데이터에 접근하지 않고도, 가상의 카탈로그 정보와 정밀 정적 검증 도구를 경유하여 안전한 범위 내에서만 질의를 발행하도록 설계된 솔루션입니다.</p>
+<p>최근 버전(v0.12.0+)부터는 단순 시드 매칭의 단계를 넘어 조인 토폴로지와 데이터 값 증거를 확장하는 <strong>GraphRAG 기반 검색 계층(<code>retrieve_context</code>)</strong> 및 사용자의 재질문 답변을 피드백 가중치로 자동 환류시키는 <strong>재질문 학습 루프</strong>가 탑재되어 연동 정확도가 더욱 향상되었습니다.</p>
+<hr/>
+<h2>2. 권장 NL2SQL 연동 워크플로 (10단계)</h2>
+<p>자연어 질문을 받았을 때 클라이언트 에이전트와 LLM은 반드시 아래의 표준 <strong>10단계 흐름</strong>을 순서대로 이행해야 합니다. 이 순서를 건너뛰면 보안 컴플라이언스 위배 및 문법 오류 가능성이 매우 높아집니다.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">단계</th>
+<th style="text-align:left">프로세스 및 호출 도구</th>
+<th style="text-align:left">실행 동작 및 조건 분기</th>
+<th style="text-align:left">산출물 및 다음 행동</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>Step 1</strong></td>
+<td style="text-align:left"><strong>사용자 질문 접수</strong></td>
+<td style="text-align:left">사용자가 자연어 질문을 에이전트에 입력</td>
+<td style="text-align:left">다음 단계로 질문 전달</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Step 2</strong></td>
+<td style="text-align:left"><strong>질문 그라운딩 및 GraphRAG</strong><br/><code>prepare_sql_context</code> 호출</td>
+<td style="text-align:left">질문 분석, <strong>GraphRAG (<code>retrieve_context</code> 내부 구동)</strong>, 되묻기 항목 진단 일괄 가동</td>
+<td style="text-align:left"><code>status</code> 판정에 따라 분기 수행</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Step 3</strong></td>
+<td style="text-align:left"><strong>되묻기 분기 게이트 및 환류</strong></td>
+<td style="text-align:left">- <strong>[needs_clarification]</strong>: Blocking 모호성 감지 시 중단 및 사용자 재질문<br/>- <strong>[ready]</strong>: 모호성 해결 완료 시 다음 단계로 진행</td>
+<td style="text-align:left">- <strong>[needs_clarification]</strong>: 답변 수집 후 Step 2 재진입 (※ 답변 해소 시 <strong>선택 테이블 corrected 피드백으로 자동 기록 및 사용량 가점 환류</strong>)<br/>- <strong>[ready]</strong>: 스켈레톤 및 그라운딩 정보 인계</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Step 4</strong></td>
+<td style="text-align:left"><strong>SQL 스켈레톤 획득</strong></td>
+<td style="text-align:left">준비된 <code>skeleton.skeleton_sql</code>, 지표 식, 조인 경로 확보</td>
+<td style="text-align:left">SQL 골격 뼈대 획득</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Step 5</strong></td>
+<td style="text-align:left"><strong>SQL 조립 및 작성</strong></td>
+<td style="text-align:left">LLM이 그라운딩 컨텍스트 내 컬럼정보만 사용하여 <code>/* SLOT */</code> 영역 조립</td>
+<td style="text-align:left">후보 SQL 완성</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Step 6</strong></td>
+<td style="text-align:left"><strong>정적 보안 검증</strong><br/><code>validate_sql</code> 호출</td>
+<td style="text-align:left">SELECT 전용 검사, PII 민감 정보 누락, 33종 가드레일 가동</td>
+<td style="text-align:left">검증 결과 (<code>valid</code> 판단)</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Step 7</strong></td>
+<td style="text-align:left"><strong>자가 수정 피드백</strong></td>
+<td style="text-align:left">- <strong>[valid == false]</strong>: 제공된 <code>fix_hints</code>를 읽어 SQL 자동 보정 (최대 2회)<br/>- <strong>[valid == true]</strong>: 검증 통과 후 다음 단계 진행</td>
+<td style="text-align:left">- <strong>[valid == false]</strong>: 실패 사유 리턴<br/>- <strong>[valid == true]</strong>: 검증 통과 SQL</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Step 8</strong></td>
+<td style="text-align:left"><strong>실행 계획 실측</strong><br/><code>explain_sql</code> 호출</td>
+<td style="text-align:left">대상 DB에 연결하여 JSON EXPLAIN 기반으로 예상 Cost, Cartesian 조인, Full Scan 여부 분석</td>
+<td style="text-align:left">- <strong>[risk == high]</strong>: 조건식 보강 후 재생성<br/>- <strong>[risk == low]</strong>: 다음 단계 진행</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Step 9</strong></td>
+<td style="text-align:left"><strong>안전 런타임 실행</strong><br/><code>run_sql_safely</code> 호출</td>
+<td style="text-align:left">LIMIT 래핑, PII 값 마스킹 필터링, 결과 캐시 및 서킷 브레이커 가동</td>
+<td style="text-align:left">최종 데이터 셋 확보 및 사용자 표출</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Step 10</strong></td>
+<td style="text-align:left"><strong>피드백 이력 적재</strong><br/><code>record_feedback</code> 호출</td>
+<td style="text-align:left">사용자 채택 여부(<code>adopted</code>) 및 오류 이력을 서버에 영속 적재</td>
+<td style="text-align:left">다음 컴파일 시 Few-shot 및 가중치 학습 반영</td>
+</tr>
+</tbody>
+</table>
+<h3>10단계 실행 프로세스 상세 명세</h3>
+<ol>
+<li><strong>자연어 질의 수신</strong>: 사용자가 대화창에 한글 또는 영어로 데이터 관련 요구사항을 작성합니다.</li>
+<li><strong><code>prepare_sql_context</code> 호출</strong>: 질문 원문과 함께 본 도구를 호출합니다. 내부적으로 <code>retrieve_context</code>가 자동 구동되어 시드 검색 테이블 외에 1-hop 조인 확장 테이블 및 값 일치 증거 테이블을 7대 가중치 신호에 맞추어 하이브리드 재정렬합니다.</li>
+<li><strong>되묻기(Clarification) 판단 게이트</strong>:
+응답의 <code>status</code>가 <code>"needs_clarification"</code>인 경우, 절대로 SQL 작성을 개시하지 마십시오. <code>clarifications</code>에 담긴 질문(선택지가 있을 경우 옵션 리스트와 권장 추천 뱃지)을 사용자 화면에 띄우고 답변을 받습니다. 사용자가 답을 주면 <code>prepare_sql_context(question, clarifications={id: answer_or_option_key})</code>로 다시 질의를 넣습니다. 이때 답변이 완료되면 해당 테이블 선택 사실이 <code>outcome: "corrected"</code>, <code>source: "clarification"</code> 피드백 로그로 즉시 자동 기록되어 usage prior 가점으로 학습됩니다.</li>
+<li><strong>골격 획득 및 컨텍스트 바인딩</strong>:
+<code>status</code>가 <code>"ready"</code>로 떨어지면, 에이전트는 제공된 <code>skeleton.skeleton_sql</code> 조각과 <code>schema_context</code>에 명시된 축소 스키마, <code>metrics</code> 사전의 지표 식을 수집합니다.</li>
+<li><strong>쿼리 조립 및 슬롯 매칭</strong>:
+LLM은 스켈레톤에 들어있는 <code>/* SLOT: ... */</code> 주석 영역만 채우는 방식으로 최종 SQL 문을 작성합니다. 카탈로그에 없는 임의의 컬럼이나 조인을 개발해 내선 안 됩니다.</li>
+<li><strong><code>validate_sql</code> 호출</strong>:
+작성된 SQL 구문을 <code>validate_sql</code> 도구에 전달합니다. 이때 <code>prepare_sql_context</code> 번들에서 취득한 <code>expected_output_columns</code>와 <code>metric_names</code>를 각각 <code>expected_outputs</code> 및 <code>metrics</code> 파라미터로 동봉하여 전송합니다.</li>
+<li><strong>자가 수정 루프 (최대 2회)</strong>:
+검증 에러(<code>valid: false</code>) 발생 시 응답 내의 <code>fix_hints</code>를 읽어 들여 쿼리를 자가 수정하고 다시 <code>validate_sql</code>을 호출합니다. 만약 2회 재시도 후에도 검증 실패 시, 쿼리 작성을 포기하고 실패 사유와 수정 대안을 사용자에게 출력합니다.</li>
+<li><strong><code>explain_sql</code> 성능 분석</strong>:
+가드레일을 통과한 SQL에 대해 <code>explain_sql</code>을 가동해 예상 Cost와 실행 계획을 실측 검사합니다(PostgreSQL은 <code>EXPLAIN (FORMAT JSON)</code>, MySQL/MariaDB는 <code>EXPLAIN FORMAT=JSON</code> 활용). 만약 <code>risk: "high"</code>가 감지되면 실행을 멈추고 suggestions에 따라 날짜 기간 조건이나 LIMIT 행 제한을 보강해 5단계로 돌아갑니다.</li>
+<li><strong><code>run_sql_safely</code> 실행</strong>:
+최종 조율된 SQL 문을 지정된 대상 DB 프로파일 ID(postgres/mysql/mariadb)로 구동하여 안전하게 행(Rows) 데이터를 확보합니다.</li>
+<li><strong><code>record_feedback</code> 적재</strong>:
+최종 쿼리의 성공/실패 여부, 사용자가 실제 채택하여 분석에 활용했는지 여부(<code>adopted: true</code>)를 피드백 로그로 적재하여 파이프라인을 종료합니다.</li>
+</ol>
+<hr/>
+<h2>3. SQL 검증 룰 에러 해소 가이드 (비포/애프터 예시)</h2>
+<p><code>validate_sql</code> 검증기가 감지하여 차단하는 33종의 룰 중 빈번하게 나타나는 핵심 이슈들의 수정 방법입니다.</p>
+<h3>3.1. [오류] PII_COLUMN (개인식별정보 노출 차단)</h3>
+<ul>
+<li><strong>에러 상황</strong>: overrides에 지정된 PII 속성 컬럼(예: 고객명 <code>cust_name</code>)을 SELECT 절에 가감 없이 기술한 경우.
+<ul>
+<li><strong>Before (에러 발생)</strong>:<pre><code class="language-sql">SELECT T1.cust_name, T1.credit_score
+FROM dw_snapshot.customer_snapshot T1
+LIMIT 100
+</code></pre>
+</li>
+<li><strong>After (해결 방법)</strong>: PII 대상을 SELECT에서 완전히 빼거나, 부득이한 경우 마스킹 처리를 부과합니다.<pre><code class="language-sql">SELECT SUBSTR(T1.cust_name, 1, 1) || '**' AS "고객명", T1.credit_score
+FROM dw_snapshot.customer_snapshot T1
+LIMIT 100
+</code></pre>
+</li>
+</ul>
+</li>
+</ul>
+<h3>3.2. [오류] DIALECT_FUNCTION / DIALECT_LIMIT (대상 DB 방언 미준수)</h3>
+<ul>
+<li><strong>에러 상황</strong>: 오라클 전용 잔존 구문(<code>NVL</code>, <code>ROWNUM</code>, <code>FETCH FIRST</code> 등)을 사용하여 PostgreSQL·MySQL·MariaDB 방언 검증에 걸린 경우.
+<ul>
+<li><strong>Before (에러 발생)</strong>:<pre><code class="language-sql">SELECT T1.credit_grade, AVG(NVL(T1.credit_score, 0))
+FROM dw_snapshot.customer_snapshot T1
+GROUP BY T1.credit_grade
+FETCH FIRST 50 ROWS ONLY
+</code></pre>
+</li>
+<li><strong>After (해결 방법)</strong>: <code>NVL</code>은 표준 <code>COALESCE</code>로, 행 제한은 대상 DB 공통 구문인 <code>LIMIT n</code>으로 치환합니다 (<code>fix_hints</code>에 치환 지침 제공: NVL→COALESCE, DECODE→CASE, ROWNUM→LIMIT).<pre><code class="language-sql">SELECT T1.credit_grade, AVG(COALESCE(T1.credit_score, 0))
+FROM dw_snapshot.customer_snapshot T1
+GROUP BY T1.credit_grade
+LIMIT 50
+</code></pre>
+</li>
+</ul>
+</li>
+</ul>
+<h3>3.3. [경고] MISSING_DEL_FILTER / MISSING_EXCL_FILTER (정책 필터 누락)</h3>
+<ul>
+<li><strong>에러 상황</strong>: 카탈로그 데이터 모델 상 분석 대상 제외 코드나 삭제 데이터 제외 조건을 생략하여 통계 왜곡 위험이 높은 경우.
+<ul>
+<li><strong>Before (경고 발생)</strong>:<pre><code class="language-sql">SELECT T1.credit_grade, AVG(T1.credit_score)
+FROM dw_snapshot.customer_snapshot T1
+WHERE T1.base_month = '202506'
+GROUP BY T1.credit_grade
+</code></pre>
+</li>
+<li><strong>After (해결 방법)</strong>: 가이드라인에 명시된 기본 제외값 조건(<code>excl_code_1 IS NULL</code> 등)을 WHERE 절에 추가합니다.<pre><code class="language-sql">SELECT T1.credit_grade, AVG(T1.credit_score)
+FROM dw_snapshot.customer_snapshot T1
+WHERE T1.base_month = '202506'
+  AND T1.excl_code_1 IS NULL
+GROUP BY T1.credit_grade
+</code></pre>
+</li>
+</ul>
+</li>
+</ul>
+<h3>3.4. [오류] CODE_VALUE_UNKNOWN (비존재 공통 코드값 차단)</h3>
+<ul>
+<li><strong>에러 상황</strong>: 공통 코드 사전 원장에 존재하지 않는 임의의 비교값 리터럴을 조건절에 지정한 경우.
+<ul>
+<li><strong>Before (에러 발생)</strong>:<pre><code class="language-sql">SELECT COUNT(*) 
+FROM dw_history.customers T1 
+WHERE T1.cust_type = '77' /* 존재하지 않는 고객구분코드 비교 */
+</code></pre>
+</li>
+<li><strong>After (해결 방법)</strong>: 검증기가 제공한 <code>fix_hints</code> 코드 대조표(예: <code>'01':개인</code>, <code>'02':법인</code>)를 확인하여 유효한 코드 리터럴만 매핑합니다.<pre><code class="language-sql">SELECT COUNT(*) 
+FROM dw_history.customers T1 
+WHERE T1.cust_type = '01' /* 개인 고객 */
+</code></pre>
+</li>
+</ul>
+</li>
+</ul>
+<hr/>
+<h2>4. 실전 복잡 질의 SQL 생성 상세 예제</h2>
+<h3>시나리오: 다중 조인 및 전월 대비 증감 현황 산출 (LAG 윈도우 함수 적용)</h3>
+<ul>
+<li>
+<p><strong>자연어 질문</strong>: "dw_history 스키마의 고객정보와 카드계좌 테이블을 연결하여, 2025년 상반기 동안의 성별 카드 총이용금액을 월별로 집계하고 전월 대비 총이용금액의 증감분을 보여줘"</p>
+</li>
+<li>
+<p><strong><code>prepare_sql_context</code>에서 추출된 정보</strong>:</p>
+<ul>
+<li><code>selected_tables</code>: <code>["dw_history.customers", "dw_history.customer_transactions"]</code></li>
+<li><code>join_paths</code>: <code>dw_history.customers.cust_id = dw_history.customer_transactions.cust_id</code> (INNER JOIN)</li>
+<li><code>default_filters</code>: <code>dw_history.customer_transactions</code>에 대해 <code>status_code IS NULL</code> 필수</li>
+<li><code>time_conditions</code>: <code>dw_history.customer_transactions.trans_date BETWEEN '20250101' AND '20250630'</code></li>
+</ul>
+</li>
+<li>
+<p><strong>최종 완성된 SQL (스켈레톤 구조를 엄격히 준수하여 조립)</strong>:</p>
+<pre><code class="language-sql">WITH monthly_sales AS (
+  SELECT T1.gender,
+         SUBSTR(T2.trans_date, 1, 6) AS YYYYMM,
+         SUM(T2.amount) AS TOT_AMT
+  FROM dw_history.customers T1
+  INNER JOIN dw_history.customer_transactions T2 ON T1.cust_id = T2.cust_id
+  WHERE T2.trans_date &gt;= '20250101' AND T2.trans_date &lt;= '20250630'
+    AND T2.status_code IS NULL
+    AND T1.cust_type = '01' /* 개인 고객 한정 필터 */
+  GROUP BY T1.gender, SUBSTR(T2.trans_date, 1, 6)
+)
+SELECT gender AS "성별코드",
+       YYYYMM AS "이용연월",
+       TOT_AMT AS "총이용금액",
+       LAG(TOT_AMT, 1) OVER (PARTITION BY gender ORDER BY YYYYMM) AS "전월이용금액",
+       TOT_AMT - LAG(TOT_AMT, 1) OVER (PARTITION BY gender ORDER BY YYYYMM) AS "전월대비증감"
+FROM monthly_sales
+ORDER BY gender, YYYYMM
+LIMIT 100
+</code></pre>
+</li>
+<li>
+<p><strong>코드 리뷰 포인트</strong>:</p>
+<ul>
+<li><code>cust_id</code> 키 컬럼을 기반으로 정확한 <code>INNER JOIN</code>을 수립했습니다.</li>
+<li><code>status_code IS NULL</code> 가이드 정책 필터를 빼놓지 않고 WHERE 조건에 추가해 데이터 왜곡을 방지했습니다.</li>
+<li>CTE(<code>WITH</code> 인라인뷰) 바깥에서 <code>LAG</code> 윈도우 함수를 정확히 호출하였으며, 전체 집계 결과가 쏟아지지 않도록 PostgreSQL·MySQL·MariaDB 공통 구문인 <code>LIMIT 100</code>으로 행 개수를 안전하게 제한했습니다.</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+    </div>
+</body>
+</html>

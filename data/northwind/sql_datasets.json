@@ -1,0 +1,56 @@
+[
+ {
+  "id": 1,
+  "question": "단종되지 않은 제품 수를 알려줘",
+  "target_sql": "SELECT COUNT(*) AS live_products FROM northwind.products T1 WHERE T1.discontinued = FALSE",
+  "target_domain": "northwind",
+  "target_table": "northwind.products",
+  "target_column": "discontinued",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 2,
+  "question": "카테고리별 제품 수를 많은 순으로 보여줘",
+  "target_sql": "SELECT T2.category_name, COUNT(*) AS products FROM northwind.products T1 JOIN northwind.categories T2 ON T1.category_id = T2.category_id GROUP BY T2.category_name ORDER BY products DESC, T2.category_name",
+  "target_domain": "northwind",
+  "target_table": "northwind.products",
+  "target_column": "category_id|category_name",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 3,
+  "question": "주문이 가장 많은 고객사 상위 3곳은?",
+  "target_sql": "SELECT T1.customer_id, COUNT(*) AS orders FROM northwind.orders T1 GROUP BY T1.customer_id ORDER BY orders DESC, T1.customer_id LIMIT 3",
+  "target_domain": "northwind",
+  "target_table": "northwind.orders",
+  "target_column": "customer_id|company_name",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 4,
+  "question": "아직 배송되지 않은 주문 건수는?",
+  "target_sql": "SELECT COUNT(*) AS unshipped FROM northwind.orders T1 WHERE T1.shipped_date IS NULL",
+  "target_domain": "northwind",
+  "target_table": "northwind.orders",
+  "target_column": "shipped_date",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 5,
+  "question": "직원별 처리 주문 수를 많은 순으로 알려줘",
+  "target_sql": "SELECT T2.last_name, COUNT(*) AS orders FROM northwind.orders T1 JOIN northwind.employees T2 ON T1.employee_id = T2.employee_id GROUP BY T2.last_name ORDER BY orders DESC, T2.last_name",
+  "target_domain": "northwind",
+  "target_table": "northwind.orders",
+  "target_column": "employee_id|last_name",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 6,
+  "question": "전체 주문 상세의 총 주문 수량은?",
+  "target_sql": "SELECT SUM(T1.quantity) AS total_quantity FROM northwind.order_details T1",
+  "target_domain": "northwind",
+  "target_table": "northwind.order_details",
+  "target_column": "quantity",
+  "target_intent": "agg_count|group_by"
+ }
+]

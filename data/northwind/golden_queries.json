@@ -1,0 +1,95 @@
+[
+ {
+  "id": 1,
+  "question": "단종되지 않은 제품 수를 알려줘",
+  "expected_tables": [
+   "northwind.products"
+  ],
+  "expected_columns": [
+   "discontinued"
+  ],
+  "expected_sql": "SELECT COUNT(*) AS live_products FROM northwind.products T1 WHERE T1.discontinued = FALSE",
+  "expected_first_row": {
+   "live_products": 12
+  }
+ },
+ {
+  "id": 2,
+  "question": "카테고리별 제품 수를 많은 순으로 보여줘",
+  "expected_tables": [
+   "northwind.products",
+   "northwind.categories"
+  ],
+  "expected_columns": [
+   "category_id",
+   "category_name"
+  ],
+  "expected_sql": "SELECT T2.category_name, COUNT(*) AS products FROM northwind.products T1 JOIN northwind.categories T2 ON T1.category_id = T2.category_id GROUP BY T2.category_name ORDER BY products DESC, T2.category_name",
+  "expected_first_row": {
+   "category_name": "Beverages",
+   "products": 3
+  }
+ },
+ {
+  "id": 3,
+  "question": "주문이 가장 많은 고객사 상위 3곳은?",
+  "expected_tables": [
+   "northwind.orders",
+   "northwind.customers"
+  ],
+  "expected_columns": [
+   "customer_id",
+   "company_name"
+  ],
+  "expected_sql": "SELECT T1.customer_id, COUNT(*) AS orders FROM northwind.orders T1 GROUP BY T1.customer_id ORDER BY orders DESC, T1.customer_id LIMIT 3",
+  "expected_first_row": {
+   "customer_id": "CUST2",
+   "orders": 4
+  }
+ },
+ {
+  "id": 4,
+  "question": "아직 배송되지 않은 주문 건수는?",
+  "expected_tables": [
+   "northwind.orders"
+  ],
+  "expected_columns": [
+   "shipped_date"
+  ],
+  "expected_sql": "SELECT COUNT(*) AS unshipped FROM northwind.orders T1 WHERE T1.shipped_date IS NULL",
+  "expected_first_row": {
+   "unshipped": 4
+  }
+ },
+ {
+  "id": 5,
+  "question": "직원별 처리 주문 수를 많은 순으로 알려줘",
+  "expected_tables": [
+   "northwind.orders",
+   "northwind.employees"
+  ],
+  "expected_columns": [
+   "employee_id",
+   "last_name"
+  ],
+  "expected_sql": "SELECT T2.last_name, COUNT(*) AS orders FROM northwind.orders T1 JOIN northwind.employees T2 ON T1.employee_id = T2.employee_id GROUP BY T2.last_name ORDER BY orders DESC, T2.last_name",
+  "expected_first_row": {
+   "last_name": "Buchanan",
+   "orders": 5
+  }
+ },
+ {
+  "id": 6,
+  "question": "전체 주문 상세의 총 주문 수량은?",
+  "expected_tables": [
+   "northwind.order_details"
+  ],
+  "expected_columns": [
+   "quantity"
+  ],
+  "expected_sql": "SELECT SUM(T1.quantity) AS total_quantity FROM northwind.order_details T1",
+  "expected_first_row": {
+   "total_quantity": 150
+  }
+ }
+]

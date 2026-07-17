@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon · 프로파일 카탈로그</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<style>
+  :root{
+    --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
+    --blue:#2563eb;--green:#15803d;--green-soft:#e6f6ec;--amber:#b45309;
+    --red:#b91c1c;--red-soft:#fdeaea;--mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
+  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header h1{font-size:16px;margin:0 10px 0 0;}
+  .grow{flex:1;}
+  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:160px;}
+  main{max-width:1300px;margin:0 auto;padding:16px 20px 90px;}
+  .cols{display:grid;grid-template-columns:280px 1fr;gap:14px;}
+  @media(max-width:900px){.cols{grid-template-columns:1fr;}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;}
+  .card h2{font-size:13px;margin:0 0 10px;color:var(--sub);font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
+  .plist{list-style:none;margin:0;padding:0;}
+  .plist li{padding:9px 10px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px;cursor:pointer;}
+  .plist li:hover{border-color:var(--blue);}
+  .plist li.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .plist .pmeta{font-size:11.5px;color:var(--sub);} .plist li.active .pmeta{color:#cfe0ff;}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;}
+  .pill.ok{background:var(--green-soft);color:var(--green);} .pill.no{background:#eef1f5;color:#5b6b7f;}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
+  .btn:hover{border-color:var(--blue);color:var(--blue);}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600;}
+  .btn.warn{background:var(--amber);border-color:var(--amber);color:#fff;}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);}
+  td.mono,.mono{font-family:var(--mono);font-size:12px;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .kpi{display:inline-block;margin-right:16px;}
+  .kpi b{font-size:22px;font-variant-numeric:tabular-nums;}
+  textarea{width:100%;min-height:280px;border:1px solid var(--line);border-radius:8px;padding:10px;font-family:var(--mono);font-size:12px;}
+  select{border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-size:13px;}
+  .msg{font-size:12.5px;margin-left:6px;} .msg.ok{color:var(--green);} .msg.bad{color:var(--red);}
+  .empty{color:var(--sub);padding:20px;text-align:center;}
+  .dsrow{cursor:pointer;} .dsrow:hover{background:#f2f6ff;}
+  .hero{background:linear-gradient(135deg,#10203c,#1f5b9e);color:#fff;border:0;padding:22px;box-shadow:0 12px 34px rgba(20,55,105,.15)}
+  .hero h2{color:#fff;text-transform:none;font-size:21px;letter-spacing:-.3px;margin-bottom:5px}.hero p{margin:0;color:#cbdcf5;max-width:760px}
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-top:18px;background:rgba(255,255,255,.16);border-radius:9px;overflow:hidden}.step{background:rgba(255,255,255,.08);padding:10px 12px;font-size:12px}.step b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#fff;color:#1f5b9e;margin-right:6px}.step span{display:block;margin-left:32px;color:#cbdcf5;font-size:11px}
+  .search{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:10px 0;font-size:13px}.profile-count{font-size:11px;color:var(--sub)}
+  .statusbar{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;background:#f3f7fd;margin:10px 0}.dot{width:9px;height:9px;border-radius:50%;background:#94a3b8}.dot.ok{background:#16a34a;box-shadow:0 0 0 3px #dcfce7}.dot.bad{background:#dc2626;box-shadow:0 0 0 3px #fee2e2}
+  .actionbox{border:1px solid #d7e1ef;background:#fbfdff;border-radius:11px;padding:13px;margin-top:12px}.actionbox h3{font-size:13px;margin:0 0 4px}.actionbox p{font-size:12px;color:var(--sub);margin:0 0 10px}.schema-list{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.schema-chip{display:flex;gap:5px;align-items:center;border:1px solid #cad6e7;border-radius:999px;padding:4px 9px;background:#fff;font-size:12px;cursor:pointer}.schema-chip:has(input:checked){background:#e8efff;border-color:var(--blue);color:#1d4ed8}
+  .resultbox{display:none;margin-top:12px;border-radius:9px;padding:11px 13px;white-space:pre-wrap}.resultbox.show{display:block}.resultbox.ok{background:var(--green-soft);border:1px solid #b9dfc5}.resultbox.bad{background:var(--red-soft);border:1px solid #efc4c4}.resultbox.info{background:#e8efff;border:1px solid #c4d6f7}
+  .dataset-help{font-size:12px;color:var(--sub);margin:-3px 0 9px}.dsrow.selected{background:#eaf1ff}.empty-action{padding:24px;text-align:center;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px}.empty-action b{display:block;font-size:15px;margin-bottom:4px}.load-error{color:var(--red);font-size:11px;margin-top:3px}
+  @media(max-width:700px){main{padding:12px}.flow{grid-template-columns:1fr 1fr}.hero{padding:17px}.row.actions{align-items:stretch}.row.actions .btn{width:100%}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🗃 프로파일 카탈로그</h1>
+  <input id="adminToken" type="password" placeholder="관리 토큰">
+  <span class="grow"></span>
+  <span class="msg" id="msg"></span>
+</header>
+<main>
+  <div class="card hero"><h2>DB별 메타데이터를 구축하고 운영하세요</h2><p>라이브 스키마를 수집한 뒤 업무 메타데이터를 보강하면, 해당 프로파일의 질문·검증·SQL 생성에 자동으로 사용됩니다.</p><div class="flow"><div class="step"><b>1</b>연결 선택<span>대상 DB 프로파일</span></div><div class="step"><b>2</b>스키마 탐색<span>수집 범위 확인</span></div><div class="step"><b>3</b>구축·검토<span>물리 모델과 품질</span></div><div class="step"><b>4</b>업무 의미 보강<span>논리명·지표·용어</span></div></div></div>
+  <div class="cols">
+    <div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h2 style="margin:0">프로파일</h2>
+          <div class="row"><button class="btn warn" id="buildAll">전체 구축</button><button class="btn" id="reload">새로고침</button></div>
+        </div>
+        <input class="search" id="profileSearch" placeholder="프로파일 이름 또는 DB 엔진 검색">
+        <div class="profile-count" id="profileCount"></div>
+        <ul class="plist" id="plist"><li class="empty">불러오는 중…</li></ul>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" id="detailCard" style="display:none">
+        <div class="row" style="justify-content:space-between">
+          <h2 style="margin:0" id="detailTitle"></h2>
+          <div class="row actions">
+            <span id="activeBadge"></span>
+            <button class="btn primary" id="activateBtn">활성 카탈로그로 전환</button>
+          </div>
+        </div>
+        <div class="statusbar"><span class="dot" id="workspaceDot"></span><b id="workspaceStatus">상태 확인 중</b><span class="grow"></span><span class="mono" id="profileType"></span></div>
+        <div id="summary" style="margin:8px 0 4px"></div>
+        <div id="health" class="mono" style="font-size:11.5px;color:var(--sub)"></div>
+        <div class="actionbox"><h3>라이브 DB에서 구축·갱신</h3><p>먼저 스키마를 탐색하고 수집할 범위를 선택하세요. 선택하지 않으면 접근 가능한 전체 스키마를 수집합니다.</p>
+          <div class="row"><button class="btn" id="discoverBtn">스키마 탐색</button><span class="mini" id="schemaHint">아직 탐색하지 않았습니다.</span></div><div class="schema-list" id="schemaList"></div>
+          <input id="buildSchemas" type="hidden"><div class="row"><label class="mono" style="font-size:12px" title="라이브 DB에서 사라진 컬럼을 워크스페이스에서도 제거합니다"><input type="checkbox" id="buildPrune"> 삭제된 컬럼 정리(prune)</label><span class="grow"></span><button class="btn warn" id="buildBtn">선택 범위 구축·갱신</button></div>
+        </div>
+        <div class="resultbox" id="actionResult"></div>
+      </div>
+
+      <div class="card" id="dsCard" style="display:none">
+        <h2>데이터셋</h2>
+        <div class="dataset-help">행을 선택하면 JSON을 검토·편집할 수 있습니다. 물리 구조는 구축으로 갱신하고, 논리명·용어·지표는 여기에서 보강하세요.</div>
+        <table><thead><tr><th>이름</th><th>파일</th><th class="num">건수</th><th>상태</th></tr></thead>
+          <tbody id="dsBody"></tbody></table>
+      </div>
+
+      <div class="card" id="editorCard" style="display:none">
+        <div class="row" style="justify-content:space-between">
+          <h2 style="margin:0">편집 · <span class="mono" id="edName"></span></h2>
+          <div class="row">
+            <button class="btn" id="edReload">되돌리기</button>
+            <button class="btn primary" id="edSave">저장(검증·백업)</button>
+          </div>
+        </div>
+        <textarea id="edText" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+var $=function(id){return document.getElementById(id);};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+function headers(j){var h={};if(j)h['Content-Type']='application/json';var t=$('adminToken');if(t&&t.value)h['X-Admin-Token']=t.value;return h;}
+function flash(ok,t){var m=$('msg');m.className='msg '+(ok?'ok':'bad');m.textContent=t;setTimeout(function(){m.textContent='';},2800);}
+var CUR=null, PROFILES=[], ACTIVE={};
+function actionResult(kind,text){var el=$('actionResult');el.className='resultbox show '+kind;el.textContent=text;}
+function loadedText(v){if(v==null)return '-';if(typeof v==='object')return Object.keys(v).map(function(k){return k+' '+v[k];}).join(' · ');return String(v);}
+
+function loadList(){
+  fetch('/api/profile-catalogs',{headers:headers()}).then(function(r){return r.json();}).then(function(d){
+    if(d.error){flash(false,d.error);return;}
+    PROFILES=d.profiles||[];renderProfileList();
+  }).catch(function(e){flash(false,e.message);});
+}
+function renderProfileList(){
+    var query=$('profileSearch').value.trim().toLowerCase();
+    var ps=PROFILES.filter(function(p){return !query||[p.profile,p.name,p.type].join(' ').toLowerCase().indexOf(query)>=0;});
+    $('profileCount').textContent='전체 '+PROFILES.length+'개 · 표시 '+ps.length+'개';
+    $('plist').innerHTML = ps.length ? ps.map(function(p){
+      var ws=p.workspace?('<span class="pill ok">워크스페이스</span>'):('<span class="pill no">없음</span>');
+      var meta=p.workspace?('테이블 '+(p.tables||0)+' · 관계 '+(p.relations||0)+(p.quality_grade?(' · 품질 '+p.quality_grade):'')):(p.type||'');
+      return '<li data-p="'+esc(p.profile)+'"'+(CUR===p.profile?' class="active"':'')+'>'+
+        '<div class="row" style="justify-content:space-between"><b>'+esc(p.profile)+'</b>'+ws+'</div>'+
+        '<div class="pmeta">'+esc(p.name||'')+' · '+esc(meta)+'</div>'+(p.load_error?'<div class="load-error">로드 실패 · '+esc(p.load_error)+'</div>':'')+'</li>';
+    }).join('') : '<li class="empty">'+(query?'검색 결과가 없습니다.':'사용 가능한 프로파일이 없습니다. DB 연결을 먼저 등록하세요.')+'</li>';
+    Array.prototype.forEach.call($('plist').querySelectorAll('li[data-p]'),function(li){
+      li.onclick=function(){ selectProfile(li.getAttribute('data-p')); };
+    });
+}
+$('profileSearch').oninput=renderProfileList;
+
+function selectProfile(p,preserveResult){
+  CUR=p; renderProfileList();$('schemaList').innerHTML='';$('schemaHint').textContent='아직 탐색하지 않았습니다.';if(!preserveResult)$('actionResult').className='resultbox';
+  $('editorCard').style.display='none';
+  fetch('/api/profile-catalogs/'+encodeURIComponent(p),{headers:headers()}).then(function(r){return r.json();}).then(function(d){
+    $('detailCard').style.display=''; $('detailTitle').textContent=p;
+    var meta=PROFILES.filter(function(x){return x.profile===p;})[0]||{};$('profileType').textContent=(meta.type||'DB')+(meta.name?' · '+meta.name:'');
+    refreshActiveBadge();
+    if(!d.workspace){
+      $('workspaceDot').className='dot';$('workspaceStatus').textContent='구축 전';
+      $('summary').innerHTML='<div class="empty-action"><b>아직 카탈로그가 없습니다</b><span class="mini">아래에서 스키마를 탐색한 다음 첫 워크스페이스를 구축하세요.</span></div>';
+      $('health').textContent=''; $('dsCard').style.display='none'; return;
+    }
+    if(d.error){$('workspaceDot').className='dot bad';$('workspaceStatus').textContent='로드 실패';$('summary').innerHTML='<span class="msg bad">'+esc(d.error)+'</span>';$('dsCard').style.display='none';return;}
+    var s=d.summary||{};
+    var q=d.quality||{};
+    var qpill = q.overall_grade? ('<span class="kpi">품질 <b>'+(q.overall_score!=null?q.overall_score.toFixed(1):'-')+'</b> '+
+      '<span class="pill '+(q.gate_pass?'ok':'no')+'">'+esc(q.overall_grade)+(q.gate_pass?' · 게이트 통과':' · 게이트 차단')+'</span></span>') : '';
+    $('summary').innerHTML='<span class="kpi"><b>'+(s.table_count||0)+'</b> 테이블</span>'+
+      '<span class="kpi"><b>'+(s.column_count||0)+'</b> 컬럼</span>'+
+      '<span class="kpi"><b>'+(s.relation_count||0)+'</b> 관계</span>'+ qpill +
+      '<span class="kpi mono" style="font-size:12px">dir: '+esc(d.dir||'')+'</span>';
+    var h=d.health||{};
+    $('workspaceDot').className='dot '+(h.status==='ok'?'ok':(h.error_count?'bad':'ok'));$('workspaceStatus').textContent=h.status==='ok'?'사용 준비됨':'검토 필요';
+    $('health').textContent = h.status? ('health: '+h.status+' · errors '+(h.error_count!=null?h.error_count:'-')) : '';
+    renderDatasets(p, d.datasets||[]);
+  }).catch(function(e){flash(false,e.message);});
+}
+
+function renderDatasets(p, ds){
+  $('dsCard').style.display='';
+  $('dsBody').innerHTML = ds.map(function(x){
+    var editable = x.editable!==false && x.format!=='jsonl-dir';
+    var st = x.present===false?'<span class="pill no">없음</span>':(editable?'<span class="pill ok">편집가능</span>':'<span class="pill no">읽기전용</span>');
+    return '<tr class="dsrow" data-ds="'+esc(x.name)+'" data-edit="'+editable+'"><td class="mono">'+esc(x.name)+'</td>'+
+      '<td class="mono">'+esc(x.file||'')+'</td><td class="num">'+esc(loadedText(x.loaded))+'</td><td>'+st+'</td></tr>';
+  }).join('');
+  Array.prototype.forEach.call($('dsBody').querySelectorAll('tr[data-ds]'),function(tr){
+    tr.onclick=function(){ openEditor(p, tr.getAttribute('data-ds'), tr.getAttribute('data-edit')==='true'); };
+  });
+}
+
+function openEditor(p, name, editable){
+  fetch('/api/profile-catalogs/'+encodeURIComponent(p)+'/dataset/'+encodeURIComponent(name),{headers:headers()})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error){flash(false,d.error);return;}
+      $('editorCard').style.display=''; $('edName').textContent=name+(editable?'':' (읽기전용)');
+      $('edText').value=JSON.stringify(d.content,null,2);
+      $('edText').readOnly=!editable; $('edSave').style.display=editable?'':'none';
+      $('edText')._p=p; $('edText')._name=name;
+      $('editorCard').scrollIntoView({behavior:'smooth'});
+    }).catch(function(e){flash(false,e.message);});
+}
+
+function refreshActiveBadge(){
+  fetch('/api/profile-catalogs/active',{headers:headers()}).then(function(r){return r.json();}).then(function(a){
+    ACTIVE=a||{};
+    var active = a.active_profile||(a.is_default?'(기본 -data)':'');
+    var isCur = (CUR && a.active_profile===CUR);
+    $('activeBadge').innerHTML = isCur? '<span class="pill ok">현재 활성</span>' : '<span class="pill no">활성: '+esc(active)+'</span>';
+    $('activateBtn').style.display=a.can_activate?'':'none';
+    if(!a.can_activate)$('activeBadge').innerHTML='<span class="pill ok">프로파일별 자동 적용</span> <span class="mini">'+esc(a.activation_note||'')+'</span>';
+  }).catch(function(){});
+}
+$('discoverBtn').onclick=function(){
+  if(!CUR)return;$('schemaHint').textContent='DB 스키마를 확인하는 중…';$('schemaList').innerHTML='';
+  fetch('/api/profile-catalogs/'+encodeURIComponent(CUR)+'/schemas',{headers:headers()}).then(function(r){return r.json();}).then(function(d){
+    if(d.error){$('schemaHint').textContent='탐색 실패';actionResult('bad','스키마 탐색 실패\n'+d.error+'\n\nDB 연결 화면에서 접속 테스트와 계정의 information_schema 조회 권한을 확인하세요.');return;}
+    var schemas=d.schemas||[];$('schemaHint').textContent=schemas.length+'개 발견 · 수집할 스키마를 선택하세요.';
+    $('schemaList').innerHTML=schemas.map(function(s){return '<label class="schema-chip"><input type="checkbox" value="'+esc(s)+'" checked>'+esc(s)+'</label>';}).join('')||'<span class="mini">접근 가능한 스키마가 없습니다.</span>';
+  }).catch(function(e){actionResult('bad',e.message);});
+};
+$('activateBtn').onclick=function(){
+  if(!CUR) return;
+  if(!confirm(CUR+' 워크스페이스를 활성 NL2SQL 카탈로그로 전환합니다(무재기동). 재기동 시 -data로 복귀합니다. 진행할까요?')) return;
+  fetch('/api/profile-catalogs/active',{method:'POST',headers:headers(true),body:JSON.stringify({profile:CUR})})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){var d=res.d;if(!res.ok||d.error){flash(false,d.error||'실패');return;}
+      flash(true,'활성 카탈로그 전환: '+(d.activated||'')); refreshActiveBadge(); loadList();
+    }).catch(function(e){flash(false,e.message);});
+};
+$('buildAll').onclick=function(){
+  if(!confirm('등록된 모든 프로파일의 카탈로그 워크스페이스를 라이브 DB로 구축/갱신합니다. 진행할까요?')) return;
+  actionResult('info','전체 프로파일을 순서대로 구축하고 있습니다…');
+  fetch('/api/profile-catalogs/build-all',{method:'POST',headers:headers(true),body:'{}'})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){var d=res.d;if(!res.ok||d.error){flash(false,d.error||'실패');return;}
+      var lines=(d.results||[]).map(function(x){return (x.status==='built'?'✓ ':'✘ ')+x.profile+' · '+x.status+(x.error?' · '+x.error:'');});
+      actionResult(d.failed?'bad':'ok','전체 구축 완료 · 성공 '+(d.built||0)+' / 실패 '+(d.failed||0)+'\n\n'+lines.join('\n')); loadList();if(CUR)selectProfile(CUR,true);
+    }).catch(function(e){flash(false,e.message);});
+};
+$('reload').onclick=loadList;
+$('buildBtn').onclick=function(){
+  if(!CUR) return;
+  if(!confirm(CUR+' 프로파일의 라이브 DB 스키마로 워크스페이스를 구축/갱신합니다. 진행할까요?')) return;
+  var selected=Array.prototype.map.call($('schemaList').querySelectorAll('input:checked'),function(x){return x.value;});
+  var discovered=$('schemaList').querySelectorAll('input').length>0;
+  if(discovered&&!selected.length&&!confirm('선택한 스키마가 없습니다. 접근 가능한 전체 범위를 구축할까요?'))return;
+  var body={schemas:selected,prune:$('buildPrune').checked};actionResult('info',CUR+' 카탈로그를 구축하고 있습니다…');
+  fetch('/api/profile-catalogs/'+encodeURIComponent(CUR)+'/build',{method:'POST',headers:headers(true),body:JSON.stringify(body)})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){var d=res.d;if(!res.ok||d.error){flash(false,d.error||'실패');return;}
+      actionResult('ok','구축 완료\n신규 컬럼 '+(d.columns_added||0)+' · 갱신 '+(d.columns_updated||0)+' · 신규 관계 '+(d.relations_added||0)+'\n폐기 후보 '+((d.retire_candidates||[]).length)+'개'+(d.pruned?' · 정리 완료':'')); loadList();selectProfile(CUR,true);
+    }).catch(function(e){flash(false,e.message);});
+};
+$('edReload').onclick=function(){ var t=$('edText'); if(t._p) openEditor(t._p,t._name,!t.readOnly); };
+$('edSave').onclick=function(){
+  var t=$('edText'); if(!t._p) return;
+  var parsed; try{ parsed=JSON.parse(t.value); }catch(e){ flash(false,'JSON 파싱 오류: '+e.message); return; }
+  fetch('/api/profile-catalogs/'+encodeURIComponent(t._p)+'/dataset/'+encodeURIComponent(t._name),
+    {method:'PUT',headers:headers(true),body:JSON.stringify(parsed)})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){var d=res.d;if(!res.ok||!d.applied){flash(false,(d&&d.error)||'저장 실패');return;}
+      flash(true,'저장됨 (백업 생성)'); selectProfile(t._p);
+    }).catch(function(e){flash(false,e.message);});
+};
+JASQL.mount({page:'profcat',onReady:loadList});
+</script>
+</body>
+</html>

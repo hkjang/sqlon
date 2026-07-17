@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon 메타 품질</title>
+<style>
+  :root{
+    --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
+    --blue:#2563eb;--green:#15803d;--amber:#b45309;--red:#b91c1c;
+    --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
+  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header h1{font-size:16px;margin:0 10px 0 0;}
+  .grow{flex:1;}
+  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:160px;}
+  main{max-width:1300px;margin:0 auto;padding:16px 20px 90px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+  .card h2{font-size:13px;margin:0 0 12px;color:var(--sub);font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+  .kpi{border:1px solid var(--line);border-radius:12px;padding:16px 18px;}
+  .kpi .n{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px;}
+  .kpi .l{font-size:12.5px;color:var(--sub);margin-top:2px;}
+  .grade{display:inline-block;min-width:30px;text-align:center;border-radius:8px;padding:2px 10px;font-weight:800;color:#fff;}
+  .gA{background:#15803d;}.gB{background:#4d9a2a;}.gC{background:#b45309;}.gD{background:#c2410c;}.gE{background:#b91c1c;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);cursor:pointer;}
+  td.mono{font-family:var(--mono);font-size:12px;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .bar{height:8px;border-radius:4px;background:#eef1f5;overflow:hidden;min-width:80px;}
+  .bar>i{display:block;height:100%;border-radius:4px;background:var(--blue);}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
+  .btn:hover{border-color:var(--blue);color:var(--blue);}
+  .pill{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;}
+  .pill.ok{background:#e6f6ec;color:var(--green);} .pill.bad{background:#fdeaea;color:var(--red);}
+  .viol{font-size:12.5px;padding:6px 10px;border-left:3px solid var(--red);background:#fdf2f2;margin:6px 0;border-radius:0 6px 6px 0;}
+  .viol.warn{border-color:var(--amber);background:#fdf7ec;}
+  .msg{font-size:12.5px;margin-left:6px;} .msg.ok{color:var(--green);} .msg.bad{color:var(--red);}
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+  .mini{font-size:12px;color:var(--sub);}
+</style>
+</head>
+<body>
+<header>
+  <h1>📈 메타 품질</h1>
+  <span class="mini" id="scope" style="color:#9db4dd"></span>
+  <input id="adminToken" type="password" placeholder="관리 토큰">
+  <span class="grow"></span>
+  <span class="msg" id="msg"></span>
+</header>
+<main>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0">릴리스 게이트</h2>
+      <span class="grow"></span>
+      <span id="gatePill"></span>
+    </div>
+    <div id="violations"></div>
+  </div>
+
+  <div class="card">
+    <h2>테이블별 품질 (점수 낮은 순)</h2>
+    <table>
+      <thead><tr>
+        <th>테이블</th><th>등급</th><th style="width:160px">점수</th>
+        <th class="num">완전성</th><th class="num">관계성</th><th class="num">프로파일</th><th class="num">보안</th>
+      </tr></thead>
+      <tbody id="rows"><tr><td colspan="7" class="mini">불러오는 중…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0">감사 로그 무결성</h2>
+      <input id="auditDay" placeholder="YYYYMMDD (오늘)" style="border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-size:13px;width:150px">
+      <button class="btn" id="verifyBtn">해시 체인 검증</button>
+      <span class="grow"></span>
+      <span id="auditPill"></span>
+    </div>
+    <div id="auditDetail" class="mini"></div>
+  </div>
+</main>
+
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+var $ = function(id){return document.getElementById(id);};
+var esc = function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+function headers(){var h={};var t=$('adminToken');if(t&&t.value)h['X-Admin-Token']=t.value;return h;}
+function flash(ok,t){var m=$('msg');m.className='msg '+(ok?'ok':'bad');m.textContent=t;setTimeout(function(){m.textContent='';},2600);}
+function gradeCls(g){return 'grade g'+(g||'E');}
+function pct(v){return Math.max(0,Math.min(100,v||0));}
+
+function load(){
+  fetch('/api/metadata/quality', {headers:headers()}).then(function(r){return r.json();}).then(function(d){
+    if(d.error){flash(false,d.error);return;}
+    $('kpis').innerHTML =
+      '<div class="kpi"><div class="n">'+(d.overall_score!=null?d.overall_score.toFixed(1):'-')+'</div><div class="l">종합 점수 / 100</div></div>'+
+      '<div class="kpi"><div class="n"><span class="'+gradeCls(d.overall_grade)+'">'+esc(d.overall_grade||'-')+'</span></div><div class="l">종합 등급</div></div>'+
+      '<div class="kpi"><div class="n">'+((d.tables||[]).length)+'</div><div class="l">테이블 수</div></div>';
+    var rows=(d.tables||[]).slice().sort(function(a,b){return (a.score||0)-(b.score||0);});
+    var dim=function(t,k){var d=t.dimensions||{};return d[k]!=null?Math.round(d[k]):'-';};
+    $('rows').innerHTML = rows.length ? rows.map(function(t){
+      var name=(t.schema?(t.schema+'.'):'')+(t.table||'');
+      return '<tr><td class="mono">'+esc(name)+'</td>'+
+        '<td><span class="'+gradeCls(t.grade)+'">'+esc(t.grade||'-')+'</span></td>'+
+        '<td><div class="bar"><i style="width:'+pct(t.score)+'%"></i></div><span class="mini">'+(t.score!=null?t.score.toFixed(0):'-')+'</span></td>'+
+        '<td class="num">'+dim(t,'completeness')+'</td><td class="num">'+dim(t,'relationship')+'</td>'+
+        '<td class="num">'+dim(t,'profiling')+'</td><td class="num">'+dim(t,'security')+'</td></tr>';
+    }).join('') : '<tr><td colspan="7" class="mini">테이블 없음</td></tr>';
+  }).catch(function(e){flash(false,e.message);});
+
+  fetch('/api/metadata/quality?gate=true', {headers:headers()}).then(function(r){return r.json();}).then(function(d){
+    if(d.error) return;
+    $('gatePill').innerHTML = d.pass ? '<span class="pill ok">통과</span>' : '<span class="pill bad">차단</span>';
+    var vs=d.violations||[];
+    $('violations').innerHTML = vs.length ? vs.map(function(v){
+      return '<div class="viol'+(v.severity==='block'?'':' warn')+'"><b>'+esc(v.code||'')+'</b> '+esc(v.message||'')+
+        (v.detail?(' <span class="mini">('+esc(v.detail)+')</span>'):'')+'</div>';
+    }).join('') : '<div class="mini">차단 조건 없음. 릴리스 가능합니다.</div>';
+  });
+}
+
+function verify(){
+  var day=$('auditDay').value.trim();
+  fetch('/api/audit/verify'+(day?('?day='+encodeURIComponent(day)):''), {headers:headers()})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error){$('auditPill').innerHTML='';flash(false,d.error);return;}
+      $('auditPill').innerHTML = d.valid ? '<span class="pill ok">무결</span>' : '<span class="pill bad">변조 의심</span>';
+      $('auditDetail').textContent = d.valid
+        ? ('일자 '+d.day+' · 검증 엔트리 '+d.entries+'건 · '+(d.note||''))
+        : ('일자 '+d.day+' · '+(d.verified_entries||0)+'건까지 정상, '+d.broken_at_line+'번째 줄에서 깨짐: '+d.reason);
+    }).catch(function(e){flash(false,e.message);});
+}
+
+$('verifyBtn').onclick = verify;
+JASQL.mount({ page:'quality', onReady:function(me){ if(me&&me.version)$('scope').textContent='v'+me.version; load(); }});
+</script>
+</body>
+</html>

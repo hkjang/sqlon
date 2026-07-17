@@ -1,0 +1,47 @@
+[
+ {
+  "id": 1,
+  "question": "발행된(publish) 글 수를 알려줘",
+  "target_sql": "SELECT COUNT(*) AS published_posts FROM wordpress.wp_posts T1 WHERE T1.post_status = 'publish' AND T1.post_type = 'post'",
+  "target_domain": "wordpress",
+  "target_table": "wordpress.wp_posts",
+  "target_column": "post_status|post_type",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 2,
+  "question": "작성자별 글 수를 많은 순으로 보여줘",
+  "target_sql": "SELECT T2.display_name, COUNT(*) AS posts FROM wordpress.wp_posts T1 JOIN wordpress.wp_users T2 ON T1.post_author = T2.id WHERE T1.post_type = 'post' GROUP BY T2.display_name ORDER BY posts DESC, T2.display_name",
+  "target_domain": "wordpress",
+  "target_table": "wordpress.wp_posts",
+  "target_column": "post_author|display_name",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 3,
+  "question": "승인된 댓글 수는?",
+  "target_sql": "SELECT COUNT(*) AS approved_comments FROM wordpress.wp_comments T1 WHERE T1.comment_approved = '1'",
+  "target_domain": "wordpress",
+  "target_table": "wordpress.wp_comments",
+  "target_column": "comment_approved",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 4,
+  "question": "카테고리별 글 수를 많은 순으로 알려줘",
+  "target_sql": "SELECT T3.name, COUNT(*) AS posts FROM wordpress.wp_term_relationships T1 JOIN wordpress.wp_term_taxonomy T2 ON T1.term_taxonomy_id = T2.term_taxonomy_id JOIN wordpress.wp_terms T3 ON T2.term_id = T3.term_id WHERE T2.taxonomy = 'category' GROUP BY T3.name ORDER BY posts DESC, T3.name",
+  "target_domain": "wordpress",
+  "target_table": "wordpress.wp_term_relationships",
+  "target_column": "taxonomy|name",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 5,
+  "question": "댓글이 가장 많이 달린 글은 무엇이야?",
+  "target_sql": "SELECT T2.post_title, COUNT(*) AS comments FROM wordpress.wp_comments T1 JOIN wordpress.wp_posts T2 ON T1.comment_post_id = T2.id GROUP BY T2.post_title ORDER BY comments DESC, T2.post_title LIMIT 1",
+  "target_domain": "wordpress",
+  "target_table": "wordpress.wp_comments",
+  "target_column": "comment_post_id|post_title",
+  "target_intent": "agg_count|group_by"
+ }
+]

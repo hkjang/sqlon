@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon 메타 검토</title>
+<style>
+  :root{
+    --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
+    --blue:#2563eb;--blue-soft:#e8efff;--green:#15803d;--green-soft:#e6f6ec;
+    --amber:#b45309;--amber-soft:#fdf3e2;--red:#b91c1c;--red-soft:#fdeaea;
+    --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
+  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header h1{font-size:16px;margin:0 10px 0 0;}
+  .grow{flex:1;}
+  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:160px;}
+  main{max-width:1300px;margin:0 auto;padding:16px 20px 90px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;}
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+  .toolbar select,.toolbar input{border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px;background:#fff;}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
+  .btn:hover{border-color:var(--blue);color:var(--blue);}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600;}
+  .btn.ok{background:var(--green);border-color:var(--green);color:#fff;}
+  .btn.bad{background:var(--red);border-color:var(--red);color:#fff;}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;}
+  .chip{font-size:12px;padding:4px 10px;border-radius:20px;background:var(--blue-soft);color:var(--blue);font-weight:600;}
+  .chip.g{background:var(--green-soft);color:var(--green);} .chip.a{background:var(--amber-soft);color:var(--amber);}
+  .chip.r{background:var(--red-soft);color:var(--red);}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);font-weight:600;}
+  td.mono{font-family:var(--mono);font-size:12px;}
+  .kind{display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;background:#eef1f5;color:#334;font-weight:600;}
+  .kind.mt{background:#efe7fb;color:#6b21a8;} .kind.rl{background:#e2f1fb;color:#0369a1;}
+  .kind.cd{background:#fdf3e2;color:#b45309;} .kind.ln,.kind.st,.kind.ds{background:var(--green-soft);color:var(--green);}
+  .conf{font-variant-numeric:tabular-nums;font-weight:600;}
+  .status{font-size:12px;font-weight:600;}
+  .status.pending{color:var(--amber);} .status.approved{color:var(--green);} .status.rejected{color:var(--red);}
+  .sug{max-width:360px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:11.5px;color:#334;}
+  .ev{font-size:11px;color:var(--sub);}
+  .rowacts{display:flex;gap:6px;}
+  .rowacts button{font-size:12px;padding:4px 9px;}
+  .empty{color:var(--sub);padding:24px;text-align:center;}
+  .msg{font-size:13px;margin-left:8px;}
+  .msg.ok{color:var(--green);} .msg.bad{color:var(--red);}
+  pre.snip{background:#0d1626;color:#dbe6ff;border-radius:10px;padding:14px;font-family:var(--mono);font-size:12px;overflow:auto;max-height:340px;}
+  .sel-actions{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 0;display:flex;gap:8px;align-items:center;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧾 메타 검토</h1>
+  <span class="mini" id="scope" style="color:#9db4dd;font-size:12px"></span>
+  <input id="adminToken" type="password" placeholder="관리 토큰">
+  <span class="grow"></span>
+  <span class="msg" id="msg"></span>
+</header>
+<main>
+  <div class="chips" id="summary"></div>
+
+  <div class="toolbar">
+    <label>상태
+      <select id="fStatus">
+        <option value="pending">대기(pending)</option>
+        <option value="">전체</option>
+        <option value="approved">승인됨</option>
+        <option value="rejected">반려됨</option>
+      </select>
+    </label>
+    <label>종류
+      <select id="fKind">
+        <option value="">전체</option>
+        <option value="logical_name">논리명</option>
+        <option value="semantic_type">의미타입</option>
+        <option value="description">설명</option>
+        <option value="code_dict">코드사전</option>
+        <option value="metric">지표</option>
+        <option value="relation">관계</option>
+      </select>
+    </label>
+    <input id="fTables" placeholder="테이블 필터 (schema.table, 콤마)">
+    <input id="fReviewer" placeholder="검토자 이름" style="width:130px">
+    <button class="btn" id="reload">새로고침</button>
+    <button class="btn" id="showSnippet">승인 스니펫 보기</button>
+    <button class="btn primary" id="applyNow">승인분 반영 + 리로드</button>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr>
+        <th style="width:26px"><input type="checkbox" id="selAll"></th>
+        <th>종류</th><th>대상</th><th>제안</th><th>신뢰도</th><th>상태</th><th>작업</th>
+      </tr></thead>
+      <tbody id="rows"><tr><td colspan="7" class="empty">불러오는 중…</td></tr></tbody>
+    </table>
+    <div class="sel-actions">
+      <label><input type="checkbox" id="selAll2"> 전체 선택</label>
+      <span class="grow" style="flex:1"></span>
+      <input id="bulkNotes" placeholder="메모(선택)" style="border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px;flex:1;max-width:320px">
+      <button class="btn ok" id="bulkApprove">선택 승인</button>
+      <button class="btn bad" id="bulkReject">선택 반려</button>
+    </div>
+  </div>
+
+  <div class="card" id="snippetCard" style="display:none">
+    <div class="toolbar" style="margin-bottom:8px">
+      <b>승인된 후보 → 적용 스니펫</b>
+      <span class="grow" style="flex:1"></span>
+      <button class="btn" id="copySnippet">복사</button>
+      <button class="btn" id="hideSnippet">닫기</button>
+    </div>
+    <pre class="snip" id="snippet"></pre>
+  </div>
+</main>
+
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+var KIND_KO = {logical_name:'논리명',semantic_type:'의미타입',description:'설명',code_dict:'코드사전',metric:'지표',relation:'관계'};
+var KIND_CLS = {logical_name:'ln',semantic_type:'st',description:'ds',code_dict:'cd',metric:'mt',relation:'rl'};
+var esc = function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+var $ = function(id){return document.getElementById(id);};
+var LATEST = [];
+
+function headers(json){
+  var h = {}; if(json) h['Content-Type']='application/json';
+  var t = $('adminToken'); if(t && t.value) h['X-Admin-Token']=t.value;
+  var rv = $('fReviewer'); if(rv && rv.value) h['X-Reviewer']=rv.value;
+  return h;
+}
+function flash(ok,text){ var m=$('msg'); m.className='msg '+(ok?'ok':'bad'); m.textContent=text; setTimeout(function(){m.textContent='';},2600); }
+
+function sugText(kind, s){
+  if(typeof s === 'string') return s;
+  try{
+    if(kind==='relation') return s.base_column+' → '+s.reference_table+'.'+s.reference_column+' ('+(s.cardinality||'')+')';
+    if(kind==='metric') return (s.aggregation||'')+' '+(s.expression||s.name||'');
+    if(kind==='code_dict'){ var e=s.entries||[]; return (s.code_dict||'')+' ['+e.slice(0,6).map(function(x){return x.code;}).join(', ')+(e.length>6?'…':'')+']'; }
+    return JSON.stringify(s);
+  }catch(_){ return JSON.stringify(s); }
+}
+
+function load(){
+  var q = new URLSearchParams();
+  q.set('status', $('fStatus').value);
+  if($('fKind').value) q.set('kinds', $('fKind').value);
+  if($('fTables').value.trim()) q.set('tables', $('fTables').value.trim());
+  $('rows').innerHTML = '<tr><td colspan="7" class="empty">불러오는 중…</td></tr>';
+  fetch('/api/reviews?'+q.toString(), {headers:headers(false)})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){ flash(false,d.error); return; }
+      renderSummary(d.summary, d.stale_count);
+      LATEST = d.items||[];
+      renderRows(LATEST);
+    }).catch(function(e){ flash(false,e.message); });
+}
+
+function renderSummary(sum, stale){
+  sum = sum||{};
+  $('summary').innerHTML =
+    '<span class="chip a">대기 '+(sum.pending||0)+'</span>'+
+    '<span class="chip g">승인 '+(sum.approved||0)+'</span>'+
+    '<span class="chip r">반려 '+(sum.rejected||0)+'</span>'+
+    (stale?'<span class="chip">과거결정(미표시) '+stale+'</span>':'');
+}
+
+function renderRows(items){
+  if(!items.length){ $('rows').innerHTML='<tr><td colspan="7" class="empty">해당 상태의 후보가 없습니다.</td></tr>'; return; }
+  $('rows').innerHTML = items.map(function(it){
+    var cls = KIND_CLS[it.kind]||'';
+    var target = esc(it.table)+(it.column?('.'+esc(it.column)):'');
+    return '<tr data-id="'+esc(it.id)+'" data-kind="'+esc(it.kind)+'">'+
+      '<td><input type="checkbox" class="rsel"></td>'+
+      '<td><span class="kind '+cls+'">'+esc(KIND_KO[it.kind]||it.kind)+'</span><div class="ev">'+esc(it.source)+'</div></td>'+
+      '<td class="mono">'+target+'</td>'+
+      '<td><div class="sug">'+esc(sugText(it.kind,it.suggested))+'</div>'+
+        (it.evidence&&it.evidence.length?'<div class="ev">'+esc(it.evidence.join(' · '))+'</div>':'')+'</td>'+
+      '<td class="conf">'+(it.confidence!=null?it.confidence.toFixed(2):'')+'</td>'+
+      '<td><span class="status '+esc(it.status)+'">'+esc(it.status)+'</span>'+
+        (it.reviewer?'<div class="ev">'+esc(it.reviewer)+'</div>':'')+'</td>'+
+      '<td><div class="rowacts">'+
+        '<button class="btn ok" data-act="approved">승인</button>'+
+        '<button class="btn bad" data-act="rejected">반려</button></div></td>'+
+    '</tr>';
+  }).join('');
+  $('rows').querySelectorAll('button[data-act]').forEach(function(b){
+    b.onclick = function(){
+      var tr = b.closest('tr');
+      decide([{id:tr.getAttribute('data-id'), decision:b.getAttribute('data-act'), notes:$('bulkNotes').value.trim()}]);
+    };
+  });
+}
+
+function selectedIds(){
+  return Array.prototype.slice.call($('rows').querySelectorAll('tr'))
+    .filter(function(tr){ var c=tr.querySelector('.rsel'); return c&&c.checked; })
+    .map(function(tr){ return tr.getAttribute('data-id'); });
+}
+
+function decide(decisions){
+  if(!decisions.length){ flash(false,'선택된 항목이 없습니다'); return; }
+  fetch('/api/reviews/decide', {method:'POST', headers:headers(true),
+    body: JSON.stringify({decisions:decisions, reviewer: $('fReviewer').value.trim()})})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){
+      if(!res.ok || res.d.error){ flash(false, (res.d&&res.d.error)||'실패'); return; }
+      flash(true, (res.d.applied||0)+'건 반영'+(res.d.unknown_ids?(' · 무시 '+res.d.unknown_ids.length):''));
+      load();
+    }).catch(function(e){ flash(false,e.message); });
+}
+
+function bulk(dec){
+  var ids = selectedIds();
+  decide(ids.map(function(id){ return {id:id, decision:dec, notes:$('bulkNotes').value.trim()}; }));
+}
+
+function showSnippet(){
+  fetch('/api/reviews/apply', {headers:headers(false)}).then(function(r){return r.json();}).then(function(d){
+    $('snippetCard').style.display='';
+    $('snippet').textContent = JSON.stringify(d, null, 2);
+    $('snippetCard').scrollIntoView({behavior:'smooth'});
+  }).catch(function(e){ flash(false,e.message); });
+}
+
+$('reload').onclick = load;
+$('fStatus').onchange = load;
+$('fKind').onchange = load;
+$('fTables').addEventListener('keydown', function(e){ if(e.key==='Enter') load(); });
+$('bulkApprove').onclick = function(){ bulk('approved'); };
+$('bulkReject').onclick = function(){ bulk('rejected'); };
+$('showSnippet').onclick = showSnippet;
+$('applyNow').onclick = function(){
+  if(!confirm('승인된 후보를 데이터셋 파일에 병합하고 카탈로그를 리로드합니다.\n각 파일은 자동 백업됩니다. 진행할까요?')) return;
+  fetch('/api/reviews/apply', {method:'POST', headers:headers(true)})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){
+      var d = res.d||{};
+      if(!res.ok || d.error){ flash(false, d.error||'실패'); return; }
+      flash(true, (d.applied||0)+'건 반영'+(d.reloaded?' · 리로드 완료':'')+(d.reload_error?' · 리로드 실패':''));
+      load();
+    }).catch(function(e){ flash(false,e.message); });
+};
+$('hideSnippet').onclick = function(){ $('snippetCard').style.display='none'; };
+$('copySnippet').onclick = function(){ navigator.clipboard.writeText($('snippet').textContent).then(function(){ flash(true,'복사됨'); }); };
+function toggleAll(chk){ $('rows').querySelectorAll('.rsel').forEach(function(c){ c.checked=chk; }); }
+$('selAll').onchange = function(){ toggleAll(this.checked); $('selAll2').checked=this.checked; };
+$('selAll2').onchange = function(){ toggleAll(this.checked); $('selAll').checked=this.checked; };
+
+JASQL.mount({ page:'reviews', onReady:function(me){
+  if(me && me.version) $('scope').textContent = 'v'+me.version;
+  load();
+}});
+</script>
+</body>
+</html>

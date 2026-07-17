@@ -1,0 +1,105 @@
+[
+ {
+  "id": 1,
+  "question": "활성 사용자 수를 알려줘",
+  "expected_tables": [
+   "public.jamypg_users"
+  ],
+  "expected_columns": [
+   "is_active"
+  ],
+  "expected_metrics": [],
+  "expected_sql": "SELECT COUNT(*) AS active_users FROM public.jamypg_users T1 WHERE T1.is_active = TRUE",
+  "expected_row_count": 1
+ },
+ {
+  "id": 2,
+  "question": "역할별 사용자 수를 보여줘",
+  "expected_tables": [
+   "public.jamypg_users"
+  ],
+  "expected_columns": [
+   "role"
+  ],
+  "expected_metrics": [],
+  "expected_sql": "SELECT T1.role, COUNT(*) AS cnt FROM public.jamypg_users T1 GROUP BY T1.role ORDER BY cnt DESC"
+ },
+ {
+  "id": 3,
+  "question": "가장 많이 호출된 MCP 도구 상위 3개를 알려줘",
+  "expected_tables": [
+   "public.jamypg_mcp_activity"
+  ],
+  "expected_columns": [
+   "tool"
+  ],
+  "expected_metrics": [],
+  "expected_sql": "SELECT T1.tool, COUNT(*) AS calls FROM public.jamypg_mcp_activity T1 GROUP BY T1.tool ORDER BY calls DESC LIMIT 3"
+ },
+ {
+  "id": 4,
+  "question": "사용자별 도구 호출 건수를 많은 순으로 보여줘",
+  "expected_tables": [
+   "public.jamypg_mcp_activity",
+   "public.jamypg_users"
+  ],
+  "expected_columns": [
+   "user_id",
+   "username"
+  ],
+  "expected_metrics": [],
+  "expected_sql": "SELECT T2.username, COUNT(*) AS calls FROM public.jamypg_mcp_activity T1 JOIN public.jamypg_users T2 ON T1.user_id = T2.id GROUP BY T2.username ORDER BY calls DESC"
+ },
+ {
+  "id": 5,
+  "question": "공유 상태인 DB 프로파일 목록을 보여줘",
+  "expected_tables": [
+   "public.jamypg_db_profiles"
+  ],
+  "expected_columns": [
+   "visibility"
+  ],
+  "expected_metrics": [],
+  "expected_sql": "SELECT T1.id, T1.visibility, T1.created_at FROM public.jamypg_db_profiles T1 WHERE T1.visibility = 'shared' ORDER BY T1.created_at"
+ },
+ {
+  "id": 6,
+  "question": "폐기되지 않은 유효한 MCP 키 개수는?",
+  "expected_tables": [
+   "public.jamypg_mcp_keys"
+  ],
+  "expected_columns": [
+   "revoked_at",
+   "expires_at"
+  ],
+  "expected_metrics": [],
+  "expected_sql": "SELECT COUNT(*) AS live_keys FROM public.jamypg_mcp_keys T1 WHERE T1.revoked_at IS NULL AND (T1.expires_at IS NULL OR T1.expires_at > CURRENT_TIMESTAMP)"
+ },
+ {
+  "id": 7,
+  "question": "도구별 평균 실행 시간이 큰 순서로 알려줘",
+  "expected_tables": [
+   "public.jamypg_mcp_activity"
+  ],
+  "expected_columns": [
+   "tool",
+   "elapsed_ms"
+  ],
+  "expected_metrics": [],
+  "expected_sql": "SELECT T1.tool, AVG(T1.elapsed_ms) AS avg_ms FROM public.jamypg_mcp_activity T1 GROUP BY T1.tool ORDER BY avg_ms DESC"
+ },
+ {
+  "id": 8,
+  "question": "실패한 도구 호출이 있었던 사용자와 건수는?",
+  "expected_tables": [
+   "public.jamypg_mcp_activity",
+   "public.jamypg_users"
+  ],
+  "expected_columns": [
+   "status",
+   "username"
+  ],
+  "expected_metrics": [],
+  "expected_sql": "SELECT T2.username, COUNT(*) AS errors FROM public.jamypg_mcp_activity T1 JOIN public.jamypg_users T2 ON T1.user_id = T2.id WHERE T1.status = 'error' GROUP BY T2.username ORDER BY errors DESC"
+ }
+]

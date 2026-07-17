@@ -1,0 +1,98 @@
+[
+ {
+  "id": 1,
+  "question": "카테고리별 영화 수를 많은 순으로 보여줘",
+  "expected_tables": [
+   "sakila.film_category",
+   "sakila.category"
+  ],
+  "expected_columns": [
+   "category_id",
+   "name"
+  ],
+  "expected_sql": "SELECT T2.name, COUNT(*) AS films FROM sakila.film_category T1 JOIN sakila.category T2 ON T1.category_id = T2.category_id GROUP BY T2.name ORDER BY films DESC, T2.name",
+  "expected_first_row": {
+   "name": "Comedy",
+   "films": 4
+  }
+ },
+ {
+  "id": 2,
+  "question": "대여 횟수가 가장 많은 고객 상위 3명은?",
+  "expected_tables": [
+   "sakila.rental",
+   "sakila.customer"
+  ],
+  "expected_columns": [
+   "customer_id",
+   "last_name"
+  ],
+  "expected_sql": "SELECT T2.last_name, COUNT(*) AS rentals FROM sakila.rental T1 JOIN sakila.customer T2 ON T1.customer_id = T2.customer_id GROUP BY T2.last_name ORDER BY rentals DESC, T2.last_name LIMIT 3",
+  "expected_first_row": {
+   "last_name": "CUST02",
+   "rentals": 8
+  }
+ },
+ {
+  "id": 3,
+  "question": "활성 고객 수를 알려줘",
+  "expected_tables": [
+   "sakila.customer"
+  ],
+  "expected_columns": [
+   "active"
+  ],
+  "expected_sql": "SELECT COUNT(*) AS active_customers FROM sakila.customer T1 WHERE T1.active = TRUE",
+  "expected_first_row": {
+   "active_customers": 7
+  }
+ },
+ {
+  "id": 4,
+  "question": "아직 반납되지 않은 대여 건수는?",
+  "expected_tables": [
+   "sakila.rental"
+  ],
+  "expected_columns": [
+   "return_date"
+  ],
+  "expected_sql": "SELECT COUNT(*) AS unreturned FROM sakila.rental T1 WHERE T1.return_date IS NULL",
+  "expected_first_row": {
+   "unreturned": 12
+  }
+ },
+ {
+  "id": 5,
+  "question": "출연 영화가 가장 많은 배우 상위 3명을 알려줘",
+  "expected_tables": [
+   "sakila.film_actor",
+   "sakila.actor"
+  ],
+  "expected_columns": [
+   "actor_id",
+   "last_name"
+  ],
+  "expected_sql": "SELECT T2.last_name, COUNT(*) AS films FROM sakila.film_actor T1 JOIN sakila.actor T2 ON T1.actor_id = T2.actor_id GROUP BY T2.last_name ORDER BY films DESC, T2.last_name LIMIT 3",
+  "expected_first_row": {
+   "last_name": "LOLLOBRIGIDA",
+   "films": 6
+  }
+ },
+ {
+  "id": 6,
+  "question": "결제 금액 합계가 가장 큰 고객은 누구야?",
+  "expected_tables": [
+   "sakila.payment",
+   "sakila.customer"
+  ],
+  "expected_columns": [
+   "amount",
+   "customer_id"
+  ],
+  "expected_sql": "SELECT T2.last_name, SUM(T1.amount) AS total_amount FROM sakila.payment T1 JOIN sakila.customer T2 ON T1.customer_id = T2.customer_id GROUP BY T2.last_name ORDER BY total_amount DESC, T2.last_name LIMIT 1",
+  "expected_first_row": {
+   "last_name": "CUST04",
+   "total_amount": 3992
+  }
+ }
+]

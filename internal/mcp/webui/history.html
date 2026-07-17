@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon 내 이력 · MCP 쿼리/실행 기록</title>
+<style>
+  :root{
+    --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
+    --blue:#2563eb;--blue-soft:#e8efff;--green:#15803d;--green-soft:#e6f6ec;
+    --red:#b91c1c;--red-soft:#fdeaea;--amber:#b45309;--amber-soft:#fdf3e2;
+    --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
+  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header h1{font-size:16px;margin:0 10px 0 0;}
+  .grow{flex:1;}
+  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:180px;}
+  main{max-width:1500px;margin:0 auto;padding:16px 20px 90px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 12px;font-size:13px;cursor:pointer;}
+  .btn:hover{border-color:var(--blue);color:var(--blue);}
+  .btn.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+  select,input.f{border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-size:13px;}
+  .mini{font-size:12px;color:var(--sub);}
+  table.t{width:100%;border-collapse:collapse;font-size:13px;}
+  table.t th{text-align:left;color:var(--sub);font-weight:600;padding:8px 9px;border-bottom:2px solid var(--line);position:sticky;top:0;background:#fff;}
+  table.t td{padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:top;}
+  .b{display:inline-block;font-size:11px;font-weight:700;border-radius:5px;padding:1px 7px;}
+  .b.prompt{background:var(--blue-soft);color:var(--blue);}
+  .b.generate{background:var(--amber-soft);color:var(--amber);}
+  .b.execute{background:var(--green-soft);color:var(--green);}
+  .b.ok{background:var(--green-soft);color:var(--green);}
+  .b.bad{background:var(--red-soft);color:var(--red);}
+  .b.gray{background:#eef1f5;color:var(--sub);}
+  .prompt-cell{max-width:320px;color:var(--ink);}
+  .sql-cell{max-width:420px;}
+  code.sql{display:block;background:#0e1726;color:#e6edf7;border-radius:6px;padding:7px 9px;font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow:auto;}
+  .paramtog{cursor:pointer;color:var(--blue);font-size:12px;}
+  pre.params{background:#eef1f5;border-radius:6px;padding:7px 9px;font-family:var(--mono);font-size:11px;white-space:pre-wrap;margin:5px 0 0;display:none;}
+  #toast{position:fixed;right:18px;bottom:18px;background:#101a2e;color:#e8eefc;border-radius:10px;padding:12px 18px;font-size:13px;display:none;z-index:50;}
+  .empty{padding:30px;text-align:center;color:var(--sub);}
+  .hero{background:linear-gradient(135deg,#10203c,#334f7f);color:#fff;border:0;padding:20px}.hero h2{font-size:20px;margin:0 0 4px}.hero p{margin:0;color:#ccd9ec}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:15px}.sum{background:rgba(255,255,255,.09);border-radius:8px;padding:9px 11px}.sum b{font-size:19px;display:block}.sum span{font-size:11px;color:#c9d7eb}.search{min-width:240px;flex:1}.actbtn{border:0;background:#e8efff;color:var(--blue);border-radius:5px;padding:3px 7px;cursor:pointer;font-size:11px;margin-top:5px}.tablewrap{overflow:auto;max-height:70vh}.filter-label{font-size:11px;color:var(--sub);display:block}.filter-group{display:flex;flex-direction:column;gap:2px}
+  @media(max-width:800px){main{padding:12px}.summary{grid-template-columns:1fr 1fr}.tablewrap{max-height:none}table.t thead{display:none}table.t tr{display:block;border-bottom:8px solid var(--bg);padding:8px}table.t td{display:block;border:0;padding:4px 8px;max-width:none!important}.toolbar>*{width:100%}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🕘 내 이력</h1>
+  <span class="mini" id="scopeChip"></span>
+  <input id="adminToken" type="password" placeholder="관리 토큰">
+  <span class="grow"></span>
+</header>
+<main>
+  <div class="card hero"><h2>과거 작업을 찾고 바로 이어서 사용하세요</h2><p>프롬프트와 생성·실행 SQL을 검색하고 질의 화면 또는 DB 콘솔로 다시 보낼 수 있습니다.</p><div class="summary"><div class="sum"><b id="sumAll">-</b><span>표시 활동</span></div><div class="sum"><b id="sumPrompt">-</b><span>프롬프트</span></div><div class="sum"><b id="sumExec">-</b><span>실행</span></div><div class="sum"><b id="sumFail">-</b><span>실패·차단</span></div></div></div>
+  <div class="card">
+    <div class="toolbar">
+      <span class="mini">MCP 키로 호출해 <b>생성/실행한 쿼리</b>와 그 쿼리를 만든 <b>사용자 프롬프트</b>, 에이전트가 보낸 파라미터를 확인합니다.</span>
+      <span class="grow"></span>
+      <label class="mini" id="allWrap" style="display:none"><input type="checkbox" id="allChk"> 전체 사용자 (admin)</label>
+      <input class="f search" id="searchFilter" placeholder="프롬프트, SQL, 프로파일 검색">
+      <div class="filter-group"><span class="filter-label">유형</span><select id="kindFilter">
+        <option value="">모든 유형</option>
+        <option value="prompt">프롬프트</option>
+        <option value="generate">생성(SQL)</option>
+        <option value="execute">실행</option>
+      </select></div>
+      <div class="filter-group"><span class="filter-label">조회 범위</span><select id="limitSel">
+        <option value="100">최근 100</option>
+        <option value="200" selected>최근 200</option>
+        <option value="500">최근 500</option>
+      </select></div>
+      <button class="btn" onclick="load()">새로고침</button>
+    </div>
+  </div>
+  <div class="card tablewrap" style="padding:0">
+    <table class="t">
+      <thead><tr>
+        <th style="width:140px">시각</th>
+        <th id="userCol" style="display:none">사용자</th>
+        <th style="width:90px">유형</th>
+        <th>사용자 프롬프트</th>
+        <th>SQL</th>
+        <th style="width:150px">프로파일/상태</th>
+        <th style="width:60px">행</th>
+      </tr></thead>
+      <tbody id="rows"><tr><td colspan="7" class="empty">불러오는 중…</td></tr></tbody>
+    </table>
+  </div>
+</main>
+<div id="toast"></div>
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let IS_ADMIN = false, LAST_ACTS=[], DISPLAY_ACTS=[], LAST_ALL=false;
+const tokenInput = $('#adminToken');
+tokenInput.value = localStorage.getItem('jasqlAdminToken') || '';
+tokenInput.addEventListener('change', () => localStorage.setItem('jasqlAdminToken', tokenInput.value));
+function headers(){ const h={}; if(tokenInput.value) h['X-Admin-Token']=tokenInput.value; return h; }
+function toast(m){ const t=$('#toast'); t.textContent=m; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none',2500); }
+const fmt = t => t ? String(t).slice(0,19).replace('T',' ') : '';
+
+async function load() {
+  const all = IS_ADMIN && $('#allChk').checked;
+  const limit = $('#limitSel').value;
+  const kindF = $('#kindFilter').value;
+  let url = '/api/mcp-activity?limit=' + limit + (all ? '&all=true' : '');
+  try {
+    const res = await fetch(url, { headers: headers() });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'HTTP ' + res.status);
+    $('#scopeChip').textContent = d.scope === 'all' ? '전체 사용자 보기' : '내 활동';
+    $('#userCol').style.display = all ? '' : 'none';
+    LAST_ACTS=d.activity||[];LAST_ALL=all;applyFilters();
+  } catch (e) {
+    $('#rows').innerHTML = '<tr><td colspan="7" class="empty">' + esc(e.message) +
+      (String(e.message).includes('meta db') ? ' — 이 기능은 인증 모드(메타 DB)에서만 제공됩니다.' : '') + '</td></tr>';
+  }
+}
+function applyFilters(){
+  const kindF=$('#kindFilter').value,q=$('#searchFilter').value.trim().toLowerCase();let acts=LAST_ACTS;
+  if(kindF)acts=acts.filter(a=>a.kind===kindF);if(q)acts=acts.filter(a=>[a.prompt,a.sql,a.profile,a.tool,a.username].join(' ').toLowerCase().includes(q));
+  $('#sumAll').textContent=acts.length;$('#sumPrompt').textContent=acts.filter(a=>a.kind==='prompt').length;$('#sumExec').textContent=acts.filter(a=>a.kind==='execute').length;$('#sumFail').textContent=acts.filter(a=>a.status&& !['executed','valid','ok'].includes(a.status)).length;render(acts,LAST_ALL);
+}
+function kindBadge(k){ const m={prompt:'프롬프트',generate:'생성',execute:'실행'}; return '<span class="b '+esc(k)+'">'+(m[k]||esc(k))+'</span>'; }
+function statusBadge(a){
+  if(a.kind==='execute'){ const ok=a.status==='executed'; return '<span class="b '+(ok?'ok':'bad')+'">'+esc(a.status||'?')+'</span>'; }
+  if(a.kind==='generate'){ const ok=a.status==='valid'; return '<span class="b '+(ok?'ok':(a.status==='invalid'?'bad':'gray'))+'">'+esc(a.status||'')+'</span>'; }
+  return '';
+}
+function render(acts, all) {
+  DISPLAY_ACTS=acts;
+  if (!acts.length) { $('#rows').innerHTML = '<tr><td colspan="7" class="empty">아직 기록이 없습니다. MCP 클라이언트에서 prepare_sql_context/validate_sql/run_sql_safely를 호출하면 여기에 쌓입니다.</td></tr>'; return; }
+  $('#rows').innerHTML = acts.map((a, i) => {
+    const params = a.params ? '<span class="paramtog" onclick="tog(' + i + ')">파라미터 ▾</span><pre class="params" id="p' + i + '">' + esc(JSON.stringify(a.params, null, 2)) + '</pre>' : '';
+    return '<tr>' +
+      '<td class="mini">' + esc(fmt(a.created_at)) + '<div class="mini" title="tool">' + esc(a.tool) + '</div></td>' +
+      (all ? '<td class="mini">' + esc(a.username || a.user_id) + '</td>' : '') +
+      '<td>' + kindBadge(a.kind) + '</td>' +
+      '<td class="prompt-cell">' + (a.prompt ? esc(a.prompt)+'<br><button class="actbtn" onclick="reusePrompt('+i+')">질의로 다시 사용</button>' : '<span class="mini">—</span>') + params + '</td>' +
+      '<td class="sql-cell">' + (a.sql ? '<code class="sql">' + esc(a.sql) + '</code><button class="actbtn" onclick="reuseSQL('+i+')">DB 콘솔로 보내기</button>' : '<span class="mini">—</span>') + '</td>' +
+      '<td class="mini">' + (a.profile ? '<div>' + esc(a.profile) + '</div>' : '') + statusBadge(a) + '</td>' +
+      '<td class="mini">' + (a.kind === 'execute' ? (a.row_count || 0) : '') + '</td>' +
+    '</tr>';
+  }).join('');
+}
+function reusePrompt(i){const a=DISPLAY_ACTS[i];if(!a||!a.prompt)return;sessionStorage.setItem('jasqlHistoryPrompt',a.prompt);location.href='/admin/ask';}
+function reuseSQL(i){const a=DISPLAY_ACTS[i];if(!a||!a.sql)return;sessionStorage.setItem('jasqlHandoffSQL',a.sql);if(a.profile)localStorage.setItem('jasqlLastProfile',a.profile);location.href='/admin/db';}
+function tog(i){ const el=$('#p'+i); el.style.display = el.style.display==='none'||!el.style.display ? 'block' : 'none'; }
+
+$('#allChk').addEventListener('change', load);
+$('#kindFilter').addEventListener('change', load);
+$('#limitSel').addEventListener('change', load);
+$('#searchFilter').addEventListener('input',applyFilters);
+
+JASQL.mount({ page: 'history', onReady(me) {
+  if (!me.auth_enabled) { $('#rows').innerHTML = '<tr><td colspan="7" class="empty">단독 모드에서는 개인 이력이 없습니다. 인증 모드(메타 DB)에서 MCP 키로 호출한 활동이 기록됩니다.</td></tr>'; return; }
+  IS_ADMIN = me.user && me.user.role === 'admin';
+  if (IS_ADMIN) $('#allWrap').style.display = '';
+  load();
+}});
+</script>
+</body>
+</html>

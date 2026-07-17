@@ -1,0 +1,44 @@
+[
+ {
+  "schema_name": "public",
+  "table_name": "jamypg_users",
+  "column_name": "role",
+  "common_division_code": "ROLE",
+  "code_dict_txt": "admin:관리자, user:일반 사용자"
+ },
+ {
+  "schema_name": "public",
+  "table_name": "jamypg_users",
+  "column_name": "provider",
+  "common_division_code": "PROVIDER",
+  "code_dict_txt": "local:로컬 계정, keycloak:SSO 계정"
+ },
+ {
+  "schema_name": "public",
+  "table_name": "jamypg_mcp_activity",
+  "column_name": "status",
+  "common_division_code": "ACT_STATUS",
+  "code_dict_txt": "ok:정상 실행, error:실행 오류"
+ },
+ {
+  "schema_name": "public",
+  "table_name": "jamypg_mcp_activity",
+  "column_name": "kind",
+  "common_division_code": "ACT_KIND",
+  "code_dict_txt": "call:정상 호출, error:오류 호출"
+ },
+ {
+  "schema_name": "public",
+  "table_name": "jamypg_db_profiles",
+  "column_name": "visibility",
+  "common_division_code": "VISIBILITY",
+  "code_dict_txt": "private:소유자 전용, shared:전체 공개"
+ },
+ {
+  "schema_name": "public",
+  "table_name": "jamypg_profile_grants",
+  "column_name": "permission",
+  "common_division_code": "PERMISSION",
+  "code_dict_txt": "use:사용 권한, manage:관리 권한"
+ }
+]

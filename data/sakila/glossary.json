@@ -1,0 +1,77 @@
+{
+ "entries": [
+  {
+   "term": "영화",
+   "category": "entity",
+   "synonyms": [
+    "film",
+    "movie",
+    "작품"
+   ]
+  },
+  {
+   "term": "고객",
+   "category": "entity",
+   "synonyms": [
+    "customer",
+    "회원",
+    "대여자"
+   ]
+  },
+  {
+   "term": "대여",
+   "category": "entity",
+   "synonyms": [
+    "rental",
+    "렌탈",
+    "빌린"
+   ]
+  },
+  {
+   "term": "반납",
+   "category": "entity",
+   "synonyms": [
+    "return",
+    "return_date",
+    "반납일"
+   ]
+  },
+  {
+   "term": "결제",
+   "category": "metric",
+   "synonyms": [
+    "payment",
+    "지불",
+    "결제금액",
+    "amount"
+   ]
+  },
+  {
+   "term": "카테고리",
+   "category": "entity",
+   "synonyms": [
+    "category",
+    "장르",
+    "genre"
+   ]
+  },
+  {
+   "term": "배우",
+   "category": "entity",
+   "synonyms": [
+    "actor",
+    "출연자",
+    "출연"
+   ]
+  },
+  {
+   "term": "재고",
+   "category": "entity",
+   "synonyms": [
+    "inventory",
+    "보유",
+    "매장 재고"
+   ]
+  }
+ ]
+}

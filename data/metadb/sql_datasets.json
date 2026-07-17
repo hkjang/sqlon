@@ -1,0 +1,110 @@
+[
+ {
+  "id": 1,
+  "question": "활성 사용자 수를 알려줘",
+  "target_sql": "SELECT COUNT(*) AS active_users FROM public.jamypg_users WHERE is_active = TRUE",
+  "target_domain": "인증",
+  "target_table": "public.jamypg_users",
+  "target_column": "jamypg_users.is_active",
+  "target_intent": "agg_count|cond_compare"
+ },
+ {
+  "id": 2,
+  "question": "역할별 사용자 수를 보여줘",
+  "target_sql": "SELECT role, COUNT(*) AS cnt FROM public.jamypg_users GROUP BY role ORDER BY cnt DESC",
+  "target_domain": "인증",
+  "target_table": "public.jamypg_users",
+  "target_column": "jamypg_users.role",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 3,
+  "question": "폐기되지 않은 유효한 MCP 키 개수는?",
+  "target_sql": "SELECT COUNT(*) AS live_keys FROM public.jamypg_mcp_keys WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)",
+  "target_domain": "인증",
+  "target_table": "public.jamypg_mcp_keys",
+  "target_column": "jamypg_mcp_keys.revoked_at|jamypg_mcp_keys.expires_at",
+  "target_intent": "agg_count|cond_null|cond_logic"
+ },
+ {
+  "id": 4,
+  "question": "가장 많이 호출된 MCP 도구 상위 3개를 알려줘",
+  "target_sql": "SELECT tool, COUNT(*) AS calls FROM public.jamypg_mcp_activity GROUP BY tool ORDER BY calls DESC LIMIT 3",
+  "target_domain": "감사",
+  "target_table": "public.jamypg_mcp_activity",
+  "target_column": "jamypg_mcp_activity.tool",
+  "target_intent": "agg_count|group_by|top_n"
+ },
+ {
+  "id": 5,
+  "question": "사용자별 도구 호출 건수를 많은 순으로 보여줘",
+  "target_sql": "SELECT u.username, COUNT(*) AS calls FROM public.jamypg_mcp_activity a JOIN public.jamypg_users u ON a.user_id = u.id GROUP BY u.username ORDER BY calls DESC",
+  "target_domain": "감사",
+  "target_table": "public.jamypg_mcp_activity",
+  "target_column": "jamypg_mcp_activity.user_id|jamypg_users.username",
+  "target_intent": "agg_count|join|group_by"
+ },
+ {
+  "id": 6,
+  "question": "공유(shared) 상태인 DB 프로파일 목록을 보여줘",
+  "target_sql": "SELECT id, owner_id, visibility, created_at FROM public.jamypg_db_profiles WHERE visibility = 'shared' ORDER BY created_at",
+  "target_domain": "커넥터",
+  "target_table": "public.jamypg_db_profiles",
+  "target_column": "jamypg_db_profiles.visibility",
+  "target_intent": "cond_compare|list"
+ },
+ {
+  "id": 7,
+  "question": "일별 run_sql_safely 실행 건수를 보여줘",
+  "target_sql": "SELECT CAST(created_at AS DATE) AS d, COUNT(*) AS runs FROM public.jamypg_mcp_activity WHERE tool = 'run_sql_safely' GROUP BY CAST(created_at AS DATE) ORDER BY d",
+  "target_domain": "감사",
+  "target_table": "public.jamypg_mcp_activity",
+  "target_column": "jamypg_mcp_activity.created_at|jamypg_mcp_activity.tool",
+  "target_intent": "agg_count|group_by|time_series"
+ },
+ {
+  "id": 8,
+  "question": "도구별 평균 실행 시간(ms)이 큰 순서로 알려줘",
+  "target_sql": "SELECT tool, ROUND(AVG(elapsed_ms), 1) AS avg_ms FROM public.jamypg_mcp_activity GROUP BY tool ORDER BY avg_ms DESC",
+  "target_domain": "감사",
+  "target_table": "public.jamypg_mcp_activity",
+  "target_column": "jamypg_mcp_activity.elapsed_ms",
+  "target_intent": "agg_avg|group_by"
+ },
+ {
+  "id": 9,
+  "question": "실패(error)한 쿼리 실행이 있었던 사용자와 건수는?",
+  "target_sql": "SELECT u.username, COUNT(*) AS errors FROM public.jamypg_mcp_activity a JOIN public.jamypg_users u ON a.user_id = u.id WHERE a.status = 'error' GROUP BY u.username ORDER BY errors DESC",
+  "target_domain": "감사",
+  "target_table": "public.jamypg_mcp_activity",
+  "target_column": "jamypg_mcp_activity.status",
+  "target_intent": "agg_count|join|cond_compare"
+ },
+ {
+  "id": 10,
+  "question": "프로파일별로 use 권한을 받은 사용자 수를 보여줘",
+  "target_sql": "SELECT p.id AS profile_id, COUNT(g.user_id) AS grantees FROM public.jamypg_db_profiles p LEFT JOIN public.jamypg_profile_grants g ON g.profile_id = p.id AND g.permission = 'use' GROUP BY p.id ORDER BY grantees DESC",
+  "target_domain": "커넥터",
+  "target_table": "public.jamypg_db_profiles",
+  "target_column": "jamypg_profile_grants.permission",
+  "target_intent": "agg_count|join|group_by"
+ },
+ {
+  "id": 11,
+  "question": "2026년 7월에 발생한 도구 호출 수를 알려줘",
+  "target_sql": "SELECT COUNT(*) AS calls FROM public.jamypg_mcp_activity WHERE created_at >= DATE '2026-07-01' AND created_at < DATE '2026-08-01'",
+  "target_domain": "감사",
+  "target_table": "public.jamypg_mcp_activity",
+  "target_column": "jamypg_mcp_activity.created_at",
+  "target_intent": "agg_count|cond_range"
+ },
+ {
+  "id": 12,
+  "question": "최근 도구 호출 내역을 시간 순으로 20건 보여줘",
+  "target_sql": "SELECT id, created_at, tool, status, elapsed_ms FROM public.jamypg_mcp_activity ORDER BY created_at DESC LIMIT 20",
+  "target_domain": "감사",
+  "target_table": "public.jamypg_mcp_activity",
+  "target_column": "jamypg_mcp_activity.created_at",
+  "target_intent": "list|sort_order|limit_topn"
+ }
+]

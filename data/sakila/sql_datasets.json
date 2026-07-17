@@ -1,0 +1,56 @@
+[
+ {
+  "id": 1,
+  "question": "카테고리별 영화 수를 많은 순으로 보여줘",
+  "target_sql": "SELECT T2.name, COUNT(*) AS films FROM sakila.film_category T1 JOIN sakila.category T2 ON T1.category_id = T2.category_id GROUP BY T2.name ORDER BY films DESC, T2.name",
+  "target_domain": "sakila",
+  "target_table": "sakila.film_category",
+  "target_column": "category_id|name",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 2,
+  "question": "대여 횟수가 가장 많은 고객 상위 3명은?",
+  "target_sql": "SELECT T2.last_name, COUNT(*) AS rentals FROM sakila.rental T1 JOIN sakila.customer T2 ON T1.customer_id = T2.customer_id GROUP BY T2.last_name ORDER BY rentals DESC, T2.last_name LIMIT 3",
+  "target_domain": "sakila",
+  "target_table": "sakila.rental",
+  "target_column": "customer_id|last_name",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 3,
+  "question": "활성 고객 수를 알려줘",
+  "target_sql": "SELECT COUNT(*) AS active_customers FROM sakila.customer T1 WHERE T1.active = TRUE",
+  "target_domain": "sakila",
+  "target_table": "sakila.customer",
+  "target_column": "active",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 4,
+  "question": "아직 반납되지 않은 대여 건수는?",
+  "target_sql": "SELECT COUNT(*) AS unreturned FROM sakila.rental T1 WHERE T1.return_date IS NULL",
+  "target_domain": "sakila",
+  "target_table": "sakila.rental",
+  "target_column": "return_date",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 5,
+  "question": "출연 영화가 가장 많은 배우 상위 3명을 알려줘",
+  "target_sql": "SELECT T2.last_name, COUNT(*) AS films FROM sakila.film_actor T1 JOIN sakila.actor T2 ON T1.actor_id = T2.actor_id GROUP BY T2.last_name ORDER BY films DESC, T2.last_name LIMIT 3",
+  "target_domain": "sakila",
+  "target_table": "sakila.film_actor",
+  "target_column": "actor_id|last_name",
+  "target_intent": "agg_count|group_by"
+ },
+ {
+  "id": 6,
+  "question": "결제 금액 합계가 가장 큰 고객은 누구야?",
+  "target_sql": "SELECT T2.last_name, SUM(T1.amount) AS total_amount FROM sakila.payment T1 JOIN sakila.customer T2 ON T1.customer_id = T2.customer_id GROUP BY T2.last_name ORDER BY total_amount DESC, T2.last_name LIMIT 1",
+  "target_domain": "sakila",
+  "target_table": "sakila.payment",
+  "target_column": "amount|customer_id",
+  "target_intent": "agg_count|group_by"
+ }
+]

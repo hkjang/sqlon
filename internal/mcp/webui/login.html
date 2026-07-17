@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon 로그인</title>
+<style>
+  :root { --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec; --blue:#2563eb; --red:#b91c1c; --red-soft:#fdeaea; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:linear-gradient(160deg,#101a2e 0%,#1d2b47 100%);
+         font:14px/1.6 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; color:var(--ink); }
+  .card { background:#fff; border-radius:16px; padding:36px 40px; width:380px; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+  h1 { font-size:20px; margin:0 0 4px; } .sub { color:var(--sub); font-size:13px; margin:0 0 22px; }
+  label { display:block; font-size:12.5px; color:var(--sub); margin:12px 0 4px; }
+  input { width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; font-size:14px; }
+  input:focus { outline:2px solid var(--blue); border-color:var(--blue); }
+  button { width:100%; margin-top:18px; padding:11px; border:0; border-radius:8px; background:var(--blue);
+           color:#fff; font-size:14px; font-weight:700; cursor:pointer; }
+  button:hover { opacity:.92; } button:disabled { opacity:.5; }
+  .sso { margin-top:10px; background:#fff; color:var(--ink); border:1px solid var(--line); }
+  .sso:hover { border-color:var(--blue); color:var(--blue); }
+  .err { display:none; background:var(--red-soft); color:var(--red); border-radius:8px; padding:10px 12px;
+         font-size:13px; margin-top:14px; }
+  .note { color:var(--sub); font-size:12px; margin-top:18px; line-height:1.55; }
+  .divider { display:flex; align-items:center; gap:10px; color:var(--sub); font-size:12px; margin-top:16px; }
+  .divider::before, .divider::after { content:""; flex:1; height:1px; background:var(--line); }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🗂 sqlon</h1>
+  <p class="sub">메타데이터 그라운딩 Text2SQL 관리 콘솔</p>
+  <form onsubmit="return doLogin(event)">
+    <label>아이디</label>
+    <input id="username" autocomplete="username" required autofocus>
+    <label>비밀번호</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button id="loginBtn" type="submit">로그인</button>
+  </form>
+  <div id="ssoBlock" style="display:none">
+    <div class="divider">또는</div>
+    <button class="sso" onclick="location.href='/auth/sso/login'">🔑 Keycloak(SSO)으로 로그인</button>
+  </div>
+  <div class="err" id="err"></div>
+  <div class="note" id="note">세션은 24시간 유지되며 사용 중 자동 연장됩니다.<br>
+    MCP 클라이언트 연결에는 로그인 대신 <b>MCP 키</b>를 사용하세요 (로그인 후 <code>/admin/keys</code>).</div>
+</div>
+<script>
+'use strict';
+const qs = new URLSearchParams(location.search);
+// only allow same-origin relative redirects (single leading slash, not //)
+function safeNext() {
+  const n = qs.get('next');
+  return (n && /^\/(?!\/)/.test(n)) ? n : '/admin';
+}
+fetch('/auth/me').then(r => r.json()).then(d => {
+  if (!d.auth_enabled) {
+    document.getElementById('note').innerHTML =
+      '⚠ 이 서버는 <b>단독 모드</b>(메타 DB 미설정)로 동작 중이라 로그인이 비활성입니다.<br>' +
+      '<code>-meta-db</code>(또는 <code>JAMYPG_META_DB</code>)로 기동하면 인증이 활성화됩니다. ' +
+      '<a href="/admin">콘솔로 이동</a>';
+    document.querySelector('form').style.display = 'none';
+    return;
+  }
+  if (d.authenticated) { location.href = safeNext(); return; }
+  if (d.sso_enabled) document.getElementById('ssoBlock').style.display = 'block';
+});
+async function doLogin(ev) {
+  ev.preventDefault();
+  const btn = document.getElementById('loginBtn'), err = document.getElementById('err');
+  btn.disabled = true; err.style.display = 'none';
+  try {
+    const res = await fetch('/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: document.getElementById('username').value,
+                             password: document.getElementById('password').value })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+    location.href = safeNext();
+  } catch (e) {
+    err.textContent = e.message; err.style.display = 'block'; btn.disabled = false;
+  }
+  return false;
+}
+</script>
+</body>
+</html>

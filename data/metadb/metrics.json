@@ -1,0 +1,76 @@
+[
+ {
+  "name": "도구 호출 수",
+  "business_name": "MCP 도구 호출 수",
+  "aliases": [
+   "호출 수",
+   "호출 건수",
+   "call count",
+   "실행 건수"
+  ],
+  "description": "조건을 만족하는 MCP 도구 호출(활동 로그)의 수.",
+  "expression": "COUNT(*)",
+  "aggregation": "COUNT",
+  "tables": [
+   "public.jamypg_mcp_activity"
+  ],
+  "columns": [
+   "id"
+  ]
+ },
+ {
+  "name": "평균 실행시간",
+  "business_name": "평균 실행 시간(ms)",
+  "aliases": [
+   "평균 소요시간",
+   "avg elapsed",
+   "평균 실행 시간"
+  ],
+  "description": "도구 호출의 평균 실행 시간(밀리초).",
+  "expression": "AVG(ELAPSED_MS)",
+  "aggregation": "AVG",
+  "tables": [
+   "public.jamypg_mcp_activity"
+  ],
+  "columns": [
+   "elapsed_ms"
+  ]
+ },
+ {
+  "name": "총 반환 행 수",
+  "business_name": "총 반환 행 수",
+  "aliases": [
+   "행 수 합계",
+   "총 행수",
+   "row count 합"
+  ],
+  "description": "도구 호출이 반환한 행 수의 합계.",
+  "expression": "SUM(ROW_COUNT)",
+  "aggregation": "SUM",
+  "tables": [
+   "public.jamypg_mcp_activity"
+  ],
+  "columns": [
+   "row_count"
+  ]
+ },
+ {
+  "name": "사용자 수",
+  "business_name": "사용자 수",
+  "aliases": [
+   "유저 수",
+   "계정 수",
+   "user count",
+   "몇 명"
+  ],
+  "description": "조건을 만족하는 사용자 계정의 수.",
+  "expression": "COUNT(*)",
+  "aggregation": "COUNT",
+  "tables": [
+   "public.jamypg_users"
+  ],
+  "columns": [
+   "id"
+  ]
+ }
+]

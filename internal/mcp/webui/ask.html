@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon 질의 · 자연어 → SQL 준비</title>
+<style>
+  :root {
+    --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
+    --blue:#2563eb; --blue-soft:#e8efff; --green:#15803d; --green-soft:#e6f6ec;
+    --red:#b91c1c; --red-soft:#fdeaea; --amber:#b45309; --amber-soft:#fdf3e2;
+    --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
+  header { background:#101a2e; color:#e8eefc; padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; position:sticky; top:0; z-index:20; }
+  header h1 { font-size:16px; margin:0 10px 0 0; }
+  .grow { flex:1; }
+  header input#adminToken { background:#1d2b47; border:1px solid #35507f; color:#e8eefc; border-radius:6px; padding:6px 10px; width:200px; }
+  .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px; padding:6px 12px; cursor:pointer; font-size:13px; white-space:nowrap; }
+  .btn:hover { border-color:var(--blue); color:var(--blue); }
+  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .btn.primary:hover { opacity:.9; color:#fff; }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+  main { max-width:1400px; margin:0 auto; padding:16px 20px 90px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+  h2 { font-size:15px; margin:0 0 10px; }
+  code, .mono { background:#eef1f5; border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
+  textarea#q { width:100%; min-height:70px; font-size:15px; border:1px solid var(--line); border-radius:8px; padding:12px 14px; resize:vertical; font-family:inherit; }
+  .askbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
+  .askbar input { border:1px solid var(--line); border-radius:7px; padding:7px 10px; font-size:13px; }
+  .mini { font-size:12px; color:var(--sub); }
+  .b { display:inline-block; font-size:11px; font-weight:700; border-radius:5px; padding:1px 7px; margin:1px 3px 1px 0; }
+  .b.ok { background:var(--green-soft); color:var(--green); }
+  .b.bad { background:var(--red-soft); color:var(--red); }
+  .b.warn { background:var(--amber-soft); color:var(--amber); }
+  .b.gray { background:#eef1f5; color:var(--sub); }
+  .b.blue { background:var(--blue-soft); color:var(--blue); }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:1000px){ .cols { grid-template-columns:1fr; } }
+  .steps { display:none; }
+  .kv { margin:3px 0; }
+  .kv b { color:var(--sub); font-weight:600; }
+  .chiplist span { display:inline-block; }
+  pre.sql { background:#0e1726; color:#e6edf7; border-radius:10px; padding:14px 16px; font-family:var(--mono); font-size:13px; overflow:auto; white-space:pre; margin:0; }
+  .slot { color:#ffd479; }
+  table.t { width:100%; border-collapse:collapse; font-size:13px; }
+  table.t th { text-align:left; color:var(--sub); font-weight:600; padding:6px 8px; border-bottom:2px solid var(--line); }
+  table.t td { padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .result { border-radius:8px; padding:11px 14px; margin-top:10px; font-size:13px; display:none; white-space:pre-wrap; word-break:break-word; }
+  .result.ok { display:block; background:var(--green-soft); border:1px solid #bfe4cc; }
+  .result.bad{ display:block; background:var(--red-soft); border:1px solid #efc4c4; }
+  .result.info{ display:block; background:var(--blue-soft); border:1px solid #c4d6f7; }
+  details.j > summary { cursor:pointer; color:var(--sub); font-size:12.5px; margin-top:6px; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }
+  #toast { position:fixed; right:18px; bottom:18px; background:#101a2e; color:#e8eefc; border-radius:10px; padding:12px 18px; font-size:13px; display:none; max-width:480px; z-index:50; box-shadow:0 6px 24px rgba(0,0,0,.25); }
+  .flow { font-size:12px; color:var(--sub); margin-bottom:12px; }
+  .flow b { color:var(--blue); }
+  .hero{background:linear-gradient(135deg,#10203c,#245b91);color:#fff;border:0;padding:22px;box-shadow:0 12px 34px rgba(20,55,105,.16)}.hero h2{font-size:21px;margin:0 0 5px}.hero p{margin:0;color:#cbdcf5}.examples{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}.example{border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);color:#fff;border-radius:999px;padding:5px 10px;cursor:pointer;font-size:12px}.example:hover{background:#fff;color:#245b91}
+  .query-card{border-top:4px solid var(--blue)}.query-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}.query-head h2{margin:0}.profile-select{border:1px solid var(--line);border-radius:7px;padding:7px 10px;min-width:220px}.context{padding:7px 10px;background:#f2f6ff;border-radius:8px;color:#365277;font-size:12px}.steps-nav{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:12px}.steps-nav span{background:#eef2f7;border-radius:6px;padding:6px;text-align:center;font-size:11px;color:var(--sub)}
+  @media(max-width:700px){main{padding:12px}.hero{padding:17px}.steps-nav{grid-template-columns:repeat(3,1fr)}.askbar .profile-select,.askbar input{width:100%!important;flex:auto!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>💬 질의 · 자연어 → SQL</h1>
+  <input id="adminToken" type="password" placeholder="관리 토큰">
+  <span class="grow"></span>
+</header>
+
+<main>
+  <div class="card hero"><h2>업무 질문을 실행 가능한 SQL 구조로 준비하세요</h2><p>DB 프로파일의 전용 카탈로그를 사용해 테이블·지표·조인 근거를 한 번에 구성합니다. 실제 DB 실행 전 준비 단계입니다.</p><div class="examples"><button class="example">최근 3개월 지역별 매출 추이</button><button class="example">이번 달 신규 고객 수</button><button class="example">오류율이 높은 서비스 상위 10개</button></div></div>
+  <div class="card query-card">
+    <div class="query-head"><h2>질문 입력</h2><span class="grow"></span><span class="context" id="catalogContext">활성 카탈로그 사용</span></div>
+    <textarea id="q" placeholder="예) 최근 3개월 지역별 연체율 상위 10개 지점을 보여줘"></textarea>
+    <div class="askbar">
+      <select id="profile" class="profile-select"><option value="">활성 카탈로그 (기본)</option></select>
+      <input id="tables" placeholder="테이블 강제 지정 (선택, 쉼표구분)" style="flex:1; min-width:200px">
+      <input id="limit" type="number" placeholder="행 제한 (예 100)" style="width:130px">
+      <button class="btn primary" id="askBtn" onclick="ask()">준비하기 ▶</button>
+      <label class="mini" id="followupWrap" style="display:none;cursor:pointer"><input type="checkbox" id="followupChk"> 이전 질문에 이어서</label>
+      <span class="mini">Ctrl/⌘+Enter</span>
+    </div>
+    <div id="askResult" class="result"></div>
+  </div>
+
+  <div class="card" id="clarCard" style="display:none; border-color:#f2c94c; background:#fffdf5">
+    <h2>❓ 확인이 필요합니다</h2>
+    <div class="mini" style="margin-bottom:10px">질문을 정확한 SQL로 바꾸기 위해 아래 항목의 답이 필요합니다. 답하지 않으면 SQL 스켈레톤이 제공되지 않습니다.</div>
+    <div id="clarList"></div>
+    <div id="clarAdvisory"></div>
+    <div class="askbar">
+      <button class="btn primary" onclick="submitClar()">답변 반영해 다시 준비 ▶</button>
+      <span class="mini">옵션 선택 또는 직접 입력 후 클릭</span>
+    </div>
+  </div>
+
+  <div id="steps" class="steps">
+    <div class="steps-nav"><span>1 질문 분석</span><span>2 테이블</span><span>3 지표</span><span>4 스키마</span><span>5 조인</span><span>6 SQL 구조</span></div>
+    <div class="cols">
+      <div class="card">
+        <h2>① 질문 분석</h2>
+        <div id="analysis" class="mini">—</div>
+        <details class="j"><summary>원본 JSON</summary><pre id="analysisRaw" class="mono" style="white-space:pre-wrap"></pre></details>
+      </div>
+      <div class="card">
+        <h2>② 후보 테이블</h2>
+        <div id="tablesOut"></div>
+        <details class="j"><summary>제외된 후보</summary><div id="excluded" class="mini"></div></details>
+      </div>
+    </div>
+
+    <div class="card" id="metricsCard">
+      <h2>③ 지표 정의</h2>
+      <div id="metrics" class="mini">—</div>
+    </div>
+
+    <div class="cols">
+      <div class="card">
+        <h2>④ 스키마 컨텍스트</h2>
+        <details class="j" open><summary>선택 테이블/컬럼 요약</summary><pre id="schemaCtx" class="mono" style="white-space:pre-wrap; max-height:340px; overflow:auto"></pre></details>
+      </div>
+      <div class="card">
+        <h2>⑤ 조인 경로</h2>
+        <div id="joins" class="mini">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>⑥ SQL 스켈레톤</h2>
+      <div class="mini" style="margin-bottom:8px">주석 <code class="slot">/* SLOT */</code> 부분을 채워 선택한 DB 방언의 단일 SELECT로 완성하세요. 아래는 카탈로그가 안전하게 조립한 뼈대입니다.</div>
+      <pre id="skeleton" class="sql">—</pre>
+      <div class="toolbar">
+        <button class="btn" onclick="copySkeleton()">📋 스켈레톤 복사</button>
+        <button class="btn primary" onclick="toDB()">🔌 DB 콘솔로 보내기 →</button>
+        <span class="mini" id="nextStep"></span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let BUNDLE = null;
+
+const tokenInput = $('#adminToken');
+tokenInput.value = localStorage.getItem('jasqlAdminToken') || '';
+tokenInput.addEventListener('change', () => localStorage.setItem('jasqlAdminToken', tokenInput.value));
+function headers(json) {
+  const h = {};
+  if (json) h['Content-Type'] = 'application/json';
+  if (tokenInput.value) h['X-Admin-Token'] = tokenInput.value;
+  return h;
+}
+function toast(msg, ms = 3000) {
+  const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', ms);
+}
+function showAsk(cls, msg) { const el = $('#askResult'); el.className = 'result ' + cls; el.textContent = msg; }
+
+let CLAR_ANSWERS = {};   // clarification id -> answer (option key or free text)
+let LAST_QUESTION = '';
+let READY_QUESTION = ''; // last question that produced a ready bundle (follow-up base)
+
+async function ask(keepAnswers) {
+  const question = $('#q').value.trim();
+  if (!question) { showAsk('bad', '질문을 입력하세요.'); return; }
+  if (question !== LAST_QUESTION && !keepAnswers) CLAR_ANSWERS = {}; // new question → stale answers out
+  LAST_QUESTION = question;
+  const tables = $('#tables').value.split(',').map(s => s.trim()).filter(Boolean);
+  const limit = Number($('#limit').value) || 0;
+  const body = { question, profile:$('#profile').value, tables, limit, clarifications: CLAR_ANSWERS };
+  if ($('#followupChk').checked && READY_QUESTION && READY_QUESTION !== question)
+    body.previous_question = READY_QUESTION;
+  $('#askBtn').disabled = true;
+  showAsk('info', '파이프라인 실행 중…');
+  $('#clarCard').style.display = 'none';
+  try {
+    const res = await fetch('/api/ask', { method: 'POST', headers: headers(true),
+      body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+    if (data.status === 'needs_clarification') {
+      $('#steps').style.display = 'none';
+      renderClarifications(data);
+      showAsk('info', '❓ 질문이 애매한 부분이 있어 확인이 필요합니다 — 아래 항목에 답한 뒤 다시 준비하세요.');
+      $('#clarCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    BUNDLE = data;
+    $('#catalogContext').textContent=(data.profile?data.profile+' · ':'')+(data.catalog_source||'active');
+    render(data);
+    READY_QUESTION = data.followup && READY_QUESTION ? READY_QUESTION : question;
+    $('#followupWrap').style.display = '';
+    $('#followupChk').checked = false;
+    let ok = '✅ 준비 완료 — 아래 스켈레톤의 /* SLOT */을 채워 완성하세요.';
+    if (data.followup) ok = '✅ 후속 질문 반영 완료 — 이전 질문 컨텍스트가 병합되었습니다.';
+    if (Array.isArray(data.assumptions) && data.assumptions.length)
+      ok += '\n가정: ' + data.assumptions.join(' / ');
+    showAsk('ok', ok);
+    $('#steps').style.display = 'block';
+    $('#steps').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    showAsk('bad', '✘ ' + e.message + (String(e.message).includes('401') ? ' — 로그인 또는 관리 토큰이 필요합니다.' : ''));
+  } finally { $('#askBtn').disabled = false; }
+}
+
+/* ---------- clarification loop ---------- */
+function renderClarifications(d) {
+  const cls = d.clarifications || [];
+  $('#clarList').innerHTML = cls.map((cl, i) => {
+    let body = '';
+    if (Array.isArray(cl.options) && cl.options.length) {
+      body = cl.options.map(o =>
+        '<label style="display:block;margin:5px 0;cursor:pointer"><input type="radio" name="clar_' + i + '" value="' + esc(o.key) + '"' +
+        (CLAR_ANSWERS[cl.id] === o.key ? ' checked' : '') + ' onchange="setClar(\'' + esc(cl.id) + '\', this.value)"> ' +
+        esc(o.label) + (o.recommended ? ' <span class="b warn">추천</span>' : '') + '</label>').join('') +
+        '<input class="clar-free" placeholder="직접 입력 (선택)" onchange="setClar(\'' + esc(cl.id) + '\', this.value)" style="width:100%;margin-top:6px;border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px">';
+    } else {
+      body = '<input class="clar-free" placeholder="답변 입력" value="' + esc(CLAR_ANSWERS[cl.id] || '') + '" onchange="setClar(\'' + esc(cl.id) + '\', this.value)" style="width:100%;margin-top:4px;border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px">';
+    }
+    return '<div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
+      '<div style="font-weight:600;margin-bottom:4px">' + (i + 1) + '. ' + esc(cl.question) + '</div>' + body + '</div>';
+  }).join('');
+  const adv = d.advisory || [];
+  $('#clarAdvisory').innerHTML = adv.length
+    ? '<div class="mini" style="margin-top:6px">ℹ ' + adv.map(a => esc(a.question)).join('<br>ℹ ') + '</div>' : '';
+  $('#clarCard').style.display = 'block';
+}
+function setClar(id, val) { val = String(val || '').trim(); if (val) CLAR_ANSWERS[id] = val; else delete CLAR_ANSWERS[id]; }
+function submitClar() { ask(true); }
+
+function render(d) {
+  const a = d.analysis || {};
+  const chip = (t, cls) => (t !== null && t !== undefined && t !== '') ? '<span class="b ' + (cls || 'gray') + '">' + esc(t) + '</span>' : '';
+  const arr = v => Array.isArray(v) ? v : (v ? [v] : []);
+  const row = (label, vals, cls) => vals.length ? '<div class="kv"><b>' + label + '</b> ' + vals.map(x => chip(typeof x === 'string' ? x : JSON.stringify(x), cls)).join('') + '</div>' : '';
+  let ana = '';
+  ana += row('의도', arr(a.intent), 'blue');
+  ana += row('시간', arr(a.time_range));
+  ana += row('차원', arr(a.dimensions));
+  ana += row('기대 출력', arr(a.expected_output_columns));
+  ana += row('지표어', arr(d.metric_names), 'warn');
+  ana += row('필터', arr(a.filters));
+  ana += row('집계수준', arr(a.aggregation_level));
+  $('#analysis').innerHTML = ana || '<span class="mini">분석 신호 없음</span>';
+  $('#analysisRaw').textContent = JSON.stringify(a, null, 2);
+
+  const cand = d.search_candidates || [];
+  const sel = new Set(d.selected_tables || []);
+  $('#tablesOut').innerHTML = cand.length === 0 ? '<span class="mini">후보 없음</span>' :
+    '<table class="t"><thead><tr><th>테이블</th><th>점수</th><th>매칭</th></tr></thead><tbody>' +
+    cand.map(c => '<tr><td class="mono">' + (sel.has(c.table) ? '✓ ' : '') + esc(c.table) +
+      '</td><td>' + (c.score != null ? Number(c.score).toFixed(3) : '') + '</td>' +
+      '<td class="mini">' + esc(((c.reasons || []).concat(c.matched_terms || [])).join(', ')) + '</td></tr>').join('') +
+    '</tbody></table>';
+  $('#excluded').innerHTML = (d.excluded_candidates || []).length
+    ? (d.excluded_candidates).map(e => '<div>' + esc(e.table || e) + (e.reason ? ' — ' + esc(e.reason) : '') + '</div>').join('')
+    : '없음';
+
+  const metrics = d.metrics || [];
+  $('#metrics').innerHTML = metrics.length === 0 ? '<span class="mini">질문에서 감지된 지표 정의 없음</span>' :
+    metrics.map(m => '<div class="kv"><b>' + esc(m.name || m.metric || '') + '</b> ' +
+      (m.description ? '<span class="mini">' + esc(m.description) + '</span>' : '') +
+      (m.expression ? '<div><code>' + esc(m.expression) + '</code></div>' : '') + '</div>').join('');
+
+  $('#schemaCtx').textContent = typeof d.schema_context === 'string'
+    ? d.schema_context : JSON.stringify(d.schema_context, null, 2);
+
+  const jp = d.join_paths || {};
+  const paths = jp.paths || jp.edges || [];
+  $('#joins').innerHTML = (Array.isArray(paths) && paths.length)
+    ? paths.map(p => '<div class="kv"><code>' + esc(p.on || p.condition || (p.from && p.to ? p.from + ' ⋈ ' + p.to : JSON.stringify(p))) + '</code></div>').join('')
+    : ((d.selected_tables || []).length < 2 ? '<span class="mini">단일 테이블 — 조인 불필요</span>' : '<span class="mini">직접 조인 경로 없음 (스켈레톤 참조)</span>');
+
+  const sk = d.skeleton || {};
+  const sql = sk.skeleton_sql || sk.sql || '';
+  $('#skeleton').innerHTML = esc(sql).replace(/(\/\*\s*SLOT\s*\*\/)/g, '<span class="slot">$1</span>') || '—';
+  $('#nextStep').textContent = d.next_step || '';
+}
+
+function copySkeleton() {
+  const sql = (BUNDLE && BUNDLE.skeleton && (BUNDLE.skeleton.skeleton_sql || BUNDLE.skeleton.sql)) || '';
+  navigator.clipboard.writeText(sql).then(() => toast('스켈레톤을 복사했습니다')).catch(() => toast('복사 실패'));
+}
+function toDB() {
+  const sql = (BUNDLE && BUNDLE.skeleton && (BUNDLE.skeleton.skeleton_sql || BUNDLE.skeleton.sql)) || '';
+  if (sql) sessionStorage.setItem('jasqlHandoffSQL', sql);
+  if ($('#profile').value) localStorage.setItem('jasqlLastProfile',$('#profile').value);
+  location.href = '/admin/db';
+}
+
+async function loadProfiles(){
+  try{const r=await fetch('/api/db-profiles',{headers:headers()});const d=await r.json();const last=localStorage.getItem('jasqlLastProfile')||'';
+    $('#profile').innerHTML='<option value="">활성 카탈로그 (기본)</option>'+(d.profiles||[]).map(p=>'<option value="'+esc(p.id)+'"'+(p.id===last?' selected':'')+'>'+esc(p.id)+(p.name?' — '+esc(p.name):'')+'</option>').join('');
+    $('#profile').dispatchEvent(new Event('change'));const hp=sessionStorage.getItem('jasqlHistoryPrompt');if(hp){$('#q').value=hp;sessionStorage.removeItem('jasqlHistoryPrompt');}
+  }catch(e){}
+}
+$('#profile').addEventListener('change',()=>{$('#catalogContext').textContent=$('#profile').value?$('#profile').value+' 전용 카탈로그':'활성 카탈로그 사용';});
+document.querySelectorAll('.example').forEach(b=>b.onclick=()=>{$('#q').value=b.textContent;$('#q').focus();});
+
+$('#q').addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); ask(); } });
+
+JASQL.mount({ page: 'ask',onReady:loadProfiles });
+</script>
+</body>
+</html>

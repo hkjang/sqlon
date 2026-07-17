@@ -1,0 +1,53 @@
+{
+ "dialect": "postgres",
+ "pii_columns": [
+  "sakila.customer.email"
+ ],
+ "tables": [
+  {
+   "table": "sakila.category",
+   "domain": "DVD렌탈",
+   "row_count": 6
+  },
+  {
+   "table": "sakila.actor",
+   "domain": "DVD렌탈",
+   "row_count": 10
+  },
+  {
+   "table": "sakila.film",
+   "domain": "DVD렌탈",
+   "row_count": 20
+  },
+  {
+   "table": "sakila.film_category",
+   "domain": "DVD렌탈",
+   "row_count": 20
+  },
+  {
+   "table": "sakila.film_actor",
+   "domain": "DVD렌탈",
+   "row_count": 42
+  },
+  {
+   "table": "sakila.inventory",
+   "domain": "DVD렌탈",
+   "row_count": 30
+  },
+  {
+   "table": "sakila.customer",
+   "domain": "DVD렌탈",
+   "row_count": 8
+  },
+  {
+   "table": "sakila.rental",
+   "domain": "DVD렌탈",
+   "row_count": 60
+  },
+  {
+   "table": "sakila.payment",
+   "domain": "DVD렌탈",
+   "row_count": 60
+  }
+ ]
+}

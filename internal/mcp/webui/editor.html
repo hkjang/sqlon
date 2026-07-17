@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon 데이터셋 테이블 편집기</title>
+<style>
+  :root {
+    --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
+    --blue:#2563eb; --blue-soft:#e8efff; --green:#15803d; --green-soft:#e6f6ec;
+    --red:#b91c1c; --red-soft:#fdeaea; --amber:#b45309; --amber-soft:#fdf3e2;
+    --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
+  header { background:#101a2e; color:#e8eefc; padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; position:sticky; top:0; z-index:20; }
+  header h1 { font-size:16px; margin:0 10px 0 0; }
+  header .grow { flex:1; }
+  header select, header input { background:#1d2b47; border:1px solid #35507f; color:#e8eefc; border-radius:6px; padding:6px 10px; }
+  header select { min-width:220px; }
+  .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px; padding:6px 12px; cursor:pointer; font-size:13px; white-space:nowrap; }
+  .btn:hover { border-color:var(--blue); color:var(--blue); }
+  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .btn.primary:hover { opacity:.9; color:#fff; }
+  .btn.danger { color:var(--red); border-color:#efc4c4; }
+  .btn.danger:hover { background:var(--red-soft); }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+  main { max-width:1700px; margin:0 auto; padding:14px 20px 80px; }
+  .hero { display:grid; grid-template-columns:1fr auto; gap:20px; align-items:center; padding:20px 22px;
+    background:linear-gradient(135deg,#fff 45%,#edf3ff); }
+  .hero h2 { margin:0 0 5px; font-size:20px; } .hero p { margin:0; color:var(--sub); }
+  .steps { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+  .step { padding:7px 11px; border:1px solid var(--line); border-radius:20px; color:var(--sub); background:#fff; font-size:12px; }
+  .step.on { border-color:#9db9f6; background:var(--blue-soft); color:var(--blue); font-weight:700; }
+  .dataset-info { display:grid; grid-template-columns:repeat(4,minmax(120px,1fr)); gap:10px; margin-top:12px; }
+  .metric { border:1px solid var(--line); border-radius:9px; padding:9px 12px; background:#fbfcfe; }
+  .metric span { display:block; color:var(--sub); font-size:11px; } .metric b { font-size:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+  details.guide > summary { cursor:pointer; font-weight:700; }
+  details.guide ul { margin:8px 0 2px; padding-left:20px; color:var(--sub); font-size:13px; }
+  details.guide code { background:#eef1f5; border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
+  .dirty { display:none; background:var(--amber-soft); color:var(--amber); border:1px solid #f0ddb5;
+           border-radius:8px; padding:8px 14px; margin-bottom:12px; font-size:13px; }
+  .dirty.show { display:block; }
+  .savebar .toolbar { position:sticky; top:58px; z-index:12; background:var(--card); padding:10px 0;
+    box-shadow:0 8px 14px -12px rgba(15,23,42,.45); }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px; }
+  .toolbar input[type=search] { border:1px solid var(--line); border-radius:7px; padding:6px 10px; min-width:240px; }
+  .toolbar .mini { color:var(--sub); font-size:12.5px; }
+  .gridwrap { overflow:auto; border:1px solid var(--line); border-radius:10px; max-height:66vh; background:var(--card); }
+  table.grid { border-collapse:separate; border-spacing:0; font-size:12.8px; min-width:100%; }
+  table.grid th, table.grid td { border-bottom:1px solid var(--line); border-right:1px solid var(--line); padding:0; vertical-align:top; }
+  table.grid thead th { position:sticky; top:0; z-index:5; background:#eef2f8; padding:0; }
+  .colhead { display:flex; align-items:center; gap:4px; padding:6px 8px; }
+  .colhead .nm { font-family:var(--mono); font-weight:700; font-size:12px; }
+  .colhead .ops { visibility:hidden; display:flex; gap:2px; }
+  th:hover .ops { visibility:visible; }
+  .colhead button { border:0; background:none; cursor:pointer; font-size:11px; padding:1px 3px; border-radius:4px; color:var(--sub); }
+  .colhead button:hover { background:var(--blue-soft); color:var(--blue); }
+  td.rowno { position:sticky; left:0; background:#f6f8fb; color:var(--sub); font-size:11px; text-align:right;
+             padding:6px 8px; z-index:3; min-width:74px; }
+  td.rowno .rops { visibility:hidden; }
+  tr:hover td.rowno .rops { visibility:visible; }
+  td.rowno button { border:0; background:none; cursor:pointer; font-size:12px; padding:0 2px; }
+  td.cell { min-width:120px; max-width:420px; cursor:cell; }
+  td.cell > .v { padding:6px 8px; white-space:pre-wrap; word-break:break-all; max-height:90px; overflow:hidden; font-family:var(--mono); font-size:12px; }
+  td.cell .t-num { color:#0e7490; } td.cell .t-bool { color:#7c3aed; } td.cell .t-null { color:#9aa5b1; font-style:italic; }
+  td.cell .t-obj { color:#b45309; }
+  td.cell.editing { outline:2px solid var(--blue); outline-offset:-2px; }
+  td.cell textarea { width:100%; min-height:60px; border:0; outline:0; resize:vertical; font-family:var(--mono); font-size:12px; padding:6px 8px; background:#fffdf3; }
+  td.cell.changed > .v { background:#fff8e6; }
+  tr.newrow td { background:#f0fff4; }
+  .pager { display:flex; gap:8px; align-items:center; margin-top:10px; font-size:13px; color:var(--sub); }
+  .result { border-radius:8px; padding:11px 14px; margin-top:10px; font-size:13px; display:none; white-space:pre-wrap; }
+  .result.ok { display:block; background:var(--green-soft); border:1px solid #bfe4cc; }
+  .result.bad{ display:block; background:var(--red-soft); border:1px solid #efc4c4; }
+  .result.info{ display:block; background:var(--blue-soft); border:1px solid #c4d6f7; }
+  .schemabox { font-size:12px; color:var(--sub); font-family:var(--mono); background:#f6f8fb; border-radius:8px; padding:8px 12px; margin-top:8px; white-space:pre-wrap; word-break:break-all; }
+  .empty { color:var(--sub); text-align:center; padding:50px 0; }
+  #toast { position:fixed; right:18px; bottom:18px; background:#101a2e; color:#e8eefc; border-radius:10px;
+    padding:12px 18px; font-size:13px; display:none; max-width:480px; z-index:50; box-shadow:0 6px 24px rgba(0,0,0,.25); }
+  @media(max-width:760px){ main{padding:10px 10px 70px}.hero{grid-template-columns:1fr}.steps{justify-content:flex-start}.dataset-info{grid-template-columns:1fr 1fr}header select{min-width:150px;flex:1}.savebar .toolbar{top:104px}.toolbar input[type=search]{min-width:100%;order:9} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📋 데이터셋 테이블 편집기</h1>
+  <select id="dsSelect"><option value="">데이터셋 선택…</option></select>
+  <button class="btn" onclick="loadDataset()">불러오기</button>
+  <span class="grow"></span>
+  <input id="adminToken" type="password" placeholder="관리 토큰 (미설정 시 비워두기)">
+</header>
+
+<main>
+  <div class="card hero">
+    <div><h2>안전하게 확인하고, 표에서 바로 편집하세요</h2><p>데이터셋 선택 → 구조 확인 → 행·컬럼 편집 → 검증 및 백업 저장 순서로 진행합니다.</p></div>
+    <div class="steps"><span class="step on" id="step1">1 데이터셋 선택</span><span class="step" id="step2">2 내용 편집</span><span class="step" id="step3">3 저장·반영</span></div>
+  </div>
+  <div class="card">
+    <div class="schemabox" id="schemaBox" style="display:none"></div>
+    <div class="dataset-info" id="datasetInfo" style="display:none"></div>
+  </div>
+
+  <div class="dirty" id="dirtyBar">⚠ 저장되지 않은 변경이 있습니다 — <b id="dirtyCount"></b>. [💾 저장]을 눌러 반영하거나 [다시 불러오기]로 취소하세요.</div>
+
+  <div class="card savebar" id="gridCard">
+    <div class="toolbar">
+      <button class="btn primary" id="saveBtn" onclick="save()" disabled>💾 저장 (백업 후 반영)</button>
+      <button class="btn" id="addRowBtn" onclick="addRow()" disabled>＋ 행 추가</button>
+      <button class="btn" id="addColBtn" onclick="addColumn()" disabled>＋ 컬럼 추가</button>
+      <button class="btn" id="revertBtn" onclick="loadDataset()" disabled>다시 불러오기</button>
+      <span class="grow" style="flex:1"></span>
+      <input type="search" id="search" placeholder="🔍 행 검색 (모든 컬럼 대상)" oninput="page=0;render()">
+      <span class="mini" id="stat"></span>
+    </div>
+    <div class="gridwrap"><table class="grid"><thead id="ghead"></thead><tbody id="gbody">
+      <tr><td class="empty">상단에서 데이터셋을 선택하고 [불러오기]를 누르세요.</td></tr>
+    </table></div>
+    <div class="pager" id="pager"></div>
+    <div class="result" id="saveResult"></div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const PAGE_SIZE = 50;
+// overrides(깊은 중첩)와 시스템 관리 대상은 표 편집에서 제외
+const EXCLUDE = new Set(['overrides', 'feedback', 'audit']);
+
+let REGISTRY = [], DS = null, ROWS = [], COLS = [], dirty = 0, page = 0;
+
+const tokenInput = $('#adminToken');
+tokenInput.value = localStorage.getItem('jasqlAdminToken') || '';
+tokenInput.addEventListener('change', () => localStorage.setItem('jasqlAdminToken', tokenInput.value));
+function headers(json) {
+  const h = {};
+  if (json) h['Content-Type'] = 'application/json';
+  if (tokenInput.value) h['X-Admin-Token'] = tokenInput.value;
+  return h;
+}
+function toast(msg, ms = 3000) {
+  const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', ms);
+}
+window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+/* ---------- init: dataset list ---------- */
+async function initDatasets() {
+  try {
+    const res = await fetch('/api/datasets', { headers: headers(false) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+    REGISTRY = data.datasets || [];
+  const sel = $('#dsSelect');
+  REGISTRY.filter(d => d.editable && !EXCLUDE.has(d.name) && (d.format === 'json-array' || d.name === 'glossary'))
+    .forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.name;
+      o.textContent = d.name + ' — ' + d.description.split('.')[0] + (d.present ? '' : ' (파일 없음)');
+      sel.appendChild(o);
+    });
+  const want = new URLSearchParams(location.search).get('ds');
+  if (want) { sel.value = want; if (sel.value === want) loadDataset(); }
+  } catch (e) {
+    showResult('bad', '데이터셋 목록을 불러오지 못했습니다: ' + e.message + '\n관리 토큰과 서버 상태를 확인하세요.');
+  }
+}
+$('#dsSelect').addEventListener('change', () => { if ($('#dsSelect').value) loadDataset(); });
+
+/* ---------- load ---------- */
+async function loadDataset() {
+  const name = $('#dsSelect').value;
+  if (!name) { toast('데이터셋을 먼저 선택하세요'); return; }
+  if (dirty && !confirm('저장되지 않은 변경 ' + dirty + '건이 사라집니다. 계속할까요?')) return;
+  DS = REGISTRY.find(d => d.name === name);
+  const r = await fetch('/api/datasets/' + encodeURIComponent(name) + '/content', { headers: headers(false) });
+  if (r.status === 204) { showResult('info', '아직 파일이 없습니다. 빈 표에서 행을 추가해 새 데이터셋을 만들 수 있습니다.'); }
+  else if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    showResult('bad', '불러오기 실패: ' + (err.error || 'HTTP ' + r.status) + '\n빈 데이터로 대체하지 않았습니다. 관리 토큰과 파일 상태를 확인하세요.');
+    DS = null; ROWS = []; COLS = []; updateDirty(); render(); return;
+  }
+  let parsed = [];
+  if (r.status === 200) { try { parsed = JSON.parse(await r.text()); } catch (e) { showResult('bad', 'JSON 해석 실패: ' + e.message); DS=null; updateDirty(); return; } }
+  const data = (name === 'glossary') ? (parsed.entries || []) : parsed;
+  if (!Array.isArray(data)) { alert('이 데이터셋은 배열 형태가 아니라 표로 편집할 수 없습니다.'); return; }
+  ROWS = data.map(row => ({ ...row }));
+  COLS = deriveColumns(ROWS);
+  dirty = 0; page = 0;
+  $('#search').value = '';
+  $('#schemaBox').style.display = 'block';
+  $('#schemaBox').textContent = '기대 스키마: ' + DS.schema + '\n사용 기능: ' + DS.used_by.join(', ');
+  ['addRowBtn','addColBtn','revertBtn'].forEach(id => $('#'+id).disabled = false);
+  $('#datasetInfo').style.display = 'grid';
+  $('#datasetInfo').innerHTML = '<div class="metric"><span>데이터셋</span><b>'+esc(DS.name)+'</b></div><div class="metric"><span>현재 크기</span><b>'+ROWS.length+'행</b></div><div class="metric"><span>컬럼</span><b>'+COLS.length+'개</b></div><div class="metric"><span>적용 방식</span><b>백업 후 핫스왑</b></div>';
+  $('#step1').classList.remove('on'); $('#step2').classList.add('on');
+  hideResult(); updateDirty(); render();
+  toast(name + ' 로드: ' + ROWS.length + '행, ' + COLS.length + '컬럼');
+}
+function deriveColumns(rows) {
+  const cols = [];
+  const seen = new Set();
+  for (const row of rows) for (const k of Object.keys(row)) if (!seen.has(k)) { seen.add(k); cols.push(k); }
+  if (cols.length === 0 && DS) {
+    // empty dataset: seed columns from the registry schema summary
+    (DS.schema.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []).slice(0, 12).forEach(k => { if (!seen.has(k)) { seen.add(k); cols.push(k); } });
+  }
+  return cols;
+}
+
+/* ---------- render ---------- */
+function filteredIdx() {
+  const q = $('#search').value.trim().toLowerCase();
+  const idx = [];
+  ROWS.forEach((row, i) => {
+    if (!q || JSON.stringify(row).toLowerCase().includes(q)) idx.push(i);
+  });
+  return idx;
+}
+function render() {
+  const idx = filteredIdx();
+  const pages = Math.max(1, Math.ceil(idx.length / PAGE_SIZE));
+  if (page >= pages) page = pages - 1;
+  const slice = idx.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  $('#ghead').innerHTML = '<tr><th style="min-width:74px"></th>' + COLS.map((c, ci) =>
+    '<th><div class="colhead"><span class="nm">' + esc(c) + '</span><span class="ops">' +
+    '<button title="컬럼 이름 변경 (모든 행에 적용)" onclick="renameColumn(' + ci + ')">✎</button>' +
+    '<button title="컬럼 삭제 (모든 행에서 이 키 제거)" onclick="deleteColumn(' + ci + ')">✕</button>' +
+    '</span></div></th>').join('') + '</tr>';
+
+  $('#gbody').innerHTML = slice.length === 0
+    ? '<tr><td class="empty" colspan="' + (COLS.length + 1) + '">' + (ROWS.length ? '검색 결과 없음' : '행이 없습니다 — [＋ 행 추가]로 시작하세요') + '</td></tr>'
+    : slice.map(ri => {
+        const row = ROWS[ri];
+        return '<tr data-ri="' + ri + '"' + (row.__new ? ' class="newrow"' : '') + '>' +
+          '<td class="rowno">' + (ri + 1) +
+          ' <span class="rops"><button title="행 복제" onclick="dupRow(' + ri + ')">⧉</button>' +
+          '<button title="행 삭제" onclick="delRow(' + ri + ')">✕</button></span></td>' +
+          COLS.map(c => renderCell(ri, c)).join('') + '</tr>';
+      }).join('');
+  $('#gbody').querySelectorAll('td.cell').forEach(td =>
+    td.addEventListener('click', () => beginEdit(td)));
+  $('#stat').textContent = ROWS.length + '행 · ' + COLS.length + '컬럼' + ($('#search').value ? ' · 필터 ' + idx.length + '행' : '');
+  $('#pager').innerHTML = pages <= 1 ? '' :
+    '<button class="btn" ' + (page === 0 ? 'disabled' : '') + ' onclick="page--;render()">◀ 이전</button>' +
+    '<span>' + (page + 1) + ' / ' + pages + ' 페이지</span>' +
+    '<button class="btn" ' + (page >= pages - 1 ? 'disabled' : '') + ' onclick="page++;render()">다음 ▶</button>';
+}
+function renderCell(ri, col) {
+  const v = ROWS[ri][col];
+  let cls = '', text = '';
+  if (v === undefined) { text = ''; }
+  else if (v === null) { cls = 't-null'; text = 'null'; }
+  else if (typeof v === 'number') { cls = 't-num'; text = String(v); }
+  else if (typeof v === 'boolean') { cls = 't-bool'; text = String(v); }
+  else if (typeof v === 'object') { cls = 't-obj'; text = JSON.stringify(v); }
+  else { text = v; }
+  return '<td class="cell" data-ri="' + ri + '" data-col="' + esc(col) + '"><div class="v"><span class="' + cls + '">' + esc(text) + '</span></div></td>';
+}
+
+/* ---------- cell edit ---------- */
+function beginEdit(td) {
+  if (td.classList.contains('editing')) return;
+  document.querySelectorAll('td.cell.editing').forEach(t => commitEdit(t, true));
+  const ri = +td.dataset.ri, col = td.dataset.col;
+  const v = ROWS[ri][col];
+  const initial = v === undefined ? '' : (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v));
+  td.classList.add('editing');
+  td.innerHTML = '<textarea></textarea>';
+  const ta = td.querySelector('textarea');
+  ta.value = initial;
+  ta.focus(); ta.select();
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(td, true); }
+    if (e.key === 'Escape') { e.preventDefault(); commitEdit(td, false); }
+  });
+  ta.addEventListener('blur', () => commitEdit(td, true));
+  td._orig = initial;
+}
+function parseCell(text) {
+  const t = text.trim();
+  if (t === '') return undefined;              // key 제거
+  if (t === 'null') return null;
+  if (t === 'true') return true;
+  if (t === 'false') return false;
+  if (/^-?\d+(\.\d+)?$/.test(t)) return Number(t);
+  if (/^[\[{\"]/.test(t)) {
+    try { return JSON.parse(t); } catch (e) { throw new Error('객체·배열·문자열 JSON 형식이 올바르지 않습니다: ' + e.message); }
+  }
+  return text;
+}
+function commitEdit(td, apply) {
+  const ta = td.querySelector('textarea');
+  if (!ta) return;
+  const ri = +td.dataset.ri, col = td.dataset.col;
+  if (apply && ta.value !== td._orig) {
+    let nv;
+    try { nv = parseCell(ta.value); } catch (e) { td.classList.add('editing'); ta.focus(); showResult('bad', '셀 입력 오류: ' + e.message + '\nJSON 값은 괄호와 따옴표를 확인하세요. Esc를 누르면 취소합니다.'); return false; }
+    if (nv === undefined) delete ROWS[ri][col]; else ROWS[ri][col] = nv;
+    dirty++; updateDirty();
+    td.classList.add('changed');
+  }
+  td.classList.remove('editing');
+  td.outerHTML = renderCell(ri, col);
+  const fresh = document.querySelector('td.cell[data-ri="' + ri + '"][data-col="' + CSS.escape(col) + '"]');
+  if (fresh) { if (apply && ta.value !== td._orig) fresh.classList.add('changed'); fresh.addEventListener('click', () => beginEdit(fresh)); }
+  return true;
+}
+
+/* ---------- row ops ---------- */
+function addRow() {
+  const row = { __new: true };
+  ROWS.unshift(row);
+  dirty++; updateDirty(); page = 0; $('#search').value = ''; render();
+  toast('빈 행이 맨 위에 추가되었습니다. 셀을 클릭해 값을 입력하세요.');
+}
+function dupRow(ri) {
+  const copy = JSON.parse(JSON.stringify(ROWS[ri])); copy.__new = true;
+  ROWS.splice(ri + 1, 0, copy);
+  dirty++; updateDirty(); render();
+}
+function delRow(ri) {
+  if (!confirm((ri + 1) + '번 행을 삭제할까요? (저장 전까지는 [다시 불러오기]로 취소 가능)')) return;
+  ROWS.splice(ri, 1);
+  dirty++; updateDirty(); render();
+}
+
+/* ---------- column ops ---------- */
+function addColumn() {
+  const name = prompt('추가할 컬럼(필드) 이름을 입력하세요.\n기대 스키마를 참고하세요:\n' + (DS ? DS.schema : ''));
+  if (!name) return;
+  const k = name.trim();
+  if (!k || COLS.includes(k)) { alert('빈 이름이거나 이미 존재하는 컬럼입니다.'); return; }
+  COLS.push(k);
+  dirty++; updateDirty(); render();
+  toast('컬럼 [' + k + '] 추가됨 — 값을 입력한 행에만 키가 저장됩니다.');
+}
+function renameColumn(ci) {
+  const oldName = COLS[ci];
+  const name = prompt('컬럼 [' + oldName + ']의 새 이름 (모든 행의 키가 변경됩니다):', oldName);
+  if (!name || name.trim() === oldName) return;
+  const k = name.trim();
+  if (COLS.includes(k)) { alert('이미 존재하는 컬럼입니다.'); return; }
+  COLS[ci] = k;
+  for (const row of ROWS) if (Object.prototype.hasOwnProperty.call(row, oldName)) { row[k] = row[oldName]; delete row[oldName]; }
+  dirty++; updateDirty(); render();
+}
+function deleteColumn(ci) {
+  const name = COLS[ci];
+  const cnt = ROWS.filter(r => Object.prototype.hasOwnProperty.call(r, name)).length;
+  if (!confirm('컬럼 [' + name + ']을 삭제할까요?\n' + cnt + '개 행에서 이 키가 제거됩니다. (저장 전까지 [다시 불러오기]로 취소 가능)')) return;
+  COLS.splice(ci, 1);
+  for (const row of ROWS) delete row[name];
+  dirty++; updateDirty(); render();
+}
+
+/* ---------- save ---------- */
+function serialize() {
+  const out = ROWS.map(r => { const c = { ...r }; delete c.__new; return c; });
+  return DS.name === 'glossary' ? JSON.stringify({ entries: out }) : JSON.stringify(out);
+}
+async function save() {
+  for (const t of [...document.querySelectorAll('td.cell.editing')]) if (commitEdit(t, true) === false) return;
+  if (!DS) return;
+  if (!confirm('[' + DS.name + '] 데이터셋을 표의 현재 내용(' + ROWS.length + '행)으로 저장합니다.\n\n· 기존 파일은 backups/에 백업됩니다\n· 카탈로그가 재컴파일되어 즉시 반영됩니다\n· 문제가 있으면 자동 롤백됩니다\n\n계속할까요?')) return;
+  try {
+    const res = await fetch('/api/datasets/' + encodeURIComponent(DS.name), {
+      method: 'PUT', headers: headers(true), body: serialize()
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+    const el = $('#saveResult');
+    if (data.applied) {
+      el.className = 'result ok';
+      el.textContent = '✅ 저장 완료 — 카탈로그 핫스왑됨 (재기동 불필요)\n백업: ' + (data.backup || '(신규 파일)');
+      dirty = 0; updateDirty();
+      $('#step2').classList.remove('on'); $('#step3').classList.add('on');
+      ROWS.forEach(r => delete r.__new);
+      document.querySelectorAll('td.cell.changed').forEach(t => t.classList.remove('changed'));
+      render();
+      toast('저장 완료: ' + DS.name);
+    } else {
+      el.className = 'result bad';
+      el.textContent = '↩ 자동 롤백됨 — 파일과 카탈로그는 이전 상태로 유지됩니다.\n사유: ' + data.reason +
+        (data.issues ? '\n오류:\n' + JSON.stringify(data.issues, null, 2) : '') +
+        '\n\n표의 편집 내용은 남아 있으니 문제를 고친 뒤 다시 저장하세요.';
+    }
+  } catch (e) {
+    const el = $('#saveResult'); el.className = 'result bad';
+    el.textContent = '✘ 저장 실패: ' + e.message + (e.message.includes('token') ? '\n상단에 관리 토큰을 입력했는지 확인하세요.' : '');
+  }
+}
+function updateDirty() {
+  $('#dirtyBar').classList.toggle('show', dirty > 0);
+  $('#dirtyCount').textContent = '변경 작업 ' + dirty + '건';
+  $('#saveBtn').disabled = !DS || dirty === 0;
+  if (dirty > 0) { $('#step3').classList.add('on'); } else { $('#step3').classList.remove('on'); }
+}
+function hideResult() { $('#saveResult').className = 'result'; }
+function showResult(cls, msg) { const el=$('#saveResult'); el.className='result '+cls; el.textContent=msg; }
+
+window.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (!$('#saveBtn').disabled) save(); } });
+
+JASQL.mount({ page: 'editor', onReady() { initDatasets(); } });
+</script>
+</body>
+</html>

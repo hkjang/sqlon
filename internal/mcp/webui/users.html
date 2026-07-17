@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon 사용자 관리</title>
+<style>
+  :root { --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
+    --blue:#2563eb; --green:#15803d; --green-soft:#e6f6ec; --red:#b91c1c; --red-soft:#fdeaea;
+    --amber:#b45309; --amber-soft:#fdf3e2; --mono:ui-monospace,Consolas,monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
+  header { background:#101a2e; color:#e8eefc; padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  header h1 { font-size:16px; margin:0 10px 0 0; } header .grow { flex:1; }
+  .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px; padding:6px 12px; cursor:pointer; font-size:13px; text-decoration:none; display:inline-block; }
+  .btn:hover { border-color:var(--blue); color:var(--blue); }
+  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .btn.danger { color:var(--red); border-color:#efc4c4; }
+  main { max-width:1200px; margin:0 auto; padding:16px 20px 60px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; color:var(--sub); padding:7px 9px; border-bottom:2px solid var(--line); }
+  td { padding:8px 9px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .b { display:inline-block; font-size:11px; font-weight:700; border-radius:5px; padding:1px 7px; }
+  .b.admin { background:var(--amber-soft); color:var(--amber); }
+  .b.user { background:#eef1f5; color:var(--sub); }
+  .b.on { background:var(--green-soft); color:var(--green); }
+  .b.off { background:var(--red-soft); color:var(--red); }
+  .b.sso { background:#e8efff; color:var(--blue); }
+  select, input { border:1px solid var(--line); border-radius:7px; padding:6px 9px; font-size:13px; }
+  .row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px; margin:8px 0; }
+  .result { border-radius:8px; padding:10px 13px; margin-top:8px; font-size:13px; display:none; white-space:pre-wrap; }
+  .result.ok { display:block; background:var(--green-soft); border:1px solid #bfe4cc; }
+  .result.bad { display:block; background:var(--red-soft); border:1px solid #efc4c4; }
+  .mini { font-size:12px; color:var(--sub); }
+  #userchip { font-size:12px; color:#cfe0ff; }
+</style>
+</head>
+<body>
+<header>
+  <h1>👥 사용자 관리</h1>
+  <span class="grow"></span>
+</header>
+<main>
+  <div class="card">
+    <b>새 로컬 사용자 추가</b>
+    <div class="mini">Keycloak SSO 사용자는 최초 SSO 로그인 시 자동 생성됩니다 (기본 역할 user — 아래 표에서 승격).</div>
+    <form onsubmit="return createUser(event)">
+      <div class="row">
+        <input id="c_username" placeholder="아이디" required>
+        <input id="c_password" type="password" placeholder="비밀번호 (8자+)" required minlength="8">
+        <input id="c_display" placeholder="표시 이름">
+        <input id="c_email" type="email" placeholder="이메일">
+        <select id="c_role"><option value="user">user</option><option value="dba">dba</option><option value="admin">admin</option></select>
+        <button class="btn primary" type="submit">＋ 추가</button>
+      </div>
+    </form>
+    <div class="result" id="createResult"></div>
+  </div>
+
+  <div class="card">
+    <b>사용자 목록</b> <span class="mini" id="stat"></span>
+    <table>
+      <thead><tr><th>아이디</th><th>이름/이메일</th><th>제공자</th><th>역할</th><th>상태</th><th>최근 로그인</th><th style="width:280px">작업</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="7" class="mini">불러오는 중…</td></tr></tbody>
+    </table>
+    <div class="result" id="rowResult"></div>
+    <div class="mini" style="margin-top:8px">
+      · <b>역할</b>: admin은 모든 관리 권한(사용자/데이터셋/전체 프로파일/전체 키). user는 본인 프로파일·키와 grant받은 프로파일만.<br>
+      · <b>비활성화</b>: 즉시 모든 세션이 폐기되고 로그인·키 인증이 차단됩니다. 마지막 admin은 강등/비활성화할 수 없습니다.<br>
+      · <b>비밀번호 재설정</b>: 로컬 계정만 가능. SSO 계정은 Keycloak에서 관리합니다.
+    </div>
+  </div>
+</main>
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let ME = null;
+
+async function api(method, path, body) {
+  const res = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+  return data;
+}
+function show(id, cls, msg) { const el = $(id); el.className = 'result ' + cls; el.textContent = msg; }
+
+async function init(me) {
+  if (!me.auth_enabled) { document.querySelector('main').innerHTML = '<div class="card">단독 모드(메타 DB 미설정) — 사용자 관리가 비활성입니다.</div>'; return; }
+  ME = me.user;
+  refresh();
+}
+async function refresh() {
+  try {
+    const d = await api('GET', '/api/users');
+    const users = d.users || [];
+    $('#stat').textContent = users.length + '명';
+    $('#rows').innerHTML = users.map(u =>
+      '<tr><td><b class="mono">' + esc(u.username) + '</b></td>' +
+      '<td>' + esc(u.display_name || '') + '<div class="mini">' + esc(u.email || '') + '</div></td>' +
+      '<td>' + (u.provider === 'keycloak' ? '<span class="b sso">Keycloak</span>' : '<span class="b user">local</span>') + '</td>' +
+      '<td><span class="b ' + u.role + '">' + u.role + '</span></td>' +
+      '<td>' + (u.is_active ? '<span class="b on">활성</span>' : '<span class="b off">비활성</span>') + '</td>' +
+      '<td class="mini">' + esc(u.last_login_at ? u.last_login_at.slice(0, 19).replace('T', ' ') : '—') + '</td>' +
+      '<td>' +
+        '<select class="btn" onchange="setRole(\'' + u.id + '\', this.value)">' +
+          ['user','dba','admin'].map(function(r){return '<option value="'+r+'"'+(u.role===r?' selected':'')+'>'+r+'</option>';}).join('') +
+        '</select> ' +
+        '<button class="btn" onclick="setActive(\'' + u.id + '\', ' + !u.is_active + ')">' + (u.is_active ? '비활성화' : '활성화') + '</button> ' +
+        (u.provider === 'local' ? '<button class="btn" onclick="resetPw(\'' + u.id + '\', \'' + esc(u.username) + '\')">PW 재설정</button>' : '') +
+      '</td></tr>').join('');
+  } catch (e) { show('#rowResult', 'bad', e.message); }
+}
+async function createUser(ev) {
+  ev.preventDefault();
+  try {
+    await api('POST', '/api/users', JSON.stringify({
+      username: $('#c_username').value.trim(), password: $('#c_password').value,
+      display_name: $('#c_display').value.trim(), email: $('#c_email').value.trim(),
+      role: $('#c_role').value }));
+    show('#createResult', 'ok', '✅ 사용자가 추가되었습니다.');
+    ev.target.reset(); refresh();
+  } catch (e) { show('#createResult', 'bad', '✘ ' + e.message); }
+  return false;
+}
+async function setRole(id, role) {
+  if (!confirm('역할을 ' + role + '로 변경할까요?')) return;
+  try { await api('PUT', '/api/users/' + id, JSON.stringify({ role })); refresh(); }
+  catch (e) { show('#rowResult', 'bad', e.message); }
+}
+async function setActive(id, active) {
+  if (!confirm((active ? '활성화' : '비활성화 (모든 세션 즉시 폐기)') + ' 할까요?')) return;
+  try { await api('PUT', '/api/users/' + id, JSON.stringify({ is_active: active })); refresh(); }
+  catch (e) { show('#rowResult', 'bad', e.message); }
+}
+async function resetPw(id, username) {
+  const pw = prompt('[' + username + '] 새 비밀번호 (8자 이상):');
+  if (!pw) return;
+  try { await api('PUT', '/api/users/' + id, JSON.stringify({ password: pw })); show('#rowResult', 'ok', '✅ 비밀번호가 재설정되었습니다.'); }
+  catch (e) { show('#rowResult', 'bad', e.message); }
+}
+JASQL.mount({ page: 'users', onReady: init });
+</script>
+</body>
+</html>

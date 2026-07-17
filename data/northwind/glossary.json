@@ -1,0 +1,75 @@
+{
+ "entries": [
+  {
+   "term": "제품",
+   "category": "entity",
+   "synonyms": [
+    "product",
+    "상품",
+    "품목"
+   ]
+  },
+  {
+   "term": "주문",
+   "category": "entity",
+   "synonyms": [
+    "order",
+    "발주",
+    "주문건"
+   ]
+  },
+  {
+   "term": "고객사",
+   "category": "entity",
+   "synonyms": [
+    "customer",
+    "고객",
+    "거래처"
+   ]
+  },
+  {
+   "term": "직원",
+   "category": "entity",
+   "synonyms": [
+    "employee",
+    "담당자",
+    "사원"
+   ]
+  },
+  {
+   "term": "공급업체",
+   "category": "entity",
+   "synonyms": [
+    "supplier",
+    "공급사",
+    "벤더"
+   ]
+  },
+  {
+   "term": "배송",
+   "category": "entity",
+   "synonyms": [
+    "ship",
+    "shipper",
+    "shipped_date",
+    "출고"
+   ]
+  },
+  {
+   "term": "단종",
+   "category": "entity",
+   "synonyms": [
+    "discontinued",
+    "판매중지"
+   ]
+  },
+  {
+   "term": "카테고리",
+   "category": "entity",
+   "synonyms": [
+    "category",
+    "분류"
+   ]
+  }
+ ]
+}

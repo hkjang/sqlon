@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SQLON — AI Database Operations Platform</title>
+<style>
+  :root { --bg:#0e1726; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec; --blue:#2563eb; --blue-soft:#e8efff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:linear-gradient(180deg,#0e1726 0%,#16233c 260px,#f5f7fa 260px,#f5f7fa 100%);
+         color:var(--ink); font:15px/1.6 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
+  .hero { max-width:1000px; margin:0 auto; padding:46px 24px 0; color:#e8eefc; }
+  .hero h1 { font-size:30px; margin:0 0 8px; }
+  .hero p { font-size:16px; color:#b9c6e0; margin:0 0 4px; max-width:720px; }
+  main { max-width:1000px; margin:0 auto; padding:28px 24px 80px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-bottom:22px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px 22px; box-shadow:0 4px 20px rgba(16,26,46,.06); }
+  .card h2 { font-size:16px; margin:0 0 8px; }
+  .card p { color:var(--sub); font-size:13.5px; margin:0 0 14px; }
+  a.btn { display:inline-block; text-decoration:none; background:var(--blue); color:#fff; border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; }
+  a.btn.ghost { background:var(--blue-soft); color:var(--blue); }
+  a.btn:hover { opacity:.92; }
+  .card ul { margin:6px 0 0; padding-left:18px; color:var(--sub); font-size:13px; }
+  code { background:#eef1f5; border-radius:4px; padding:1px 6px; font-family:ui-monospace,Consolas,monospace; font-size:12.5px; }
+  .mode { font-size:13px; color:var(--sub); background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 18px; }
+  .mode b { color:var(--ink); }
+  .foot { text-align:center; color:var(--sub); font-size:12.5px; margin-top:26px; }
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>🛢️ SQLON</h1>
+  <p>PostgreSQL·MySQL·MariaDB·Oracle를 관찰·진단·통제하는 <b>AI Database Operations Platform</b>입니다.</p>
+  <p>운영 현황을 먼저 확인하고, SQL Lab은 읽기 전용 보조 기능으로 사용하세요.</p>
+</div>
+
+<main>
+  <div class="grid">
+    <div class="card">
+      <h2>📡 운영 현황</h2>
+      <p>연결 상태, 수집 최신성, DBA 진단과 최근 변경 근거를 확인합니다.</p>
+      <a class="btn" href="/admin/dba">운영 워크스페이스 →</a>
+    </div>
+    <div class="card">
+      <h2>🧪 SQL Lab</h2>
+      <p>기존 NL2SQL은 검증된 읽기 전용 SQL Lab으로 유지됩니다.</p>
+      <a class="btn ghost" href="/admin/ask">SQL Lab →</a>
+    </div>
+    <div class="card">
+      <h2>📘 API 문서</h2>
+      <p>REST API(Swagger)와 MCP 도구 레퍼런스를 확인합니다.</p>
+      <a class="btn ghost" href="/docs">Swagger UI →</a>
+    </div>
+  </div>
+
+  <div class="mode" id="modeBox">
+    <b>로그인 방법</b> — 서버 구성에 따라 다음 중 하나를 사용합니다:
+    <ul>
+      <li><b>로컬 계정</b>: 아이디/비밀번호로 웹 콘솔 로그인 (bcrypt·세션 쿠키)</li>
+      <li><b>Keycloak SSO</b>: 조직 IdP 통합 (OIDC authorization code)</li>
+      <li><b>MCP 키</b> <code>jsk_...</code>: LLM 클라이언트/스크립트의 <code>/mcp</code>·<code>/api</code> 접근용 — <code>Authorization: Bearer jsk_...</code></li>
+    </ul>
+    <div id="modeHint"></div>
+  </div>
+
+  <div class="foot" id="foot">SQLON · AI Database Operations Platform</div>
+</main>
+
+<script>
+'use strict';
+(async function () {
+  try {
+    const me = await (await fetch('/auth/me')).json();
+    if (me.version) document.getElementById('foot').textContent = 'SQLON v' + me.version + ' · AI Database Operations Platform';
+    const hint = document.getElementById('modeHint');
+    if (!me.auth_enabled) {
+      hint.innerHTML = '<div style="margin-top:8px">현재 <b>단독 모드</b>입니다 — 로그인 없이 콘솔에 접근할 수 있습니다. (<code>-meta-db</code>로 인증을 활성화하세요.)</div>';
+    } else if (me.authenticated) {
+      hint.innerHTML = '<div style="margin-top:8px">✅ <b>' + me.user.username + '</b> (' + me.user.role + ')(으)로 로그인됨. · <a href="/auth/logout" onclick="fetch(\'/auth/logout\',{method:\'POST\'}).then(()=>location.reload());return false;">로그아웃</a></div>';
+    } else {
+      hint.innerHTML = '<div style="margin-top:10px"><a class="btn" href="/auth/login">로그인 →</a></div>';
+    }
+  } catch (e) { /* ignore */ }
+})();
+</script>
+</body>
+</html>

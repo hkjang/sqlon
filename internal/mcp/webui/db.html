@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon DB 연결 관리 · 쿼리 실행</title>
+<style>
+  :root {
+    --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
+    --blue:#2563eb; --blue-soft:#e8efff; --green:#15803d; --green-soft:#e6f6ec;
+    --red:#b91c1c; --red-soft:#fdeaea; --amber:#b45309; --amber-soft:#fdf3e2;
+    --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
+  header { background:#101a2e; color:#e8eefc; padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; position:sticky; top:0; z-index:20; }
+  header h1 { font-size:16px; margin:0 10px 0 0; }
+  header .grow { flex:1; }
+  header input { background:#1d2b47; border:1px solid #35507f; color:#e8eefc; border-radius:6px; padding:6px 10px; width:220px; }
+  .chip { display:inline-block; padding:2px 10px; border-radius:20px; font-size:12px; background:#243654; color:#cfe0ff; }
+  .chip.err { background:#5b1d1d; color:#ffc9c9; }
+  .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px; padding:6px 12px; cursor:pointer; font-size:13px; white-space:nowrap; }
+  .btn:hover { border-color:var(--blue); color:var(--blue); }
+  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .btn.primary:hover { opacity:.9; color:#fff; }
+  .btn.danger { color:var(--red); border-color:#efc4c4; }
+  .btn.danger:hover { background:var(--red-soft); }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+  main { max-width:1600px; margin:0 auto; padding:14px 20px 80px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+  details.guide > summary { cursor:pointer; font-weight:700; }
+  details.guide ul { margin:8px 0 2px; padding-left:20px; color:var(--sub); font-size:13px; }
+  code, .mono { background:#eef1f5; border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
+  table.t { width:100%; border-collapse:collapse; font-size:13px; }
+  table.t th { text-align:left; color:var(--sub); font-weight:600; padding:7px 9px; border-bottom:2px solid var(--line); }
+  table.t td { padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .b { display:inline-block; font-size:11px; font-weight:700; border-radius:5px; padding:1px 7px; margin-right:3px; }
+  .b.ok { background:var(--green-soft); color:var(--green); }
+  .b.bad { background:var(--red-soft); color:var(--red); }
+  .b.warn { background:var(--amber-soft); color:var(--amber); }
+  .b.gray { background:#eef1f5; color:var(--sub); }
+  .cols2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:1000px){ .cols2 { grid-template-columns:1fr; } }
+  form.pform label { display:block; font-size:12.5px; color:var(--sub); margin:8px 0 3px; }
+  form.pform input, form.pform select { width:100%; border:1px solid var(--line); border-radius:7px; padding:7px 10px; font-size:13px; }
+  form.pform .row { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; }
+  textarea#sqlBox { width:100%; min-height:140px; font-family:var(--mono); font-size:13px; border:1px solid var(--line); border-radius:8px; padding:10px; resize:vertical; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:10px 0; }
+  .result { border-radius:8px; padding:11px 14px; margin-top:8px; font-size:13px; display:none; white-space:pre-wrap; word-break:break-all; }
+  .result.ok { display:block; background:var(--green-soft); border:1px solid #bfe4cc; }
+  .result.bad{ display:block; background:var(--red-soft); border:1px solid #efc4c4; }
+  .result.info{ display:block; background:var(--blue-soft); border:1px solid #c4d6f7; }
+  .gridwrap { overflow:auto; border:1px solid var(--line); border-radius:10px; max-height:45vh; margin-top:10px; }
+  table.rs { border-collapse:collapse; font-size:12.5px; min-width:100%; }
+  table.rs th { position:sticky; top:0; background:#eef2f8; padding:6px 9px; text-align:left; font-family:var(--mono); font-size:12px; border-bottom:1px solid var(--line); }
+  table.rs td { padding:5px 9px; border-bottom:1px solid var(--line); border-right:1px solid var(--line); font-family:var(--mono); font-size:12px; white-space:pre-wrap; max-width:360px; word-break:break-all; }
+  .mini { font-size:12px; color:var(--sub); }
+  #toast { position:fixed; right:18px; bottom:18px; background:#101a2e; color:#e8eefc; border-radius:10px; padding:12px 18px; font-size:13px; display:none; max-width:480px; z-index:50; box-shadow:0 6px 24px rgba(0,0,0,.25); }
+  h2 { font-size:15px; margin:0 0 10px; }
+  .profile-hero{background:linear-gradient(135deg,#10203c,#1d4f91);color:#fff;border:0;padding:22px;box-shadow:0 12px 34px rgba(20,55,105,.16)}
+  .profile-hero h2{font-size:21px;margin-bottom:5px}.profile-hero p{margin:0;color:#cbdcf5}.profile-hero .btn{font-weight:700}
+  .form-shell{background:#fbfcff;border:1px solid #cbd8eb!important;border-radius:14px;padding:0!important;overflow:hidden}.form-head{padding:18px 20px;background:#f0f5fd;border-bottom:1px solid #d7e1ef;display:flex;gap:12px;align-items:center}.form-head h2{font-size:18px;margin:0}.form-body{padding:20px}
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);margin-bottom:20px}.flow-step{padding:9px 10px;border-bottom:3px solid #dce3ed;color:var(--sub);font-size:12px}.flow-step b{display:inline-grid;place-items:center;width:22px;height:22px;margin-right:6px;border-radius:50%;background:#e3e8f0}.flow-step.active{border-color:var(--blue);color:var(--blue);font-weight:700}.flow-step.active b{background:var(--blue);color:#fff}
+  .engine-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:7px 0 16px}.engine-card{position:relative;border:1px solid var(--line);background:#fff;border-radius:11px;padding:13px;cursor:pointer;transition:.15s}.engine-card:hover{transform:translateY(-1px);border-color:#91afe0}.engine-card.selected{border:2px solid var(--blue);background:#f4f8ff;padding:12px;box-shadow:0 4px 15px rgba(37,99,235,.1)}.engine-card input{position:absolute;opacity:0}.engine-card b{display:block;font-size:14px}.engine-card span{font-size:11.5px;color:var(--sub)}
+  .field-section{background:#fff;border:1px solid var(--line);border-radius:11px;padding:15px;margin-bottom:12px}.field-section h3{font-size:13px;margin:0 0 5px}.field-section>p{font-size:12px;color:var(--sub);margin:0 0 10px}.field-hint{font-size:11.5px;color:var(--sub);margin-top:4px}.form-actions{position:sticky;bottom:0;background:rgba(255,255,255,.96);border-top:1px solid var(--line);padding:12px 20px;margin:18px -20px -20px;display:flex;align-items:center;gap:8px;backdrop-filter:blur(6px)}
+  .diagnostic{margin-top:7px;border-left:3px solid var(--red);padding:7px 10px;background:#fff6f6;border-radius:0 7px 7px 0}.diagnostic b{display:block}.diagnostic ul{margin:5px 0 0;padding-left:18px}
+  @media(max-width:760px){.engine-grid,.flow{grid-template-columns:1fr}.flow-step{display:none}.flow-step.active{display:block}.form-body{padding:14px}.form-actions{margin-left:-14px;margin-right:-14px}.profile-hero .toolbar{align-items:flex-start}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔌 DB 연결 관리 · 쿼리 실행</h1>
+  <span id="driverChip"></span>
+  <span class="grow"></span>
+  <input id="adminToken" type="password" placeholder="관리 토큰 (미설정 시 비워두기)">
+</header>
+
+<main>
+  <div class="card profile-hero"><div class="toolbar" style="margin:0"><div><h2>데이터베이스 연결 시작하기</h2><p>엔진을 선택하고 읽기 전용 계정으로 연결한 뒤, 저장과 동시에 실제 접속을 확인하세요.</p></div><span style="flex:1"></span><button class="btn" onclick="openForm(null)">＋ 새 DB 연결</button></div></div>
+  <div class="card">
+    <div class="toolbar" style="justify-content:space-between">
+      <h2 style="margin:0">DB 프로파일</h2>
+      <span>
+        <button class="btn" onclick="refreshProfiles()">새로고침</button>
+        <button class="btn primary" onclick="openForm(null)">＋ 프로파일 추가</button>
+      </span>
+    </div>
+    <table class="t">
+      <thead><tr><th>ID / 이름</th><th>접속 문자열</th><th>계정</th><th>풀 / 정책</th><th>상태</th><th style="width:230px">작업</th></tr></thead>
+      <tbody id="pRows"><tr><td colspan="6" class="mini">불러오는 중…</td></tr></tbody>
+    </table>
+    <div id="formWrap" class="form-shell" style="display:none; margin-top:14px">
+      <div class="form-head"><div><span class="mini">DB CONNECTION WIZARD</span><h2 id="formTitle">프로파일 추가</h2></div><span style="flex:1"></span><button class="btn" type="button" onclick="closeForm()">닫기</button></div>
+      <form class="pform" onsubmit="return saveProfile(event)">
+       <div class="form-body">
+        <div class="flow"><div class="flow-step active"><b>1</b>DB 엔진</div><div class="flow-step active"><b>2</b>접속 정보</div><div class="flow-step"><b>3</b>운영 정책</div><div class="flow-step"><b>4</b>검증·저장</div></div>
+        <div class="field-section"><h3>1. 데이터베이스 엔진</h3><p>엔진에 따라 드라이버와 접속 방식, SQL 방언이 결정됩니다. 잘못 선택하면 연결할 수 없습니다.</p>
+          <div class="engine-grid">
+            <label class="engine-card selected" data-engine="postgres"><input type="radio" name="dbtype" value="postgres" checked><b>🐘 PostgreSQL</b><span>pgx · 기본 포트 5432</span></label>
+            <label class="engine-card" data-engine="mysql"><input type="radio" name="dbtype" value="mysql"><b>🐬 MySQL</b><span>go-sql-driver/mysql · 3306</span></label>
+            <label class="engine-card" data-engine="mariadb"><input type="radio" name="dbtype" value="mariadb"><b>🦭 MariaDB</b><span>MySQL wire protocol · 3306</span></label>
+          </div>
+        </div>
+        <div class="field-section"><h3>2. 기본 접속 정보</h3><p id="engineHelp">PostgreSQL 접속 정보를 입력하세요.</p>
+        <div class="cols2">
+          <div>
+            <label>ID (영문/숫자/._-, 저장 후 변경 불가)</label>
+            <input id="f_id" required pattern="[A-Za-z0-9._-]{1,64}" placeholder="mysql-prod-readonly">
+            <label>이름</label>
+            <input id="f_name" placeholder="운영 MySQL 읽기 전용">
+            <label>접속 문자열</label>
+            <input id="f_conn" required placeholder="db.example.com:5432/appdb">
+            <div class="field-hint" id="connHint">형식: host:port/database 또는 postgres://host:port/database</div>
+            <label>사용자 (SELECT 전용 계정)</label>
+            <input id="f_user" required placeholder="app_readonly">
+            <label>비밀번호 참조 (env:변수 | file:경로 | plain:값)</label>
+            <input id="f_pw" required placeholder="env:DB_PASSWORD">
+            <div class="field-hint">Docker에서는 env: 변수를 컨테이너 environment로 전달하고, file: 경로는 컨테이너에 마운트해야 합니다.</div>
+          </div>
+          <div>
+            <label>커넥션 풀</label>
+            <div class="row">
+              <input id="f_maxopen" type="number" placeholder="max_open (10)">
+              <input id="f_maxidle" type="number" placeholder="max_idle (2)">
+              <input id="f_lifetime" type="number" placeholder="lifetime초 (1800)">
+              <input id="f_idletime" type="number" placeholder="idle초 (600)">
+            </div>
+            <label>정책</label>
+            <div class="row">
+              <input id="f_qtimeout" type="number" placeholder="쿼리 timeout초 (30)">
+              <input id="f_ptimeout" type="number" placeholder="ping timeout초 (5)">
+              <input id="f_defrows" type="number" placeholder="기본 행수 (100)">
+              <input id="f_maxrows" type="number" placeholder="최대 행수 (1000)">
+            </div>
+            <label>추가 차단 키워드 (콤마 구분, 기본 차단 목록에 추가됨)</label>
+            <input id="f_denied" placeholder="예: DBLINK, EXTERNAL">
+            <label style="margin-top:6px">🛢 DBA 자격증명 (선택 — DBA 콘솔/도구 활성화용, 쓰기 가능 계정)</label>
+            <div class="grid">
+              <label class="chk" style="grid-column:1/-1"><input type="checkbox" id="f_dba_enabled"> DBA 작업 활성화 (dba.enabled)</label>
+              <input id="f_dba_user" placeholder="DBA 계정 (예: postgres)">
+              <input id="f_dba_pw" placeholder="env:PG_SUPER_PW (권장) / file:… / plain:…">
+              <input id="f_dba_conn" placeholder="DBA 접속문자열(선택, 예: host:5432/postgres)">
+            </div>
+            <label id="visLabel" style="display:none">공개 범위 (인증 모드)</label>
+            <select id="f_visibility" style="display:none">
+              <option value="private">private — 소유자와 grant받은 사용자만</option>
+              <option value="shared">shared — 모든 로그인 사용자가 사용(조회) 가능</option>
+            </select>
+          </div>
+        </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn primary" type="submit">저장하고 연결 테스트</button>
+          <button class="btn" type="button" onclick="closeForm()">취소</button>
+          <span class="mini">저장 후 실제 DB에 Ping하여 실패 단계와 해결 방법을 표시합니다.</span>
+        </div>
+       </div>
+      </form>
+      <div id="formResult" class="result"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>쿼리 콘솔 (Read-Only)</h2>
+    <div class="toolbar">
+      <label class="mini">프로파일&nbsp;<select id="qProfile" style="min-width:220px; padding:6px;"></select></label>
+      <label class="mini">최대 행&nbsp;<input id="qMaxRows" type="number" value="100" style="width:90px; padding:6px;"></label>
+      <label class="mini">timeout초&nbsp;<input id="qTimeout" type="number" placeholder="프로파일 기본" style="width:110px; padding:6px;"></label>
+    </div>
+    <textarea id="sqlBox" placeholder="SELECT ... (SELECT/WITH만 허용, 세미콜론 없이 하나의 문장)"></textarea>
+    <div class="toolbar">
+      <button class="btn" onclick="qValidate()">① 검증</button>
+      <button class="btn" onclick="qExplain()">② 실행계획</button>
+      <button class="btn" onclick="qMeta()">컬럼 메타</button>
+      <button class="btn primary" onclick="qRun(true)">③ 미리보기</button>
+      <button class="btn primary" onclick="qRun(false)">④ 실행</button>
+      <button class="btn" onclick="qSubmitAsync()" title="장기 쿼리를 백그라운드로 제출하고 폴링합니다">⏳ 비동기 실행</button>
+      <button class="btn" onclick="copySQL()">📋 SQL 복사</button>
+      <span class="grow" style="flex:1"></span>
+      <span class="mini">Ctrl/⌘+Enter=미리보기</span>
+      <span class="mini" id="qStat"></span>
+    </div>
+    <div id="qResult" class="result"></div>
+    <div class="gridwrap" id="rsWrap" style="display:none"><table class="rs"><thead id="rsHead"></thead><tbody id="rsBody"></tbody></table></div>
+    <div id="rsTools" style="display:none; margin-top:8px">
+      <button class="btn" onclick="copyResults()">📋 결과 복사 (TSV)</button>
+      <button class="btn" onclick="downloadCSV()">⬇ CSV 다운로드</button>
+    </div>
+    <div id="jobsWrap" style="display:none; margin-top:12px">
+      <div class="mini" style="font-weight:700; margin-bottom:4px">⏳ 비동기 잡</div>
+      <table class="t"><thead><tr><th>Job</th><th>SQL</th><th>상태</th><th style="width:150px">작업</th></tr></thead>
+      <tbody id="jobRows"></tbody></table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar" style="justify-content:space-between">
+      <h2 style="margin:0">실행 이력 / 실행 중</h2>
+      <button class="btn" onclick="refreshHistory()">새로고침</button>
+    </div>
+    <div id="runningWrap"></div>
+    <table class="t"><thead><tr><th>시각</th><th>프로파일</th><th>SQL</th><th>결과</th><th>소요</th></tr></thead>
+      <tbody id="hRows"><tr><td colspan="5" class="mini">이력 없음</td></tr></tbody></table>
+  </div>
+
+  <div class="card" id="grantsCard" style="display:none">
+    <div class="toolbar" style="justify-content:space-between">
+      <h2 style="margin:0">🔐 프로파일 권한 — <span id="grantsProfile" class="mono"></span></h2>
+      <button class="btn" onclick="$('#grantsCard').style.display='none'">닫기</button>
+    </div>
+    <div class="mini">소유자·관리자·manage 권한자만 편집할 수 있습니다. <b>use</b>=조회/실행, <b>manage</b>=정의 수정+권한 부여.</div>
+    <div class="result info" id="grantScope" style="display:block; margin-top:10px">
+      <label style="cursor:pointer"><input type="checkbox" id="g_shared" onchange="toggleShared()">
+        <b>전체 사용자에게 공개 (shared)</b></label>
+      <span class="mini"> — 켜면 모든 로그인 사용자가 이 프로파일을 <b>use</b>(조회/실행)할 수 있습니다. 특정 사용자에게만 주려면 끄고 아래에서 개별 부여하세요. (공개 전환은 소유자·관리자만)</span>
+    </div>
+    <div class="toolbar">
+      <input id="g_user" list="g_userlist" placeholder="사용자 아이디 (입력 또는 선택)" style="min-width:220px">
+      <datalist id="g_userlist"></datalist>
+      <select id="g_perm"><option value="use">use (조회/실행)</option><option value="manage">manage (수정/권한)</option></select>
+      <button class="btn primary" onclick="addGrant()">＋ 사용자에게 권한 부여</button>
+    </div>
+    <table class="t"><thead><tr><th>사용자</th><th>권한</th><th>부여자</th><th>일시</th><th></th></tr></thead>
+      <tbody id="grantRows"></tbody></table>
+    <div class="result" id="grantResult"></div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let PROFILES = [], EDIT_ID = null;
+
+const tokenInput = $('#adminToken');
+tokenInput.value = localStorage.getItem('jasqlAdminToken') || '';
+tokenInput.addEventListener('change', () => localStorage.setItem('jasqlAdminToken', tokenInput.value));
+function headers(json) {
+  const h = {};
+  if (json) h['Content-Type'] = 'application/json';
+  if (tokenInput.value) h['X-Admin-Token'] = tokenInput.value;
+  return h;
+}
+async function api(method, path, body) {
+  const res = await fetch(path, { method, headers: headers(body !== undefined), body });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || method + ' ' + path + ' → HTTP ' + res.status);
+  return data;
+}
+function toast(msg, ms = 3200) {
+  const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', ms);
+}
+
+/* ---------- profiles ---------- */
+async function refreshProfiles() {
+  const data = await api('GET', '/api/db-profiles');
+  PROFILES = data.profiles || [];
+  $('#driverChip').innerHTML = data.driver_available
+    ? '<span class="chip" title="' + esc(data.driver_note) + '">드라이버: PostgreSQL · MySQL · MariaDB 포함</span>'
+    : '<span class="chip err" title="' + esc(data.driver_note) + '">DB 드라이버 없음 — 실행 불가</span>';
+  $('#pRows').innerHTML = PROFILES.length === 0
+    ? '<tr><td colspan="6" class="mini">등록된 프로파일이 없습니다 — [＋ 프로파일 추가]로 시작하세요.</td></tr>'
+    : renderProfileGroups(PROFILES);
+  const sel = $('#qProfile');
+  const last = localStorage.getItem('jasqlLastProfile');
+  sel.innerHTML = PROFILES.map(p => '<option value="' + esc(p.id) + '"' + (p.id === last ? ' selected' : '') + '>' + esc(p.id) + (p.name ? ' — ' + esc(p.name) : '') + '</option>').join('')
+    || '<option value="">프로파일 없음</option>';
+  sel.onchange = () => localStorage.setItem('jasqlLastProfile', sel.value);
+}
+function profileRow(p) {
+  const isAdmin = window.AUTH && window.AUTH.user && window.AUTH.user.role === 'admin';
+  const perm = p.my_permission;
+  const canManage = !window.AUTH || perm === 'owner' || perm === 'manage';
+  const canDelete = !window.AUTH || perm === 'owner' || isAdmin;
+  return '<tr><td><b class="mono">' + esc(p.id) + '</b><div class="mini">' + esc(p.name || '') +
+      (p.visibility ? ' · <span class="b ' + (p.visibility === 'shared' ? 'ok' : 'gray') + '">' + p.visibility + '</span>' : '') +
+      (p.owner ? ' · 소유 ' + esc(p.owner) : '') + (perm ? ' · 내권한 ' + esc(perm) : '') + '</div></td>' +
+    '<td class="mono" style="word-break:break-all">' + esc(p.connect_string) + '</td>' +
+    '<td class="mono">' + esc(p.username) + '<div class="mini">' + esc(p.password_ref) + '</div></td>' +
+    '<td class="mini">pool ' + p.pool.max_open_conns + '/' + p.pool.max_idle_conns +
+      ' · timeout ' + p.policy.query_timeout_seconds + 's · rows ' + p.policy.default_max_rows + '/' + p.policy.max_rows + '</td>' +
+    '<td id="st_' + esc(p.id) + '"><span class="b gray">미확인</span></td>' +
+    '<td><button class="btn" onclick="testProfile(\'' + esc(p.id) + '\')">접속 테스트</button> ' +
+    (canManage ? '<button class="btn" onclick="openForm(\'' + esc(p.id) + '\')">수정</button> ' : '') +
+    (window.AUTH && (perm === 'owner' || perm === 'manage' || isAdmin) ? '<button class="btn" onclick="openGrants(\'' + esc(p.id) + '\')">권한·공유</button> ' : '') +
+    (canDelete ? '<button class="btn danger" onclick="deleteProfile(\'' + esc(p.id) + '\')">삭제</button>' : '') +
+    '</td></tr>';
+}
+function groupHeader(title, hint) {
+  return '<tr><td colspan="6" style="background:#f2f6ff;border-top:2px solid var(--line)">' +
+    '<b>' + esc(title) + '</b>' + (hint ? ' <span class="mini">— ' + esc(hint) + '</span>' : '') + '</td></tr>';
+}
+function renderProfileGroups(list) {
+  // Standalone mode: no per-user ownership, render flat.
+  if (!window.AUTH) return list.map(profileRow).join('');
+  const isAdmin = window.AUTH.user && window.AUTH.user.role === 'admin';
+  const mine = list.filter(p => p.my_permission === 'owner');
+  const shared = list.filter(p => p.my_permission === 'use' || p.my_permission === 'manage');
+  const others = list.filter(p => !['owner', 'use', 'manage'].includes(p.my_permission));
+  let html = '';
+  html += groupHeader('👤 내 프로파일 (' + mine.length + ')', '내가 소유 — 자유롭게 수정·삭제·권한부여');
+  html += mine.length ? mine.map(profileRow).join('') : '<tr><td colspan="6" class="mini">아직 없음 — [＋ 프로파일 추가]로 개인 접속 정보를 등록하세요.</td></tr>';
+  if (shared.length) { html += groupHeader('🤝 공유 · 부여받음 (' + shared.length + ')', 'shared 이거나 나에게 권한이 부여된 프로파일'); html += shared.map(profileRow).join(''); }
+  if (isAdmin && others.length) { html += groupHeader('🛡 전체 (관리자 열람, ' + others.length + ')', '다른 사용자 소유 — 관리자 권한으로 표시'); html += others.map(profileRow).join(''); }
+  return html;
+}
+async function testProfile(id) {
+  const cell = $('#st_' + CSS.escape(id));
+  cell.innerHTML = '<span class="b gray">테스트 중…</span>';
+  try {
+    const r = await api('POST', '/api/db-profiles/' + encodeURIComponent(id) + '/test');
+    cell.innerHTML = r.ok
+      ? '<span class="b ok">정상 ' + r.elapsed_ms + 'ms</span>'
+      : '<span class="b bad" title="' + esc(r.error) + '">실패 · ' + esc(r.category || r.error_code || 'unknown') + '</span>'+
+        '<div class="diagnostic"><b>' + esc(r.hint || r.error || '연결에 실패했습니다.') + '</b><span class="mini">코드 ' + esc(r.error_code || '-') + ' · ' + esc((r.error || '').slice(0,180)) + '</span>'+
+        ((r.next_steps||[]).length?'<ul class="mini">'+r.next_steps.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+'</div>';
+  } catch (e) { cell.innerHTML = '<span class="b bad">오류</span><div class="mini">' + esc(e.message) + '</div>'; }
+}
+function openForm(id) {
+  EDIT_ID = id;
+  $('#formWrap').style.display = 'block';
+  $('#formTitle').textContent = id ? '프로파일 수정: ' + id : '프로파일 추가';
+  $('#formResult').className = 'result';
+  const p = PROFILES.find(x => x.id === id) || { pool: {}, policy: {} };
+  setEngine(p.type || 'postgres');
+  $('#f_id').value = p.id || ''; $('#f_id').disabled = !!id;
+  $('#f_name').value = p.name || '';
+  $('#f_conn').value = p.connect_string || '';
+  $('#f_user').value = p.username || '';
+  $('#f_pw').value = id ? (p.password_ref.startsWith('plain:') ? '' : p.password_ref) : '';
+  $('#f_pw').placeholder = id && p.password_ref.startsWith('plain:') ? '변경하려면 새 값 입력 (plain:****)' : 'env:DB_PASSWORD';
+  $('#f_maxopen').value = p.pool.max_open_conns || '';
+  $('#f_maxidle').value = p.pool.max_idle_conns || '';
+  $('#f_lifetime').value = p.pool.conn_max_lifetime_seconds || '';
+  $('#f_idletime').value = p.pool.conn_max_idle_time_seconds || '';
+  $('#f_qtimeout').value = p.policy.query_timeout_seconds || '';
+  $('#f_ptimeout').value = p.policy.connection_test_timeout_seconds || '';
+  $('#f_defrows').value = p.policy.default_max_rows || '';
+  $('#f_maxrows').value = p.policy.max_rows || '';
+  $('#f_denied').value = (p.policy.denied_keywords || []).join(', ');
+  const dba = p.dba || {};
+  $('#f_dba_enabled').checked = !!dba.enabled;
+  $('#f_dba_user').value = dba.username || '';
+  $('#f_dba_pw').value = id ? (dba.password_ref && !dba.password_ref.startsWith('plain:') ? dba.password_ref : '') : '';
+  $('#f_dba_conn').value = dba.connect_string || '';
+  if (window.AUTH) {
+    $('#visLabel').style.display = ''; $('#f_visibility').style.display = '';
+    $('#f_visibility').value = p.visibility || 'private';
+  }
+  window.scrollTo({ top: $('#formWrap').offsetTop - 80, behavior: 'smooth' });
+}
+function closeForm() { $('#formWrap').style.display = 'none'; EDIT_ID = null; }
+const engineCopy={
+  postgres:{help:'PostgreSQL · pgx 드라이버가 내장되어 있습니다.',conn:'db.example.com:5432/appdb',hint:'형식: host:port/database 또는 postgres://host:port/database'},
+  mysql:{help:'MySQL · 순수 Go 드라이버가 바이너리에 포함되어 별도 client library가 필요 없습니다.',conn:'mysql.example.com:3306/appdb',hint:'형식: host:port/database 또는 mysql://host:port/database'},
+  mariadb:{help:'MariaDB · MySQL wire protocol 드라이버가 바이너리에 포함되어 별도 client library가 필요 없습니다.',conn:'mariadb.example.com:3306/appdb',hint:'형식: host:port/database 또는 mariadb://host:port/database'}
+};
+function setEngine(type){
+  if(!engineCopy[type])type='postgres';
+  document.querySelectorAll('.engine-card').forEach(c=>{const on=c.dataset.engine===type;c.classList.toggle('selected',on);c.querySelector('input').checked=on;});
+  $('#engineHelp').textContent=engineCopy[type].help;$('#f_conn').placeholder=engineCopy[type].conn;$('#connHint').textContent=engineCopy[type].hint;
+}
+document.querySelectorAll('.engine-card').forEach(c=>c.addEventListener('click',()=>setEngine(c.dataset.engine)));
+async function saveProfile(ev) {
+  ev.preventDefault();
+  const num = id => { const v = $(id).value.trim(); return v ? Number(v) : 0; };
+  const body = {
+    id: $('#f_id').value.trim(), name: $('#f_name').value.trim(),
+    type: document.querySelector('input[name="dbtype"]:checked').value,
+    connect_string: $('#f_conn').value.trim(), username: $('#f_user').value.trim(),
+    password_ref: $('#f_pw').value.trim(),
+    pool: { max_open_conns: num('#f_maxopen'), max_idle_conns: num('#f_maxidle'),
+            conn_max_lifetime_seconds: num('#f_lifetime'), conn_max_idle_time_seconds: num('#f_idletime') },
+    policy: { query_timeout_seconds: num('#f_qtimeout'), connection_test_timeout_seconds: num('#f_ptimeout'),
+              default_max_rows: num('#f_defrows'), max_rows: num('#f_maxrows'),
+              denied_keywords: $('#f_denied').value.split(',').map(s => s.trim()).filter(Boolean) }
+  };
+  if (window.AUTH) body.visibility = $('#f_visibility').value;
+  // DBA credentials (optional)
+  const dbaUser = $('#f_dba_user').value.trim();
+  let dbaPw = $('#f_dba_pw').value.trim();
+  if ($('#f_dba_enabled').checked || dbaUser || dbaPw) {
+    if (EDIT_ID && !dbaPw) {
+      const cur = PROFILES.find(x => x.id === EDIT_ID);
+      if (cur && cur.dba && cur.dba.password_ref && !cur.dba.password_ref.startsWith('plain:')) dbaPw = cur.dba.password_ref;
+    }
+    body.dba = { enabled: $('#f_dba_enabled').checked, username: dbaUser,
+      password_ref: dbaPw, connect_string: $('#f_dba_conn').value.trim() };
+  }
+  if (EDIT_ID && !body.password_ref) {
+    const cur = PROFILES.find(x => x.id === EDIT_ID);
+    if (cur && !cur.password_ref.startsWith('plain:')) body.password_ref = cur.password_ref;
+    else { showForm('bad', '비밀번호 참조를 입력하세요 (plain 값은 보안상 다시 표시되지 않습니다).'); return false; }
+  }
+  try {
+    if (EDIT_ID) await api('PUT', '/api/db-profiles/' + encodeURIComponent(EDIT_ID), JSON.stringify(body));
+    else await api('POST', '/api/db-profiles', JSON.stringify(body));
+    await refreshProfiles();
+    const tested=await api('POST','/api/db-profiles/'+encodeURIComponent(body.id)+'/test');
+    if(tested.ok){showForm('ok','✅ 저장 및 연결 테스트 성공 · '+tested.elapsed_ms+'ms\n엔진: '+body.type+' · 프로파일: '+body.id);toast('프로파일 저장 및 연결 확인 완료');setTimeout(closeForm,1200);}
+    else {showForm('bad','프로파일은 저장했지만 연결하지 못했습니다.\n\n['+(tested.category||tested.error_code||'연결 오류')+'] '+(tested.hint||tested.error)+'\n'+(tested.next_steps||[]).map((x,i)=>(i+1)+'. '+x).join('\n')+'\n\n상세: '+(tested.error||''));toast('저장됨 · 연결 설정을 확인하세요',5000);}
+  } catch (e) { showForm('bad', '✘ 저장 실패: ' + e.message); }
+  return false;
+}
+function showForm(cls, msg) { const el = $('#formResult'); el.className = 'result ' + cls; el.textContent = msg; }
+async function deleteProfile(id) {
+  if (!confirm('[' + id + '] 프로파일을 삭제할까요?\n(db_profiles.json이 백업된 후 삭제되며, /admin의 백업/복원으로 되돌릴 수 있습니다)')) return;
+  try { await api('DELETE', '/api/db-profiles/' + encodeURIComponent(id)); toast('삭제됨: ' + id); await refreshProfiles(); }
+  catch (e) { alert('삭제 실패: ' + e.message); }
+}
+
+/* ---------- grants + 공유 (인증 모드) ---------- */
+let GRANT_PID = null, GRANT_USERS_LOADED = false;
+async function openGrants(id) {
+  GRANT_PID = id;
+  $('#grantsProfile').textContent = id;
+  $('#grantsCard').style.display = 'block';
+  $('#grantResult').className = 'result';
+  await loadUserList();
+  await loadGrants();
+  window.scrollTo({ top: $('#grantsCard').offsetTop - 80, behavior: 'smooth' });
+}
+// admin can pick from all usernames; non-admins type the id directly.
+async function loadUserList() {
+  if (GRANT_USERS_LOADED || !(window.AUTH && window.AUTH.user && window.AUTH.user.role === 'admin')) return;
+  try {
+    const d = await api('GET', '/api/users');
+    $('#g_userlist').innerHTML = (d.users || []).map(u => '<option value="' + esc(u.username) + '">').join('');
+    GRANT_USERS_LOADED = true;
+  } catch (e) { /* non-fatal */ }
+}
+async function loadGrants() {
+  try {
+    const d = await api('GET', '/api/db-profiles/' + encodeURIComponent(GRANT_PID) + '/grants');
+    const shared = d.visibility === 'shared';
+    $('#g_shared').checked = shared;
+    const rows = (d.grants || []).map(g =>
+      '<tr><td class="mono">' + esc(g.username) + '</td><td><span class="b ' + (g.permission === 'manage' ? 'warn' : 'gray') + '">' + g.permission + '</span></td>' +
+      '<td class="mini">' + esc(g.granted_by || '') + '</td><td class="mini">' + esc((g.granted_at || '').slice(0, 19).replace('T', ' ')) + '</td>' +
+      '<td><button class="btn danger" onclick="removeGrant(\'' + g.user_id + '\')">회수</button></td></tr>').join('');
+    $('#grantRows').innerHTML = shared
+      ? '<tr><td colspan="5" class="mini">🌐 <b>shared</b> — 모든 로그인 사용자가 use 가능합니다. 개별 부여는 manage 권한을 추가로 줄 때만 의미가 있습니다.</td></tr>' + rows
+      : (rows || '<tr><td colspan="5" class="mini">개별 부여가 없습니다. 위에서 사용자에게 use/manage를 주거나, 전체 공개를 켜세요.</td></tr>');
+  } catch (e) { const el = $('#grantResult'); el.className = 'result bad'; el.textContent = e.message; }
+}
+async function toggleShared() {
+  const want = $('#g_shared').checked;
+  if (!confirm(want ? '이 프로파일을 전체 사용자에게 공개(shared)할까요? 모든 로그인 사용자가 조회/실행할 수 있게 됩니다.'
+                    : '전체 공개를 해제(private)할까요? 소유자·부여받은 사용자·관리자만 접근하게 됩니다.')) {
+    $('#g_shared').checked = !want; return;
+  }
+  try {
+    await api('PUT', '/api/db-profiles/' + encodeURIComponent(GRANT_PID) + '/visibility',
+      JSON.stringify({ visibility: want ? 'shared' : 'private' }));
+    toast(want ? '전체 공개로 전환했습니다' : 'private로 전환했습니다');
+    loadGrants(); refreshProfiles();
+  } catch (e) {
+    $('#g_shared').checked = !want;
+    const el = $('#grantResult'); el.className = 'result bad'; el.textContent = e.message;
+  }
+}
+async function addGrant() {
+  const user = $('#g_user').value.trim();
+  if (!user) { const el = $('#grantResult'); el.className = 'result bad'; el.textContent = '사용자 아이디를 입력하세요.'; return; }
+  try {
+    await api('PUT', '/api/db-profiles/' + encodeURIComponent(GRANT_PID) + '/grants',
+      JSON.stringify({ username: user, permission: $('#g_perm').value }));
+    $('#g_user').value = ''; loadGrants(); toast(user + '에게 권한을 부여했습니다');
+  } catch (e) { const el = $('#grantResult'); el.className = 'result bad'; el.textContent = e.message; }
+}
+async function removeGrant(userID) {
+  if (!confirm('이 사용자의 권한을 회수할까요?')) return;
+  try { await api('DELETE', '/api/db-profiles/' + encodeURIComponent(GRANT_PID) + '/grants/' + encodeURIComponent(userID)); loadGrants(); }
+  catch (e) { alert(e.message); }
+}
+
+/* ---------- query console ---------- */
+function showQ(cls, msg) { const el = $('#qResult'); el.className = 'result ' + cls; el.textContent = msg; }
+async function qValidate() {
+  try {
+    const r = await api('POST', '/api/query/validate', JSON.stringify({ sql: $('#sqlBox').value, profile_id: $('#qProfile').value }));
+    const cat = r.catalog, con = r.connector;
+    let msg = (cat.valid ? '✔ 카탈로그 검증 통과' : '✘ 카탈로그 오류 ' + (cat.errors || []).length + '건') +
+      ' / 경고 ' + (cat.warnings || []).length + '건\n' +
+      (con.valid ? '✔ 커넥터 가드 통과' : '✘ 커넥터 가드: ' + con.error);
+    (cat.errors || []).forEach(e => msg += '\n  [오류] ' + e.code + ': ' + e.message + (e.hint ? ' → ' + e.hint : ''));
+    (cat.warnings || []).slice(0, 6).forEach(e => msg += '\n  [경고] ' + e.code + ': ' + e.message);
+    showQ(cat.valid && con.valid ? 'ok' : 'bad', msg);
+  } catch (e) { showQ('bad', e.message); }
+}
+async function qExplain() {
+  showQ('info', '실행계획 분석 중…');
+  try {
+    const r = await api('POST', '/api/query/explain', JSON.stringify({ profile_id: $('#qProfile').value, sql: $('#sqlBox').value }));
+    const st = r.static || {};
+    let msg = '정적 분석: risk=' + st.risk + ' (score ' + st.risk_score + ')';
+    if (r.live_plan_error) {
+      msg += '\n실측 EXPLAIN PLAN 불가: ' + r.live_plan_error;
+      showQ('info', msg); return;
+    }
+    const lp = r.live_plan;
+    msg += '\n실측 EXPLAIN PLAN: risk=' + lp.risk + ' (score ' + lp.risk_score + ') · cost ' + lp.total_cost + ' · 최대 예상행 ' + lp.max_cardinality;
+    (lp.risk_factors || []).forEach(f => msg += '\n  ⚠ ' + f);
+    (lp.suggestions || []).forEach(s2 => msg += '\n  → ' + s2);
+    msg += '\n\n플랜 스텝:';
+    (lp.steps || []).forEach(s2 => msg += '\n  ' + '  '.repeat(s2.depth) + s2.operation + (s2.options ? ' (' + s2.options + ')' : '') +
+      (s2.object_name ? ' ' + s2.object_name : '') + (s2.cardinality ? ' ~' + s2.cardinality + '행' : '') + (s2.cost ? ' cost=' + s2.cost : ''));
+    showQ(lp.risk === 'high' ? 'bad' : (lp.risk === 'medium' ? 'info' : 'ok'), msg);
+  } catch (e) { showQ('bad', e.message); }
+}
+async function qMeta() {
+  try {
+    const r = await api('POST', '/api/query/metadata', JSON.stringify({ profile_id: $('#qProfile').value, sql: $('#sqlBox').value }));
+    if (!r.ok) { showQ('bad', '메타 조회 실패: ' + r.error); return; }
+    showQ('info', '컬럼 ' + r.columns.length + '개:\n' + r.columns.map(c => c.name + ' (' + c.type + ')').join(', '));
+  } catch (e) { showQ('bad', e.message); }
+}
+let LAST_RS = null;
+async function qRun(preview) {
+  const who = (window.AUTH && window.AUTH.user && window.AUTH.user.username) || 'admin-ui';
+  const body = { profile_id: $('#qProfile').value, sql: $('#sqlBox').value,
+    max_rows: Number($('#qMaxRows').value) || 0, timeout_seconds: Number($('#qTimeout').value) || 0, user: who };
+  if (!body.profile_id) { showQ('bad', '프로파일을 먼저 등록/선택하세요.'); return; }
+  if (!preview && !confirm('실행(execute)은 실제 DB에 질의합니다.\n프로파일: ' + body.profile_id + '\n계속할까요? (미리보기는 확인 없이 실행됩니다)')) return;
+  showQ('info', (preview ? '미리보기' : '실행') + ' 중…');
+  $('#rsWrap').style.display = 'none'; $('#rsTools').style.display = 'none';
+  try {
+    const r = await api('POST', preview ? '/api/query/preview' : '/api/query/execute', JSON.stringify(body));
+    if (!r.executed) {
+      let msg = '✘ 실행되지 않음: ' + (r.reason || r.error || '');
+      if (r.hint) msg += '\n💡 ' + r.hint;
+      if (r.validation && r.validation.errors) r.validation.errors.forEach(e => msg += '\n  [' + e.code + '] ' + e.message + (e.hint ? ' → ' + e.hint : ''));
+      showQ('bad', msg);
+      refreshHistory();
+      return;
+    }
+    const res = r.result;
+    let okMsg = '✅ ' + res.row_count + '행 · ' + res.elapsed_ms + 'ms' +
+      (res.truncated ? ' · ⚠ max_rows(' + res.max_rows + ') 초과로 잘림(truncated)' : '') +
+      (res.bytes_capped ? ' · ⚠ 응답 바이트 캡 도달' : '') + ' · execution_id ' + res.execution_id;
+    if (r.result_diagnosis) {
+      const d = r.result_diagnosis;
+      (d.hints || []).forEach(h => okMsg += '\n💡 ' + h);
+      if (d.columns) okMsg += '\n⚠ NULL 과다 컬럼: ' + d.columns.join(', ');
+      if (d.truncated_note) okMsg += '\n💡 ' + d.truncated_note;
+    }
+    if (r.lint_warnings && r.lint_warnings.length) {
+      okMsg += '\n\n🩺 SQL 린트 (권고 · 실행에는 영향 없음):';
+      r.lint_warnings.forEach(f => okMsg += '\n  [' + (f.severity || '') + '] ' + f.rule + ' — ' + f.message +
+        (f.suggestion ? '\n     💡 ' + f.suggestion : ''));
+    }
+    showQ(res.row_count === 0 ? 'info' : 'ok', okMsg);
+    renderRS(res);
+    refreshHistory();
+  } catch (e) { showQ('bad', '✘ ' + e.message); }
+}
+/* ---------- async jobs ---------- */
+const JOBS = {}; // id -> {sql, poll timer}
+async function qSubmitAsync() {
+  const who = (window.AUTH && window.AUTH.user && window.AUTH.user.username) || 'admin-ui';
+  const body = { profile_id: $('#qProfile').value, sql: $('#sqlBox').value,
+    max_rows: Number($('#qMaxRows').value) || 0, timeout_seconds: Number($('#qTimeout').value) || 0, user: who };
+  if (!body.profile_id) { showQ('bad', '프로파일을 먼저 등록/선택하세요.'); return; }
+  showQ('info', '비동기 제출 중…');
+  try {
+    const r = await api('POST', '/api/query/submit', JSON.stringify(body));
+    if (!r.submitted) {
+      let msg = '✘ 제출되지 않음: ' + (r.reason || '');
+      if (r.validation && r.validation.errors) r.validation.errors.forEach(e => msg += '\n  [' + e.code + '] ' + e.message);
+      showQ('bad', msg);
+      return;
+    }
+    showQ('ok', '⏳ 제출됨 · job ' + r.job_id + ' — 완료 시 아래 목록에 표시됩니다 (결과 ' + (r.result_ttl_minutes || 10) + '분 보관).');
+    JOBS[r.job_id] = { sql: body.sql };
+    $('#jobsWrap').style.display = 'block';
+    renderJobs();
+    pollJob(r.job_id);
+  } catch (e) { showQ('bad', '✘ ' + e.message); }
+}
+function pollJob(id) {
+  const tick = async () => {
+    try {
+      const j = await api('GET', '/api/query/job/' + encodeURIComponent(id));
+      JOBS[id].job = j;
+      renderJobs();
+      if (j.status === 'running') { JOBS[id].t = setTimeout(tick, 1500); return; }
+      // terminal
+      if (j.status === 'done' && j.result) {
+        showQ(j.result.row_count === 0 ? 'info' : 'ok', '✅ job ' + id + ' 완료 · ' + j.result.row_count + '행 · ' + j.result.elapsed_ms + 'ms' +
+          (j.masked_columns && j.masked_columns.length ? ' · 🔒 마스킹: ' + j.masked_columns.join(', ') : ''));
+        renderRS(j.result);
+      } else if (j.status === 'failed') {
+        showQ('bad', '✘ job ' + id + ' 실패: ' + (j.error || '') + (j.hint ? '\n💡 ' + j.hint : ''));
+      }
+    } catch (e) { /* job may have expired */ renderJobs(); }
+  };
+  JOBS[id].t = setTimeout(tick, 800);
+}
+function renderJobs() {
+  const ids = Object.keys(JOBS);
+  if (ids.length === 0) { $('#jobsWrap').style.display = 'none'; return; }
+  $('#jobRows').innerHTML = ids.map(id => {
+    const j = JOBS[id].job || { status: 'running' };
+    const sql = (JOBS[id].sql || '').slice(0, 60);
+    const badge = j.status === 'done' ? '<span class="b ok">완료 ' + (j.result ? j.result.row_count + '행' : '') + '</span>'
+      : j.status === 'failed' ? '<span class="b bad">실패</span>'
+      : '<span class="b warn">실행 중…</span>';
+    const act = j.status === 'running'
+      ? '<button class="btn danger" onclick="cancelJob(\'' + esc(id) + '\')">취소</button>'
+      : '<button class="btn" onclick="dismissJob(\'' + esc(id) + '\')">지우기</button>';
+    return '<tr><td class="mono mini">' + esc(id) + '</td><td class="mono mini" style="max-width:360px;word-break:break-all">' + esc(sql) + '</td><td>' + badge + '</td><td>' + act + '</td></tr>';
+  }).join('');
+}
+async function cancelJob(id) {
+  try { await api('POST', '/api/query/job/' + encodeURIComponent(id) + '/cancel'); toast('취소 요청: ' + id); }
+  catch (e) { alert(e.message); }
+}
+function dismissJob(id) { if (JOBS[id] && JOBS[id].t) clearTimeout(JOBS[id].t); delete JOBS[id]; renderJobs(); }
+
+function renderRS(res) {
+  LAST_RS = res;
+  $('#rsHead').innerHTML = '<tr>' + res.columns.map(c => '<th title="' + esc(c.type) + '">' + esc(c.name) + '</th>').join('') + '</tr>';
+  $('#rsBody').innerHTML = res.rows.map(row =>
+    '<tr>' + res.columns.map(c => '<td>' + esc(row[c.name] === null || row[c.name] === undefined ? 'NULL' : row[c.name]) + '</td>').join('') + '</tr>').join('');
+  $('#rsWrap').style.display = 'block';
+  $('#rsTools').style.display = res.rows.length ? 'block' : 'none';
+  $('#qStat').textContent = res.columns.length + '컬럼 × ' + res.row_count + '행';
+}
+function copySQL() {
+  navigator.clipboard.writeText($('#sqlBox').value).then(() => toast('SQL을 복사했습니다')).catch(() => toast('복사 실패'));
+}
+function copyResults() {
+  if (!LAST_RS) return;
+  const cols = LAST_RS.columns.map(c => c.name);
+  const head = cols.join('\t');
+  const body = LAST_RS.rows.map(r => cols.map(c => (r[c] === null || r[c] === undefined ? '' : String(r[c]))).join('\t')).join('\n');
+  navigator.clipboard.writeText(head + '\n' + body).then(() => toast('결과를 TSV로 복사했습니다')).catch(() => toast('복사 실패'));
+}
+function downloadCSV() {
+  if (!LAST_RS) return;
+  const cols = LAST_RS.columns.map(c => c.name);
+  const q = v => { const s = (v === null || v === undefined) ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = [cols.map(q).join(',')].concat(LAST_RS.rows.map(r => cols.map(c => q(r[c])).join(','))).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }); // BOM → 엑셀 한글 호환
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'jasql-result-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('CSV 다운로드 시작 (' + LAST_RS.rows.length + '행)');
+}
+
+/* ---------- history ---------- */
+async function refreshHistory() {
+  try {
+    const r = await api('GET', '/api/query/history?limit=30');
+    const running = r.running || [];
+    $('#runningWrap').innerHTML = running.length === 0 ? '' :
+      '<div class="result info" style="display:block">실행 중 ' + running.length + '건: ' +
+      running.map(x => '<code>' + esc(x.execution_id) + '</code> (' + esc(x.profile_id) + ', ' + x.elapsed_ms + 'ms) ' +
+        '<button class="btn danger" onclick="qCancel(\'' + esc(x.execution_id) + '\')">취소</button>').join(' · ') + '</div>';
+    const h = r.history || [];
+    $('#hRows').innerHTML = h.length === 0 ? '<tr><td colspan="5" class="mini">이력 없음</td></tr>' :
+      h.map(e => '<tr><td class="mini">' + esc(e.started_at) + '</td><td class="mono">' + esc(e.db_profile_id) + '</td>' +
+        '<td class="mono" style="max-width:420px; word-break:break-all">' + esc((e.sql_text || '').slice(0, 160)) + '</td>' +
+        '<td>' + (e.success ? '<span class="b ok">성공 ' + e.row_count + '행' + (e.truncated ? ' (잘림)' : '') + '</span>'
+                            : '<span class="b bad" title="' + esc(e.error_message) + '">' + esc(e.error_code || '실패') + '</span>') + '</td>' +
+        '<td class="mini">' + e.elapsed_ms + 'ms</td></tr>').join('');
+  } catch (e) { /* 조용히 무시 */ }
+}
+async function qCancel(id) {
+  try { await api('POST', '/api/query/cancel/' + encodeURIComponent(id)); toast('취소 요청: ' + id); refreshHistory(); }
+  catch (e) { alert(e.message); }
+}
+
+setInterval(refreshHistory, 10000);
+
+/* ---------- keyboard: Ctrl/Cmd+Enter = preview ---------- */
+$('#sqlBox').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); qRun(true); }
+});
+
+/* ---------- handoff from /admin/ask ---------- */
+(function pickupHandoff() {
+  const sql = sessionStorage.getItem('jasqlHandoffSQL');
+  if (sql) {
+    sessionStorage.removeItem('jasqlHandoffSQL');
+    const box = $('#sqlBox');
+    if (box) { box.value = sql; box.scrollIntoView({ behavior: 'smooth', block: 'center' }); toast('질의 화면에서 스켈레톤을 가져왔습니다 — /* SLOT */을 채운 뒤 검증하세요'); }
+  }
+})();
+
+JASQL.mount({ page: 'db', onReady() { refreshProfiles(); refreshHistory(); } });
+</script>
+</body>
+</html>

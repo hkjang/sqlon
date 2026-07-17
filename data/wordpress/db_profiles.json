@@ -1,0 +1,53 @@
+[
+ {
+  "id": "pg-wordpress",
+  "name": "PostgreSQL wordpress",
+  "type": "postgres",
+  "connect_string": "127.0.0.1:55432/jamypg_meta",
+  "username": "jamypg_ro",
+  "password_ref": "plain:jamypg_ro_pw",
+  "routing": {
+   "schemas": [
+    "wordpress"
+   ],
+   "tags": [
+    "oss:wordpress"
+   ],
+   "priority": 10
+  }
+ },
+ {
+  "id": "mysql-wordpress",
+  "name": "MySQL wordpress",
+  "type": "mysql",
+  "connect_string": "127.0.0.1:53306/wordpress",
+  "username": "jamypg_ro",
+  "password_ref": "plain:jamypg_ro_pw",
+  "routing": {
+   "schemas": [
+    "wordpress"
+   ],
+   "tags": [
+    "oss:wordpress"
+   ],
+   "priority": 10
+  }
+ },
+ {
+  "id": "mariadb-wordpress",
+  "name": "MariaDB wordpress",
+  "type": "mariadb",
+  "connect_string": "127.0.0.1:53307/wordpress",
+  "username": "jamypg_ro",
+  "password_ref": "plain:jamypg_ro_pw",
+  "routing": {
+   "schemas": [
+    "wordpress"
+   ],
+   "tags": [
+    "oss:wordpress"
+   ],
+   "priority": 10
+  }
+ }
+]

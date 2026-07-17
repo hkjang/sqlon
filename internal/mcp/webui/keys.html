@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon MCP 키 관리</title>
+<style>
+  :root { --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
+    --blue:#2563eb; --green:#15803d; --green-soft:#e6f6ec; --red:#b91c1c; --red-soft:#fdeaea;
+    --amber:#b45309; --amber-soft:#fdf3e2; --mono:ui-monospace,Consolas,monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
+  header { background:#101a2e; color:#e8eefc; padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  header h1 { font-size:16px; margin:0 10px 0 0; } header .grow { flex:1; }
+  .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px; padding:6px 12px; cursor:pointer; font-size:13px; text-decoration:none; display:inline-block; }
+  .btn:hover { border-color:var(--blue); color:var(--blue); }
+  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .btn.danger { color:var(--red); border-color:#efc4c4; }
+  main { max-width:1200px; margin:0 auto; padding:16px 20px 60px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; color:var(--sub); padding:7px 9px; border-bottom:2px solid var(--line); }
+  td { padding:8px 9px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .b { display:inline-block; font-size:11px; font-weight:700; border-radius:5px; padding:1px 7px; }
+  .b.active { background:var(--green-soft); color:var(--green); }
+  .b.revoked { background:var(--red-soft); color:var(--red); }
+  .b.expired { background:var(--amber-soft); color:var(--amber); }
+  input, select { border:1px solid var(--line); border-radius:7px; padding:6px 9px; font-size:13px; }
+  .newkey { background:#0f1729; color:#8ef0b6; border-radius:8px; padding:14px; font-family:var(--mono); font-size:13px;
+            word-break:break-all; margin-top:10px; display:none; }
+  .result { border-radius:8px; padding:10px 13px; margin-top:8px; font-size:13px; display:none; }
+  .result.bad { display:block; background:var(--red-soft); border:1px solid #efc4c4; }
+  .mini { font-size:12px; color:var(--sub); }
+  code { background:#eef1f5; border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
+  #userchip { font-size:12px; color:#cfe0ff; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔑 MCP 키 관리</h1>
+  <span class="grow"></span>
+</header>
+<main>
+  <div class="card">
+    <b>MCP 키란?</b>
+    <div class="mini" style="margin-top:4px">
+      MCP 클라이언트(Claude, qwen-code 등)가 이 서버의 <code>/mcp</code> HTTP 엔드포인트에 접속할 때 쓰는 API 키입니다.
+      클라이언트 설정에 <code>Authorization: Bearer jsk_...</code> 또는 <code>X-MCP-Key: jsk_...</code> 헤더로 넣으세요.
+      키는 <b>발급 순간 한 번만</b> 표시되며 서버에는 해시만 저장됩니다. 유출이 의심되면 즉시 [회전] 또는 [폐기]하세요.
+    </div>
+  </div>
+
+  <div class="card">
+    <b>새 키 발급</b>
+    <form onsubmit="return createKey(event)" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; align-items:center">
+      <input id="k_name" placeholder="키 이름 (예: 노트북-claude)" required style="min-width:220px">
+      <select id="k_ttl">
+        <option value="0">무기한</option>
+        <option value="24">24시간</option>
+        <option value="168">7일</option>
+        <option value="720">30일</option>
+        <option value="2160">90일</option>
+      </select>
+      <select id="k_user" style="display:none"></select>
+      <button class="btn primary" type="submit">＋ 발급</button>
+    </form>
+    <div class="newkey" id="newkey"></div>
+    <div class="result" id="createResult"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center">
+      <b>키 목록</b>
+      <span><label class="mini" id="allWrap" style="display:none"><input type="checkbox" id="allChk" onchange="refresh()"> 전체 사용자 키 보기 (admin)</label>
+      <button class="btn" onclick="refresh()">새로고침</button></span>
+    </div>
+    <table>
+      <thead><tr><th>이름</th><th>접두</th><th id="ownerHead" style="display:none">소유자</th><th>상태</th><th>생성</th><th>만료</th><th>최근 사용</th><th style="width:170px">작업</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="8" class="mini">불러오는 중…</td></tr></tbody>
+    </table>
+    <div class="result" id="rowResult"></div>
+    <div class="mini" style="margin-top:8px">
+      · <b>회전</b>: 기존 키를 즉시 폐기하고 같은 이름의 새 키를 발급합니다 (남은 유효기간 승계).<br>
+      · <b>폐기</b>: 즉시 무효화. 폐기·만료된 키는 감사 목적上 목록에 남습니다.
+    </div>
+  </div>
+</main>
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let ME = null, USERS = {};
+
+async function api(method, path, body) {
+  const res = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+  return data;
+}
+function fmt(t) { return t ? String(t).slice(0, 19).replace('T', ' ') : '—'; }
+
+async function init(me) {
+  if (!me.auth_enabled) { document.querySelector('main').innerHTML = '<div class="card">단독 모드(메타 DB 미설정) — MCP 키가 필요 없습니다. /mcp는 인증 없이 접근됩니다.</div>'; return; }
+  ME = me.user;
+  if (ME.role === 'admin') {
+    $('#allWrap').style.display = '';
+    try {
+      const d = await api('GET', '/api/users');
+      (d.users || []).forEach(u => USERS[u.id] = u.username);
+      const sel = $('#k_user');
+      sel.style.display = '';
+      sel.innerHTML = '<option value="">본인 키</option>' +
+        (d.users || []).filter(u => u.id !== ME.id).map(u => '<option value="' + u.id + '">' + esc(u.username) + ' 키 발급</option>').join('');
+    } catch (e) { /* ignore */ }
+  }
+  refresh();
+}
+async function refresh() {
+  const all = $('#allChk') && $('#allChk').checked;
+  $('#ownerHead').style.display = all ? '' : 'none';
+  try {
+    const d = await api('GET', '/api/mcp-keys' + (all ? '?all=true' : ''));
+    const keys = d.keys || [];
+    $('#rows').innerHTML = keys.length === 0
+      ? '<tr><td colspan="8" class="mini">키가 없습니다 — 위에서 발급하세요.</td></tr>'
+      : keys.map(k =>
+        '<tr><td><b>' + esc(k.name) + '</b></td>' +
+        '<td><code>' + esc(k.key_prefix) + '…</code></td>' +
+        (all ? '<td class="mini">' + esc(USERS[k.user_id] || k.user_id) + '</td>' : '<td style="display:none"></td>') +
+        '<td><span class="b ' + k.status + '">' + k.status + '</span></td>' +
+        '<td class="mini">' + fmt(k.created_at) + '</td>' +
+        '<td class="mini">' + fmt(k.expires_at) + '</td>' +
+        '<td class="mini">' + fmt(k.last_used_at) + '</td>' +
+        '<td>' + (k.status === 'active'
+          ? '<button class="btn" onclick="rotateKey(\'' + k.id + '\')">회전</button> <button class="btn danger" onclick="revokeKey(\'' + k.id + '\')">폐기</button>'
+          : (k.rotated_from ? '<span class="mini">회전됨</span>' : '')) + '</td></tr>').join('');
+  } catch (e) { const el = $('#rowResult'); el.className = 'result bad'; el.textContent = e.message; }
+}
+function showNewKey(data) {
+  const el = $('#newkey');
+  el.style.display = 'block';
+  el.textContent = '';
+  const strong = document.createElement('div');
+  strong.innerHTML = '⚠ 아래 키는 <b>지금 한 번만</b> 표시됩니다 — 복사해 안전하게 보관하세요.';
+  const keyLine = document.createElement('div');
+  keyLine.style.marginTop = '8px'; keyLine.textContent = data.key;
+  const copy = document.createElement('button');
+  copy.className = 'btn'; copy.style.marginTop = '8px'; copy.textContent = '📋 복사';
+  copy.onclick = () => { navigator.clipboard.writeText(data.key); copy.textContent = '✅ 복사됨'; };
+  el.append(strong, keyLine, copy);
+}
+async function createKey(ev) {
+  ev.preventDefault();
+  try {
+    const body = { name: $('#k_name').value.trim(), ttl_hours: Number($('#k_ttl').value) };
+    const uid = $('#k_user').value;
+    if (uid) body.user_id = uid;
+    const data = await api('POST', '/api/mcp-keys', JSON.stringify(body));
+    showNewKey(data); refresh();
+  } catch (e) { const el = $('#createResult'); el.className = 'result bad'; el.textContent = '✘ ' + e.message; }
+  return false;
+}
+async function rotateKey(id) {
+  if (!confirm('키를 회전할까요? 기존 키는 즉시 폐기되고 새 키가 한 번만 표시됩니다.')) return;
+  try { const data = await api('POST', '/api/mcp-keys/' + id + '/rotate'); showNewKey(data); refresh(); }
+  catch (e) { alert(e.message); }
+}
+async function revokeKey(id) {
+  if (!confirm('키를 폐기할까요? 이 키를 쓰는 모든 클라이언트가 즉시 차단됩니다.')) return;
+  try { await api('DELETE', '/api/mcp-keys/' + id); refresh(); }
+  catch (e) { alert(e.message); }
+}
+JASQL.mount({ page: 'keys', onReady: init });
+</script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+{
+ "dialect": "postgres",
+ "pii_columns": [
+  "*.email",
+  "*.password_hash",
+  "*.token_hash",
+  "*.key_hash",
+  "*.ip"
+ ],
+ "tables": [
+  {
+   "table": "public.jamypg_users",
+   "domain": "인증",
+   "grain": "사용자 1행",
+   "row_count": 10
+  },
+  {
+   "table": "public.jamypg_sessions",
+   "domain": "인증",
+   "grain": "세션 1행",
+   "row_count": 10
+  },
+  {
+   "table": "public.jamypg_mcp_keys",
+   "domain": "인증",
+   "grain": "MCP 키 1행",
+   "row_count": 7
+  },
+  {
+   "table": "public.jamypg_db_profiles",
+   "domain": "커넥터",
+   "grain": "프로파일 1행",
+   "row_count": 4
+  },
+  {
+   "table": "public.jamypg_profile_grants",
+   "domain": "커넥터",
+   "grain": "프로파일-사용자 권한 1행",
+   "row_count": 5
+  },
+  {
+   "table": "public.jamypg_settings",
+   "domain": "운영",
+   "grain": "설정 키 1행",
+   "row_count": 4
+  },
+  {
+   "table": "public.jamypg_mcp_activity",
+   "domain": "감사",
+   "grain": "도구 호출 1행",
+   "row_count": 51
+  }
+ ],
+ "columns": [
+  {
+   "table": "public.jamypg_users",
+   "column": "role",
+   "sample_values": [
+    "admin",
+    "user"
+   ]
+  },
+  {
+   "table": "public.jamypg_users",
+   "column": "provider",
+   "sample_values": [
+    "local",
+    "keycloak"
+   ]
+  },
+  {
+   "table": "public.jamypg_db_profiles",
+   "column": "visibility",
+   "sample_values": [
+    "private",
+    "shared"
+   ]
+  },
+  {
+   "table": "public.jamypg_profile_grants",
+   "column": "permission",
+   "sample_values": [
+    "use",
+    "manage"
+   ]
+  },
+  {
+   "table": "public.jamypg_mcp_activity",
+   "column": "tool",
+   "sample_values": [
+    "run_sql_safely",
+    "search_schema",
+    "validate_sql",
+    "analyze_question",
+    "explain_sql"
+   ]
+  },
+  {
+   "table": "public.jamypg_mcp_activity",
+   "column": "status",
+   "sample_values": [
+    "ok",
+    "error"
+   ]
+  },
+  {
+   "table": "public.jamypg_mcp_activity",
+   "column": "created_at",
+   "semantic_type": "TIMESTAMP"
+  },
+  {
+   "table": "public.jamypg_users",
+   "column": "created_at",
+   "semantic_type": "TIMESTAMP"
+  },
+  {
+   "table": "public.jamypg_users",
+   "column": "last_login_at",
+   "semantic_type": "TIMESTAMP"
+  }
+ ]
+}

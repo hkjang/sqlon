@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon · OpenMetadata 연동</title>
+<style>
+  :root{
+    --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
+    --blue:#2563eb;--green:#15803d;--green-soft:#e6f6ec;--amber:#b45309;
+    --red:#b91c1c;--red-soft:#fdeaea;--mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
+  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header h1{font-size:16px;margin:0 10px 0 0;}
+  .grow{flex:1;}
+  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:160px;}
+  main{max-width:1200px;margin:0 auto;padding:16px 20px 90px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+  .card h2{font-size:13px;margin:0 0 12px;color:var(--sub);font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  input,select{border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px;background:#fff;}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
+  .btn:hover{border-color:var(--blue);color:var(--blue);}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600;}
+  .btn.warn{background:var(--amber);border-color:var(--amber);color:#fff;}
+  .pill{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;}
+  .pill.ok{background:var(--green-soft);color:var(--green);} .pill.bad{background:var(--red-soft);color:var(--red);}
+  .mini{font-size:12px;color:var(--sub);}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);}
+  td.mono{font-family:var(--mono);font-size:12px;}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f5;color:#334;margin-right:3px;}
+  .tag.pii{background:var(--red-soft);color:var(--red);}
+  .counts{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0;}
+  .counts b{font-size:20px;font-variant-numeric:tabular-nums;}
+  .msg{font-size:12.5px;margin-left:6px;} .msg.ok{color:var(--green);} .msg.bad{color:var(--red);}
+  pre{background:#0d1626;color:#dbe6ff;border-radius:10px;padding:12px;font-family:var(--mono);font-size:12px;overflow:auto;max-height:280px;}
+  .empty{color:var(--sub);padding:16px 0;}
+  label.f{font-size:12px;color:var(--sub);display:flex;gap:6px;align-items:center;}
+  .hero{background:linear-gradient(135deg,#10203c,#245b91 65%,#28787b);color:#fff;border:0;padding:22px;box-shadow:0 12px 34px rgba(20,55,105,.16)}.hero h2{color:#fff;text-transform:none;font-size:21px;letter-spacing:-.3px;margin-bottom:5px}.hero p{margin:0;color:#d2e2f2;max-width:780px}
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);margin-top:18px;border-radius:9px;overflow:hidden;background:rgba(255,255,255,.14)}.step{padding:10px 12px;background:rgba(255,255,255,.06);font-size:12px}.step b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#fff;color:#245b91;margin-right:6px}.step span{display:block;margin-left:32px;color:#c8daec;font-size:11px}
+  .connection{border-left:4px solid #94a3b8}.connection.ready{border-left-color:#16a34a}.connection.fail{border-left-color:#dc2626}.fieldgrid{display:grid;grid-template-columns:minmax(260px,2fr) minmax(220px,1fr);gap:12px}.field{display:flex;flex-direction:column;gap:4px;color:var(--sub);font-size:12px}.field input{width:100%}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}.btn:disabled{opacity:.45;cursor:not-allowed}.btn.safe{background:#0f766e;border-color:#0f766e;color:#fff}.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+  .op-head{display:flex;gap:12px;align-items:flex-start}.op-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:#e8efff;font-size:19px}.op-head h2{font-size:15px;color:var(--ink);text-transform:none;margin:0}.op-head p{font-size:12px;color:var(--sub);margin:2px 0 0}.prereq{margin:10px 0;padding:9px 11px;background:#fff8e7;border:1px solid #f2d99d;border-radius:8px;color:#7c5209;font-size:12px}.warning{margin-top:8px;padding:9px 11px;background:#fff8e7;border-radius:8px;color:#7c5209;font-size:12px}.raw-toggle{cursor:pointer;font-weight:700}.busy:after{content:' 처리 중…';font-weight:400}.result-state{font-size:12px;color:var(--sub);margin-left:auto}
+  @media(max-width:700px){main{padding:12px}.flow{grid-template-columns:1fr 1fr}.fieldgrid{grid-template-columns:1fr}.actions .btn{flex:1}.hero{padding:17px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔗 OpenMetadata 연동</h1>
+  <span class="mini" id="target" style="color:#9db4dd"></span>
+  <input id="adminToken" type="password" placeholder="관리 토큰">
+  <span class="grow"></span>
+  <span id="statusPill"></span>
+  <span class="msg" id="msg"></span>
+</header>
+<main>
+  <div class="card hero"><h2>OpenMetadata와 안전하게 메타데이터를 동기화하세요</h2><p>연결을 먼저 검증하고 변경 계획을 확인한 뒤, 검토 큐 또는 직접 반영을 선택하세요.</p><div class="flow"><div class="step"><b>1</b>연결 검증<span>URL·토큰 확인</span></div><div class="step"><b>2</b>Drift 분석<span>차이와 충돌 파악</span></div><div class="step"><b>3</b>미리보기<span>변경 범위 검토</span></div><div class="step"><b>4</b>승인·반영<span>Import/Export/Lineage</span></div></div></div>
+  <div class="card connection" id="connectionCard">
+    <div class="op-head"><div class="op-icon">🔌</div><div><h2>연결 설정</h2><p>테스트가 성공한 설정만 저장하는 것을 권장합니다. 토큰을 비우면 저장된 토큰으로 테스트합니다.</p></div><span class="grow"></span><span class="mini" id="cfgSource"></span></div>
+    <div class="fieldgrid" style="margin-top:12px"><label class="field">OpenMetadata URL<input id="cfgUrl" placeholder="http://openmetadata:8585"></label><label class="field">Bot JWT Token<input id="cfgToken" type="password" placeholder="비우면 기존 토큰 유지"></label></div>
+    <div class="actions"><button class="btn" id="testBtn">1. 입력값 연결 테스트</button><button class="btn primary" id="cfgSave" disabled>2. 검증된 설정 저장</button><button class="btn" id="statusBtn">저장된 연결 재확인</button><span class="result-state" id="testState">입력값을 먼저 테스트하세요.</span></div>
+    <div class="mini" id="statusDetail" style="margin-top:6px"></div>
+  </div>
+
+  <div class="card">
+    <div class="op-head"><div class="op-icon">⬇</div><div><h2>Import · OpenMetadata → sqlon</h2><p>빈 업무 메타데이터만 후보로 가져옵니다. 기존 값은 덮어쓰지 않습니다.</p></div></div>
+    <div class="row">
+      <label class="f">scope <input id="impScope" placeholder="service.db (선택)" style="width:200px"></label>
+      <label class="f">max <input id="impMax" type="number" value="500" style="width:80px"></label>
+      <label class="f"><input type="checkbox" id="impGloss" checked> 용어집 포함</label>
+      <button class="btn" id="previewBtn">미리보기</button>
+      <button class="btn safe" id="reviewBtn">검토 큐로 보내기</button><button class="btn warn" id="applyBtn">즉시 반영 + 리로드</button>
+    </div>
+    <div class="counts" id="impCounts"></div>
+    <div id="impTables"></div>
+  </div>
+
+  <div class="card">
+    <div class="op-head"><div class="op-icon">⬆</div><div><h2>Export · sqlon → OpenMetadata</h2><p>OpenMetadata에서 설명이 비어 있는 컬럼만 대상으로 합니다.</p></div></div>
+    <div class="row">
+      <label class="f">scope <input id="expScope" placeholder="service.db (선택)" style="width:200px"></label>
+      <label class="f">max <input id="expMax" type="number" value="500" style="width:80px"></label>
+      <button class="btn" id="expPlanBtn">계획 (dry-run)</button>
+      <button class="btn warn" id="expPushBtn">실제 반영</button>
+    </div>
+    <div class="counts" id="expCounts"></div>
+    <div id="expTable"></div>
+  </div>
+
+  <div class="card">
+    <div class="op-head"><div class="op-icon">⇄</div><div><h2>Drift · 양쪽 카탈로그 대조</h2><p>Import 후보, 충돌, Export 후보를 먼저 파악해 동기화 방향을 결정합니다.</p></div></div>
+    <div class="row">
+      <label class="f">scope <input id="drScope" placeholder="service.db (선택)" style="width:200px"></label>
+      <label class="f">max <input id="drMax" type="number" value="500" style="width:80px"></label>
+      <button class="btn" id="driftBtn">대조 실행</button>
+    </div>
+    <div class="counts" id="drCounts"></div>
+    <div id="drTables"></div>
+  </div>
+
+  <div class="card"><div class="op-head"><div class="op-icon">↗</div><div><h2>Lineage · 관계 그래프 내보내기</h2><p>sqlon FK 관계를 OpenMetadata의 테이블 관계형 lineage로 전송합니다. ETL 데이터 흐름은 아닙니다.</p></div></div><div class="row" style="margin-top:12px"><label class="f">scope <input id="linScope" placeholder="service.db (선택)" style="width:200px"></label><label class="f">max <input id="linMax" type="number" value="500" style="width:80px"></label><button class="btn" id="linPlanBtn">계획 확인</button><button class="btn warn" id="linPushBtn">Lineage 반영</button></div><div class="counts" id="linCounts"></div><div id="linTable"></div></div>
+
+  <div class="card">
+    <details><summary class="raw-toggle">개발자용 원본 응답 보기</summary><pre id="raw">—</pre></details>
+  </div>
+</main>
+
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+var $=function(id){return document.getElementById(id);};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+function headers(j){var h={};if(j)h['Content-Type']='application/json';var t=$('adminToken');if(t&&t.value)h['X-Admin-Token']=t.value;return h;}
+function flash(ok,t){var m=$('msg');m.className='msg '+(ok?'ok':'bad');m.textContent=t;setTimeout(function(){m.textContent='';},3000);}
+function raw(o){$('raw').textContent=JSON.stringify(o,null,2);}
+var TESTED_SIGNATURE='';
+function cfgSignature(){return $('cfgUrl').value.trim()+'\n'+$('cfgToken').value;}
+function invalidateTest(){TESTED_SIGNATURE='';$('cfgSave').disabled=true;$('testState').textContent='입력값이 변경되었습니다. 다시 테스트하세요.';}
+function warnings(d){return (d.warnings||[]).length?'<div class="warning"><b>부분 처리 경고</b><br>'+d.warnings.map(esc).join('<br>')+'</div>':'';}
+
+function renderStatus(d){
+  raw(d);
+  if(d.config_source) $('cfgSource').textContent='source: '+d.config_source+(d.has_token?' · 토큰 있음':' · 토큰 없음');
+  if(!d.configured){$('connectionCard').className='card connection';$('statusPill').innerHTML='<span class="pill bad">미설정</span>';$('statusDetail').textContent=d.error||'';return;}
+  $('target').textContent=d.base_url||'';
+  if(d.reachable){$('connectionCard').className='card connection ready';$('statusPill').innerHTML='<span class="pill ok">연결됨</span>';
+    $('statusDetail').textContent='서버 버전 '+JSON.stringify(d.server_version||{});}
+  else{$('connectionCard').className='card connection fail';$('statusPill').innerHTML='<span class="pill bad">연결 실패</span>';$('statusDetail').textContent=d.error||'';}
+}
+function status(){
+  fetch('/api/openmetadata/status',{headers:headers()}).then(function(r){return r.json();})
+    .then(renderStatus).catch(function(e){flash(false,e.message);});
+}
+function loadConfig(){
+  fetch('/api/openmetadata/config',{headers:headers()}).then(function(r){return r.json();}).then(function(d){
+    if(d.url) $('cfgUrl').value=d.url;
+    $('cfgSource').textContent='source: '+(d.source||'')+(d.has_token?' · 토큰 있음':'');
+  }).catch(function(){});
+}
+function saveConfig(){
+  if(TESTED_SIGNATURE!==cfgSignature()){flash(false,'입력값 연결 테스트를 먼저 통과하세요');return;}
+  var body={url:$('cfgUrl').value.trim(),token:$('cfgToken').value};
+  fetch('/api/openmetadata/config',{method:'PUT',headers:headers(true),body:JSON.stringify(body)})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){
+      if(!res.ok||res.d.error){flash(false,(res.d&&res.d.error)||'저장 실패');return;}
+      $('cfgToken').value=''; flash(true,'저장됨'); renderStatus(res.d);
+    }).catch(function(e){flash(false,e.message);});
+}
+function testConfig(){
+  var body={url:$('cfgUrl').value.trim(),token:$('cfgToken').value};$('testState').textContent='연결 확인 중…';$('testBtn').disabled=true;
+  fetch('/api/openmetadata/test',{method:'POST',headers:headers(true),body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(d){raw(d);$('testBtn').disabled=false;
+    if(!d.reachable){TESTED_SIGNATURE='';$('cfgSave').disabled=true;$('testState').textContent='실패 단계: '+(d.stage||'connection');$('statusDetail').textContent=d.error||'';flash(false,'연결 테스트 실패');return;}
+    TESTED_SIGNATURE=cfgSignature();$('cfgSave').disabled=false;$('testState').textContent='검증 성공 · 이제 저장할 수 있습니다.';$('statusDetail').textContent='서버 버전 '+JSON.stringify(d.server_version||{});flash(true,'연결 테스트 성공');
+  }).catch(function(e){$('testBtn').disabled=false;flash(false,e.message);});
+}
+
+function doImport(mode){
+  var apply=mode==='apply',toReview=mode==='review';
+  var body={scope:$('impScope').value.trim(),max_tables:parseInt($('impMax').value||'500',10),
+    include_glossary:$('impGloss').checked,apply:apply,to_review:toReview};
+  if(apply && !confirm('OpenMetadata 메타데이터를 overrides.json/glossary.json에 병합하고 카탈로그를 리로드합니다.\n각 파일은 자동 백업되며 기존 값은 덮어쓰지 않습니다. 진행할까요?')) return;
+  fetch('/api/openmetadata/import',{method:'POST',headers:headers(true),body:JSON.stringify(body)})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){
+      var d=res.d; raw(d);
+      if(!res.ok||d.error){flash(false,d.error||'실패');return;}
+      if(toReview){$('impCounts').innerHTML='<span>검토 후보 <b>'+(d.staged||d.candidates||0)+'</b></span><span class="pill ok">검토 큐 등록</span>'+warnings(d);$('impTables').innerHTML='<div class="empty">메타 검토 화면에서 후보를 승인하거나 반려하세요.</div>';flash(true,'검토 큐 등록 완료');return;}
+      var c=d.counts||{};
+      $('impCounts').innerHTML='<span>컬럼 <b>'+(c.columns||0)+'</b></span><span>테이블 <b>'+(c.tables||0)+'</b></span>'+
+        '<span>용어집 <b>'+(c.glossary||0)+'</b></span><span class="mini">fetched '+(d.fetched_tables||0)+'</span>'+
+        (d.applied?'<span class="pill ok">반영됨'+(d.reloaded?' · 리로드':'')+'</span>':'<span class="pill">미리보기</span>');
+      var cols=d.column_candidates||[];
+      $('impTables').innerHTML = cols.length ? (
+        '<table><thead><tr><th>테이블</th><th>컬럼</th><th>논리명</th><th>설명</th><th>PII</th></tr></thead><tbody>'+
+        cols.map(function(x){return '<tr><td class="mono">'+esc(x.table)+'</td><td class="mono">'+esc(x.column)+'</td>'+
+          '<td>'+esc(x.logical_name||'')+'</td><td>'+esc(x.description||'')+'</td>'+
+          '<td>'+(x.pii?'<span class="tag pii">PII</span>':'')+'</td></tr>';}).join('')+'</tbody></table>'
+      ) : '<div class="empty">제안할 컬럼 후보가 없습니다(이미 채워져 있거나 매칭 테이블 없음).</div>';
+      if((d.skipped_tables||[]).length) $('impTables').innerHTML+='<div class="mini">skipped: '+esc((d.skipped_tables||[]).join(', '))+'</div>';
+      $('impTables').innerHTML+=warnings(d);
+      flash(true, apply?'반영 완료':'미리보기 완료');
+    }).catch(function(e){flash(false,e.message);});
+}
+
+function doExport(dry){
+  var body={scope:$('expScope').value.trim(),max_tables:parseInt($('expMax').value||'500',10),dry_run:dry};
+  if(!dry && !confirm('sqlon 컬럼 설명을 OpenMetadata에 기록합니다(빈 설명 컬럼만). 진행할까요?')) return;
+  fetch('/api/openmetadata/export',{method:'POST',headers:headers(true),body:JSON.stringify(body)})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+    .then(function(res){
+      var d=res.d; raw(d);
+      if(!res.ok||d.error){flash(false,d.error||'실패');return;}
+      $('expCounts').innerHTML='<span>계획 <b>'+(d.planned||0)+'</b></span>'+
+        (d.dry_run?'<span class="pill">dry-run</span>':'<span class="pill ok">반영 '+ (d.pushed||0) +(d.failed?(' · 실패 '+d.failed):'')+'</span>');
+      var ch=d.changes||[];
+      $('expTable').innerHTML = ch.length ? (
+        '<table><thead><tr><th>테이블</th><th>컬럼</th><th>설명(→OM)</th><th>상태</th></tr></thead><tbody>'+
+        ch.map(function(x){return '<tr><td class="mono">'+esc(x.table)+'</td><td class="mono">'+esc(x.column||'')+'</td>'+
+          '<td>'+esc(x.value)+'</td><td>'+(x.error?('<span class="pill bad">'+esc(x.error)+'</span>'):(x.pushed?'<span class="pill ok">기록됨</span>':'<span class="mini">예정</span>'))+'</td></tr>';}).join('')+'</tbody></table>'
+      ) : '<div class="empty">OpenMetadata에 채울 빈 설명 컬럼이 없습니다.</div>';
+      $('expTable').innerHTML+=warnings(d);flash(!d.failed, dry?'계획 생성':(d.failed?'일부 반영 실패':'반영 완료'));
+    }).catch(function(e){flash(false,e.message);});
+}
+
+function driftTable(title, items, cls){
+  if(!items||!items.length) return '';
+  var head = cls==='conflict'
+    ? '<tr><th>테이블</th><th>컬럼</th><th>필드</th><th>sqlon</th><th>OpenMetadata</th></tr>'
+    : '<tr><th>테이블</th><th>컬럼</th><th>필드</th><th>값</th></tr>';
+  var rows = items.map(function(x){
+    var v = cls==='conflict'
+      ? '<td>'+esc(x.jamypg_value||'')+'</td><td>'+esc(x.ext_value||'')+'</td>'
+      : '<td>'+esc(x.jamypg_value||x.ext_value||'')+'</td>';
+    return '<tr><td class="mono">'+esc(x.table)+'</td><td class="mono">'+esc(x.column||'')+'</td><td>'+esc(x.field)+'</td>'+v+'</tr>';
+  }).join('');
+  return '<div style="margin-top:10px"><b>'+esc(title)+'</b> ('+items.length+')<table><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div>';
+}
+function doDrift(){
+  var body={scope:$('drScope').value.trim(),max_tables:parseInt($('drMax').value||'500',10)};
+  fetch('/api/openmetadata/drift',{method:'POST',headers:headers(true),body:JSON.stringify(body)})
+    .then(function(r){return r.json();}).then(function(d){
+      raw(d);
+      if(d.error){flash(false,d.error);return;}
+      var c=d.counts||{};
+      $('drCounts').innerHTML='<span>import 후보 <b>'+(c.jamypg_gaps||0)+'</b></span>'+
+        '<span>충돌 <b>'+(c.conflicts||0)+'</b></span><span>export 후보 <b>'+(c.ext_gaps||0)+'</b></span>'+
+        '<span class="mini">비교 테이블 '+(d.resolved_tables||0)+'</span>';
+      var html = driftTable('충돌 (사람 결정 필요)', d.conflicts, 'conflict')+
+        driftTable('sqlon 설명 비어있음 (import 가능)', d.jamypg_gaps, 'gap')+
+        driftTable('OpenMetadata 공백 → export 후보', d.ext_gaps, 'gap');
+      $('drTables').innerHTML = (html || '<div class="empty">불일치가 없습니다. 두 카탈로그가 정렬돼 있습니다.</div>')+warnings(d);
+      flash(true,'대조 완료');
+    }).catch(function(e){flash(false,e.message);});
+}
+function doLineage(dry){
+  var body={scope:$('linScope').value.trim(),max_tables:parseInt($('linMax').value||'500',10),dry_run:dry};
+  if(!dry&&!confirm('sqlon FK 관계를 OpenMetadata lineage로 기록합니다. 계획을 검토했나요?'))return;
+  fetch('/api/openmetadata/lineage',{method:'POST',headers:headers(true),body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(d){raw(d);if(d.error){flash(false,d.error);return;}
+    $('linCounts').innerHTML='<span>관계 <b>'+(d.relations||0)+'</b></span><span>계획 <b>'+(d.planned||0)+'</b></span><span>건너뜀 <b>'+(d.skipped||0)+'</b></span>'+(dry?'<span class="pill">dry-run</span>':'<span class="pill ok">반영 '+(d.pushed||0)+' · 실패 '+(d.failed||0)+'</span>');
+    var es=d.edges||[];$('linTable').innerHTML=es.length?'<table><thead><tr><th>From</th><th>To</th><th>상태</th></tr></thead><tbody>'+es.map(function(x){return '<tr><td class="mono">'+esc(x.from)+'</td><td class="mono">'+esc(x.to)+'</td><td>'+(x.error?'<span class="pill bad">'+esc(x.error)+'</span>':x.skipped?'<span class="mini">'+esc(x.skipped)+'</span>':x.pushed?'<span class="pill ok">기록됨</span>':'예정')+'</td></tr>';}).join('')+'</tbody></table>':'<div class="empty">내보낼 관계가 없습니다.</div>';
+    flash(!d.failed,dry?'Lineage 계획 생성':'Lineage 반영 완료');
+  }).catch(function(e){flash(false,e.message);});
+}
+$('statusBtn').onclick=status;
+$('testBtn').onclick=testConfig;
+$('cfgSave').onclick=saveConfig;
+$('cfgUrl').oninput=invalidateTest;$('cfgToken').oninput=invalidateTest;
+$('driftBtn').onclick=doDrift;
+$('previewBtn').onclick=function(){doImport('preview');};
+$('reviewBtn').onclick=function(){doImport('review');};
+$('applyBtn').onclick=function(){doImport('apply');};
+$('expPlanBtn').onclick=function(){doExport(true);};
+$('expPushBtn').onclick=function(){doExport(false);};
+$('linPlanBtn').onclick=function(){doLineage(true);};$('linPushBtn').onclick=function(){doLineage(false);};
+JASQL.mount({page:'openmetadata',onReady:function(){loadConfig();status();}});
+</script>
+</body>
+</html>

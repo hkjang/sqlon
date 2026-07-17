@@ -1,0 +1,48 @@
+{
+ "dialect": "postgres",
+ "pii_columns": [
+  "wordpress.wp_users.user_email"
+ ],
+ "tables": [
+  {
+   "table": "wordpress.wp_users",
+   "domain": "블로그",
+   "row_count": 5
+  },
+  {
+   "table": "wordpress.wp_posts",
+   "domain": "블로그",
+   "row_count": 20
+  },
+  {
+   "table": "wordpress.wp_comments",
+   "domain": "블로그",
+   "row_count": 30
+  },
+  {
+   "table": "wordpress.wp_terms",
+   "domain": "블로그",
+   "row_count": 6
+  },
+  {
+   "table": "wordpress.wp_term_taxonomy",
+   "domain": "블로그",
+   "row_count": 6
+  },
+  {
+   "table": "wordpress.wp_term_relationships",
+   "domain": "블로그",
+   "row_count": 20
+  },
+  {
+   "table": "wordpress.wp_postmeta",
+   "domain": "블로그",
+   "row_count": 20
+  },
+  {
+   "table": "wordpress.wp_options",
+   "domain": "블로그",
+   "row_count": 5
+  }
+ ]
+}

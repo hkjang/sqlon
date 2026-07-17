@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon DBA 코파일럿</title>
+<style>
+  :root{
+    --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
+    --blue:#2563eb;--green:#15803d;--amber:#b45309;--red:#b91c1c;
+    --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
+  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header h1{font-size:16px;margin:0 10px 0 0;}
+  .grow{flex:1;}
+  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:150px;}
+  header select#profile{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;min-width:170px;}
+  main{max-width:1300px;margin:0 auto;padding:16px 20px 90px;}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+  .tab{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 15px;font-size:13px;cursor:pointer;font-weight:600;color:var(--sub);}
+  .tab.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+  .card h2{font-size:13px;margin:0 0 12px;color:var(--sub);font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:14px;}
+  .kpi{border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .kpi .n{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px;}
+  .kpi .l{font-size:12px;color:var(--sub);margin-top:2px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);}
+  td.mono,code{font-family:var(--mono);font-size:12px;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
+  .btn:hover{border-color:var(--blue);color:var(--blue);}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;}
+  .btn.primary:hover{opacity:.9;color:#fff;}
+  .btn.mini{padding:3px 9px;font-size:11.5px;}
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+  .toolbar input[type=number]{border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:13px;width:90px;}
+  textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:12.5px;resize:vertical;}
+  .mini{font-size:12px;color:var(--sub);}
+  .sev{display:inline-block;min-width:52px;text-align:center;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;color:#fff;text-transform:uppercase;}
+  .sev.high{background:var(--red);} .sev.medium{background:var(--amber);} .sev.low{background:#64748b;} .sev.info{background:#0ea5e9;}
+  .ddl{background:#0f172a;color:#d7e3f4;font-family:var(--mono);font-size:12px;padding:8px 10px;border-radius:7px;white-space:pre-wrap;word-break:break-all;}
+  .finding{border:1px solid var(--line);border-left-width:3px;border-radius:0 8px 8px 0;padding:8px 12px;margin:8px 0;}
+  .finding.high{border-left-color:var(--red);} .finding.medium{border-left-color:var(--amber);}
+  .finding.low{border-left-color:#64748b;} .finding.info{border-left-color:#0ea5e9;}
+  .finding b{font-family:var(--mono);}
+  .summary{font-size:15px;line-height:1.7;padding:12px 14px;background:#eff5ff;border:1px solid #cfe0ff;border-radius:10px;}
+  .msg{font-size:12.5px;margin-left:6px;} .msg.ok{color:var(--green);} .msg.bad{color:var(--red);}
+  .pane{display:none;} .pane.active{display:block;}
+  .note{font-size:12px;color:var(--sub);margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);}
+  .bar{height:8px;border-radius:4px;background:#eef1f5;overflow:hidden;min-width:60px;display:inline-block;width:120px;vertical-align:middle;}
+  .bar>i{display:block;height:100%;border-radius:4px;background:var(--blue);}
+</style>
+</head>
+<body>
+<header>
+  <h1>🩺 DBA 코파일럿</h1>
+  <span class="mini" id="scope" style="color:#9db4dd"></span>
+  <span class="grow"></span>
+  <select id="profile" title="DB 프로파일"></select>
+  <input id="adminToken" type="password" placeholder="관리 토큰">
+  <span class="msg" id="msg"></span>
+</header>
+<main>
+  <div class="card" id="digestBanner" style="display:none;background:linear-gradient(90deg,#101a2e,#1d2b47);color:#e8eefc;border:none">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;opacity:.7">DBA 다이제스트</span>
+      <b id="digestHeadline" style="font-size:15px"></b>
+      <span class="grow"></span>
+      <span id="digestMeta" class="mini" style="color:#9db4dd"></span>
+    </div>
+  </div>
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-p="health">헬스 점검</button>
+    <button class="tab" data-p="index">인덱스 제안</button>
+    <button class="tab" data-p="workload">워크로드</button>
+    <button class="tab" data-p="lint">SQL 린트</button>
+    <button class="tab" data-p="explain">자연어 설명</button>
+  </div>
+
+  <!-- 헬스 -->
+  <section class="pane active" id="pane-health">
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0">DB 헬스 점검</h2>
+        <span class="grow"></span>
+        <button class="btn primary" id="healthRun">점검 실행</button>
+      </div>
+      <div id="healthOut"></div>
+    </div>
+  </section>
+
+  <!-- 인덱스 -->
+  <section class="pane" id="pane-index">
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0">인덱스 어드바이저</h2>
+        <label class="mini">최소 지연(ms)<input type="number" id="idxMs" value="200" min="0"></label>
+        <label class="mini">기간(일)<input type="number" id="idxDays" value="7" min="1"></label>
+        <span class="grow"></span>
+        <button class="btn primary" id="idxRun">후보 분석</button>
+      </div>
+      <div id="idxOut"></div>
+    </div>
+  </section>
+
+  <!-- 워크로드 -->
+  <section class="pane" id="pane-workload">
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0">워크로드 리포트</h2>
+        <label class="mini">기간(일)<input type="number" id="wlDays" value="7" min="1"></label>
+        <label class="mini">느린 기준(ms)<input type="number" id="wlMs" value="200" min="0"></label>
+        <span class="grow"></span>
+        <button class="btn primary" id="wlRun">리포트 생성</button>
+      </div>
+      <div id="wlOut"></div>
+    </div>
+  </section>
+
+  <!-- 린트 -->
+  <section class="pane" id="pane-lint">
+    <div class="card">
+      <h2>SQL 안티패턴 린트</h2>
+      <textarea id="lintSql" placeholder="SELECT * FROM ... 처럼 점검할 SQL을 붙여넣으세요"></textarea>
+      <div class="toolbar" style="margin-top:10px">
+        <span class="grow"></span>
+        <button class="btn primary" id="lintRun">린트 실행</button>
+      </div>
+      <div id="lintOut"></div>
+    </div>
+  </section>
+
+  <!-- 설명 -->
+  <section class="pane" id="pane-explain">
+    <div class="card">
+      <h2>SQL 자연어 설명</h2>
+      <textarea id="expSql" placeholder="설명이 필요한 SQL을 붙여넣으세요"></textarea>
+      <div class="toolbar" style="margin-top:10px">
+        <span class="grow"></span>
+        <button class="btn primary" id="expRun">설명 생성</button>
+      </div>
+      <div id="expOut"></div>
+    </div>
+  </section>
+</main>
+
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+var $ = function(id){return document.getElementById(id);};
+var esc = function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+function headers(){var h={'Content-Type':'application/json'};var t=$('adminToken');if(t&&t.value)h['X-Admin-Token']=t.value;return h;}
+function flash(ok,t){var m=$('msg');m.className='msg '+(ok?'ok':'bad');m.textContent=t;setTimeout(function(){m.textContent='';},3000);}
+function prof(){return $('profile').value||'';}
+function post(url,body){return fetch(url,{method:'POST',headers:headers(),body:JSON.stringify(body||{})}).then(function(r){return r.json();});}
+function sevCls(s){return 'sev '+(s||'info');}
+function busy(el){el.innerHTML='<div class="mini">불러오는 중…</div>';}
+
+/* ---------- 헬스 ---------- */
+function runHealth(){
+  if(!prof()){flash(false,'프로파일을 선택하세요');return;}
+  var out=$('healthOut');busy(out);
+  post('/api/db/health',{profile:prof()}).then(function(d){
+    if(d.error){out.innerHTML='';flash(false,d.error);return;}
+    var checks=d.checks||[];
+    var html=checks.map(function(c){
+      var rows=(c.findings||[]).map(function(f){
+        return '<tr>'+Object.keys(f).map(function(k){return '<td class="mono">'+esc(f[k])+'</td>';}).join('')+'</tr>';
+      }).join('');
+      var head=(c.findings&&c.findings.length)?('<thead><tr>'+Object.keys(c.findings[0]).map(function(k){return '<th>'+esc(k)+'</th>';}).join('')+'</tr></thead>'):'';
+      return '<div class="card" style="margin:10px 0">'+
+        '<div class="toolbar"><span class="'+sevCls(c.severity)+'">'+esc(c.severity)+'</span>'+
+        '<b>'+esc(c.title)+'</b><span class="grow"></span><span class="mini">발견 '+(c.count||0)+'건</span></div>'+
+        (c.unsupported?'<div class="mini">이 엔진에서는 지원되지 않는 점검입니다.</div>':
+          (rows?('<table>'+head+'<tbody>'+rows+'</tbody></table>'):'<div class="mini">문제 없음 ✓</div>'))+
+        (c.note?'<div class="note">'+esc(c.note)+'</div>':'')+'</div>';
+    }).join('');
+    out.innerHTML=html||'<div class="mini">점검 결과가 없습니다.</div>';
+    flash(true,'헬스 점검 완료');
+  }).catch(function(e){out.innerHTML='';flash(false,e.message);});
+}
+
+/* ---------- 인덱스 ---------- */
+function runIndex(){
+  var out=$('idxOut');busy(out);
+  post('/api/db/index-advisor',{profile:prof(),min_elapsed_ms:+$('idxMs').value,days:+$('idxDays').value}).then(function(d){
+    if(d.error){out.innerHTML='';flash(false,d.error);return;}
+    var c=d.candidates||[];
+    var kpis='<div class="kpis">'+
+      '<div class="kpi"><div class="n">'+(d.scanned_queries||0)+'</div><div class="l">스캔한 쿼리</div></div>'+
+      '<div class="kpi"><div class="n">'+(d.slow_queries||0)+'</div><div class="l">느린 쿼리</div></div>'+
+      '<div class="kpi"><div class="n">'+(d.count||0)+'</div><div class="l">인덱스 후보</div></div></div>';
+    var rows=c.map(function(x){
+      return '<tr><td class="mono">'+esc(x.table)+'.'+esc(x.column)+'</td>'+
+        '<td class="num">'+x.occurrences+'</td><td class="num">'+x.avg_ms+'</td><td class="num">'+x.max_ms+'</td>'+
+        '<td><div class="ddl">'+esc(x.ddl)+'</div>'+
+        '<button class="btn mini" style="margin-top:6px" onclick="copyText(this,\''+esc(x.ddl).replace(/'/g,"\\'")+'\')">DDL 복사</button>'+
+        '<div class="mini" style="margin-top:4px">예: <code>'+esc(x.sample_sql||'')+'</code></div></td></tr>';
+    }).join('');
+    out.innerHTML=kpis+(rows?
+      '<table><thead><tr><th>컬럼</th><th class="num">발생</th><th class="num">평균 ms</th><th class="num">최대 ms</th><th>제안 DDL</th></tr></thead><tbody>'+rows+'</tbody></table>':
+      '<div class="mini">후보가 없습니다. 임계값을 낮추거나 기간을 늘려보세요.</div>')+
+      (d.note?'<div class="note">'+esc(d.note)+'</div>':'');
+    flash(true,'분석 완료');
+  }).catch(function(e){out.innerHTML='';flash(false,e.message);});
+}
+function copyText(btn,t){navigator.clipboard.writeText(t).then(function(){var o=btn.textContent;btn.textContent='복사됨 ✓';setTimeout(function(){btn.textContent=o;},1400);});}
+
+/* ---------- 워크로드 ---------- */
+function runWorkload(){
+  var out=$('wlOut');busy(out);
+  post('/api/db/workload',{profile:prof(),days:+$('wlDays').value,slow_ms:+$('wlMs').value}).then(function(d){
+    if(d.error){out.innerHTML='';flash(false,d.error);return;}
+    var l=d.latency_ms||{};
+    var kpis='<div class="kpis">'+
+      '<div class="kpi"><div class="n">'+(d.total_queries||0)+'</div><div class="l">총 쿼리</div></div>'+
+      '<div class="kpi"><div class="n">'+Math.round((d.error_rate||0)*100)+'%</div><div class="l">오류율 ('+(d.errors||0)+')</div></div>'+
+      '<div class="kpi"><div class="n">'+(d.slow_queries||0)+'</div><div class="l">느린 쿼리 (≥'+(d.slow_ms||0)+'ms)</div></div>'+
+      '<div class="kpi"><div class="n">'+(l.p95||0)+'</div><div class="l">p95 지연(ms)</div></div>'+
+      '<div class="kpi"><div class="n">'+(l.max||0)+'</div><div class="l">최대 지연(ms)</div></div>'+
+      '<div class="kpi"><div class="n">'+(d.peak_hour<0?'-':d.peak_hour+'시')+'</div><div class="l">피크 시간대 ('+(d.peak_hour_count||0)+')</div></div></div>';
+    var mk=function(title,items,keyLabel){
+      items=items||[];
+      return '<div class="card" style="margin:10px 0"><h2>'+title+'</h2>'+(items.length?
+        '<table><thead><tr><th>'+keyLabel+'</th><th class="num">건수</th></tr></thead><tbody>'+
+        items.map(function(x){return '<tr><td class="mono">'+esc(x.key||'')+'</td><td class="num">'+x.count+'</td></tr>';}).join('')+
+        '</tbody></table>':'<div class="mini">데이터 없음</div>')+'</div>';
+    };
+    var slow=(d.top_slow||[]).map(function(x){
+      return '<tr><td class="num">'+x.elapsed_ms+'</td><td class="mono">'+esc(x.profile||'')+'</td><td><code>'+esc(x.sql||'')+'</code></td></tr>';
+    }).join('');
+    out.innerHTML=kpis+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">'+
+        mk('가장 많이 접근한 테이블',d.top_tables,'테이블')+
+        mk('상위 오류 코드',d.top_errors,'코드')+
+        mk('프로파일별',d.by_profile,'프로파일')+
+        mk('툴별',d.by_tool,'툴')+
+      '</div>'+
+      '<div class="card" style="margin:10px 0"><h2>가장 느린 문장 (Top 10)</h2>'+(slow?
+        '<table><thead><tr><th class="num">ms</th><th>프로파일</th><th>SQL</th></tr></thead><tbody>'+slow+'</tbody></table>':
+        '<div class="mini">데이터 없음</div>')+'</div>'+
+      (d.note?'<div class="note">'+esc(d.note)+'</div>':'');
+    flash(true,'리포트 생성 완료');
+  }).catch(function(e){out.innerHTML='';flash(false,e.message);});
+}
+
+/* ---------- 린트 ---------- */
+function runLint(){
+  var sql=$('lintSql').value.trim();if(!sql){flash(false,'SQL을 입력하세요');return;}
+  var out=$('lintOut');busy(out);
+  post('/api/query/lint',{sql:sql,profile:prof()}).then(function(d){
+    if(d.error){out.innerHTML='';flash(false,d.error);return;}
+    var f=d.findings||[];
+    out.innerHTML=(f.length?f.map(function(x){
+      return '<div class="finding '+esc(x.severity)+'"><span class="'+sevCls(x.severity)+'">'+esc(x.severity)+'</span> '+
+        '<b>'+esc(x.rule)+'</b>'+(x.snippet?' <code>'+esc(x.snippet)+'</code>':'')+
+        '<div style="margin-top:4px">'+esc(x.message)+'</div>'+
+        '<div class="mini" style="margin-top:3px">💡 '+esc(x.suggestion)+'</div></div>';
+    }).join(''):'<div class="finding info" style="margin-top:12px">✓ 감지된 안티패턴이 없습니다.</div>')+
+      '<div class="note">정적 점검(권고용). 실행하지 않으며 자동 수정하지 않습니다.</div>';
+    flash(true,f.length+'건 감지');
+  }).catch(function(e){out.innerHTML='';flash(false,e.message);});
+}
+
+/* ---------- 설명 ---------- */
+function runExplain(){
+  var sql=$('expSql').value.trim();if(!sql){flash(false,'SQL을 입력하세요');return;}
+  var out=$('expOut');busy(out);
+  post('/api/query/explain-words',{sql:sql,profile:prof()}).then(function(d){
+    if(d.error){out.innerHTML='';flash(false,d.error);return;}
+    var t=(d.tables||[]).map(function(x){return '<tr><td class="mono">'+esc(x.fqn)+'</td><td>'+esc(x.logical_name||'')+'</td><td class="mini">'+esc(x.description||'')+'</td></tr>';}).join('');
+    out.innerHTML='<div class="summary" style="margin:12px 0">'+esc(d.summary||'')+'</div>'+
+      '<div class="kpis">'+
+        '<div class="kpi"><div class="n">'+esc(d.statement||'-')+'</div><div class="l">문장 유형</div></div>'+
+        '<div class="kpi"><div class="n">'+(d.join_count||0)+'</div><div class="l">조인 수</div></div>'+
+        '<div class="kpi"><div class="n">'+((d.aggregates||[]).join(',')||'-')+'</div><div class="l">집계</div></div>'+
+        '<div class="kpi"><div class="n">'+(d.limit||'-')+'</div><div class="l">LIMIT</div></div></div>'+
+      (t?'<div class="card" style="margin:10px 0"><h2>참조 테이블</h2><table><thead><tr><th>FQN</th><th>논리명</th><th>설명</th></tr></thead><tbody>'+t+'</tbody></table></div>':'')+
+      (d.group_by&&d.group_by.length?'<div class="mini">GROUP BY: <code>'+esc(d.group_by.join(', '))+'</code></div>':'')+
+      (d.order_by&&d.order_by.length?'<div class="mini">ORDER BY: <code>'+esc(d.order_by.join(', '))+'</code></div>':'')+
+      '<div class="note">'+esc(d.note||'')+'</div>';
+    flash(true,'설명 생성 완료');
+  }).catch(function(e){out.innerHTML='';flash(false,e.message);});
+}
+
+/* ---------- tabs + init ---------- */
+$('tabs').addEventListener('click',function(e){
+  var b=e.target.closest('.tab');if(!b)return;
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('active');});
+  b.classList.add('active');$('pane-'+b.dataset.p).classList.add('active');
+});
+$('healthRun').onclick=runHealth;
+$('idxRun').onclick=runIndex;
+$('wlRun').onclick=runWorkload;
+$('lintRun').onclick=runLint;
+$('expRun').onclick=runExplain;
+
+function loadDigest(){
+  post('/api/db/digest',{profile:prof(),days:7}).then(function(d){
+    if(d.error||d.headline==null){$('digestBanner').style.display='none';return;}
+    $('digestHeadline').textContent=d.headline;
+    $('digestMeta').textContent='최근 '+(d.window_days||7)+'일 · 쿼리 '+(d.total_queries||0)+' · 인덱스 후보 '+(d.index_candidate_count||0)+(prof()?(' · '+prof()):' · 전체');
+    $('digestBanner').style.display='block';
+  }).catch(function(){$('digestBanner').style.display='none';});
+}
+function loadProfiles(){
+  return fetch('/api/db-profiles',{headers:headers()}).then(function(r){return r.json();}).then(function(d){
+    var ps=d.profiles||[];var last=localStorage.getItem('jasqlLastProfile');
+    $('profile').innerHTML=(ps.length?ps.map(function(p){return '<option value="'+esc(p.id)+'"'+(p.id===last?' selected':'')+'>'+esc(p.id)+(p.name?' — '+esc(p.name):'')+'</option>';}).join(''):'<option value="">프로파일 없음</option>');
+    $('profile').onchange=function(){localStorage.setItem('jasqlLastProfile',$('profile').value);loadDigest();};
+  }).catch(function(){});
+}
+
+JASQL.mount({ page:'dba', onReady:function(me){ if(me&&me.version)$('scope').textContent='v'+me.version; loadProfiles().then(loadDigest); }});
+</script>
+</body>
+</html>

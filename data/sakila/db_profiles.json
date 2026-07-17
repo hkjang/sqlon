@@ -1,0 +1,53 @@
+[
+ {
+  "id": "pg-sakila",
+  "name": "PostgreSQL sakila",
+  "type": "postgres",
+  "connect_string": "127.0.0.1:55432/jamypg_meta",
+  "username": "jamypg_ro",
+  "password_ref": "plain:jamypg_ro_pw",
+  "routing": {
+   "schemas": [
+    "sakila"
+   ],
+   "tags": [
+    "oss:sakila"
+   ],
+   "priority": 10
+  }
+ },
+ {
+  "id": "mysql-sakila",
+  "name": "MySQL sakila",
+  "type": "mysql",
+  "connect_string": "127.0.0.1:53306/sakila",
+  "username": "jamypg_ro",
+  "password_ref": "plain:jamypg_ro_pw",
+  "routing": {
+   "schemas": [
+    "sakila"
+   ],
+   "tags": [
+    "oss:sakila"
+   ],
+   "priority": 10
+  }
+ },
+ {
+  "id": "mariadb-sakila",
+  "name": "MariaDB sakila",
+  "type": "mariadb",
+  "connect_string": "127.0.0.1:53307/sakila",
+  "username": "jamypg_ro",
+  "password_ref": "plain:jamypg_ro_pw",
+  "routing": {
+   "schemas": [
+    "sakila"
+   ],
+   "tags": [
+    "oss:sakila"
+   ],
+   "priority": 10
+  }
+ }
+]

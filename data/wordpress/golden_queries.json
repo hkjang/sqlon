@@ -1,0 +1,83 @@
+[
+ {
+  "id": 1,
+  "question": "발행된(publish) 글 수를 알려줘",
+  "expected_tables": [
+   "wordpress.wp_posts"
+  ],
+  "expected_columns": [
+   "post_status",
+   "post_type"
+  ],
+  "expected_sql": "SELECT COUNT(*) AS published_posts FROM wordpress.wp_posts T1 WHERE T1.post_status = 'publish' AND T1.post_type = 'post'",
+  "expected_first_row": {
+   "published_posts": 12
+  }
+ },
+ {
+  "id": 2,
+  "question": "작성자별 글 수를 많은 순으로 보여줘",
+  "expected_tables": [
+   "wordpress.wp_posts",
+   "wordpress.wp_users"
+  ],
+  "expected_columns": [
+   "post_author",
+   "display_name"
+  ],
+  "expected_sql": "SELECT T2.display_name, COUNT(*) AS posts FROM wordpress.wp_posts T1 JOIN wordpress.wp_users T2 ON T1.post_author = T2.id WHERE T1.post_type = 'post' GROUP BY T2.display_name ORDER BY posts DESC, T2.display_name",
+  "expected_first_row": {
+   "display_name": "Alice Kim",
+   "posts": 6
+  }
+ },
+ {
+  "id": 3,
+  "question": "승인된 댓글 수는?",
+  "expected_tables": [
+   "wordpress.wp_comments"
+  ],
+  "expected_columns": [
+   "comment_approved"
+  ],
+  "expected_sql": "SELECT COUNT(*) AS approved_comments FROM wordpress.wp_comments T1 WHERE T1.comment_approved = '1'",
+  "expected_first_row": {
+   "approved_comments": 25
+  }
+ },
+ {
+  "id": 4,
+  "question": "카테고리별 글 수를 많은 순으로 알려줘",
+  "expected_tables": [
+   "wordpress.wp_term_relationships",
+   "wordpress.wp_term_taxonomy",
+   "wordpress.wp_terms"
+  ],
+  "expected_columns": [
+   "taxonomy",
+   "name"
+  ],
+  "expected_sql": "SELECT T3.name, COUNT(*) AS posts FROM wordpress.wp_term_relationships T1 JOIN wordpress.wp_term_taxonomy T2 ON T1.term_taxonomy_id = T2.term_taxonomy_id JOIN wordpress.wp_terms T3 ON T2.term_id = T3.term_id WHERE T2.taxonomy = 'category' GROUP BY T3.name ORDER BY posts DESC, T3.name",
+  "expected_first_row": {
+   "name": "Life",
+   "posts": 4
+  }
+ },
+ {
+  "id": 5,
+  "question": "댓글이 가장 많이 달린 글은 무엇이야?",
+  "expected_tables": [
+   "wordpress.wp_comments",
+   "wordpress.wp_posts"
+  ],
+  "expected_columns": [
+   "comment_post_id",
+   "post_title"
+  ],
+  "expected_sql": "SELECT T2.post_title, COUNT(*) AS comments FROM wordpress.wp_comments T1 JOIN wordpress.wp_posts T2 ON T1.comment_post_id = T2.id GROUP BY T2.post_title ORDER BY comments DESC, T2.post_title LIMIT 1",
+  "expected_first_row": {
+   "post_title": "Post Title 02",
+   "comments": 2
+  }
+ }
+]

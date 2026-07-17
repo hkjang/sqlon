@@ -1,0 +1,50 @@
+# jamypg integration-test databases: the jamypg meta schema is loaded into all
+# three engines as the text2sql target. PostgreSQL doubles as the live meta DB.
+# Usage: docker compose -f deploy/test/docker-compose.yml up -d --wait
+services:
+  postgres-meta:
+    image: postgres:16
+    container_name: jamypg-test-postgres
+    environment:
+      POSTGRES_DB: jamypg_meta
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: metapw
+    ports:
+      - "55432:5432"
+    volumes:
+      - ./init/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jamypg_meta"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mysql-meta:
+    image: mysql:8.4
+    container_name: jamypg-test-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: metapw
+    ports:
+      - "53306:3306"
+    volumes:
+      - ./init/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-pmetapw"]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+
+  mariadb-meta:
+    image: mariadb:11.4
+    container_name: jamypg-test-mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: metapw
+    ports:
+      - "53307:3306"
+    volumes:
+      - ./init/mariadb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 3s
+      retries: 45

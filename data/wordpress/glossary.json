@@ -1,0 +1,74 @@
+{
+ "entries": [
+  {
+   "term": "글",
+   "category": "entity",
+   "synonyms": [
+    "post",
+    "포스트",
+    "게시글",
+    "게시물"
+   ]
+  },
+  {
+   "term": "페이지",
+   "category": "entity",
+   "synonyms": [
+    "page"
+   ]
+  },
+  {
+   "term": "댓글",
+   "category": "entity",
+   "synonyms": [
+    "comment",
+    "코멘트",
+    "리플"
+   ]
+  },
+  {
+   "term": "작성자",
+   "category": "entity",
+   "synonyms": [
+    "author",
+    "user",
+    "사용자",
+    "글쓴이"
+   ]
+  },
+  {
+   "term": "발행",
+   "category": "entity",
+   "synonyms": [
+    "publish",
+    "published",
+    "공개"
+   ]
+  },
+  {
+   "term": "카테고리",
+   "category": "entity",
+   "synonyms": [
+    "category",
+    "분류",
+    "term"
+   ]
+  },
+  {
+   "term": "태그",
+   "category": "entity",
+   "synonyms": [
+    "tag",
+    "post_tag"
+   ]
+  },
+  {
+   "term": "승인",
+   "category": "entity",
+   "synonyms": [
+    "approved",
+    "comment_approved"
+   ]
+  }
+ ]
+}

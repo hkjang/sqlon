@@ -1,0 +1,9 @@
+[
+ {
+  "id": 1,
+  "dbms": "POSTGRES",
+  "port": 55432,
+  "name": "jamypg_meta",
+  "alias": "meta"
+ }
+]

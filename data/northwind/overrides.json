@@ -1,0 +1,46 @@
+{
+ "dialect": "postgres",
+ "pii_columns": [],
+ "tables": [
+  {
+   "table": "northwind.categories",
+   "domain": "주문관리",
+   "row_count": 5
+  },
+  {
+   "table": "northwind.suppliers",
+   "domain": "주문관리",
+   "row_count": 6
+  },
+  {
+   "table": "northwind.products",
+   "domain": "주문관리",
+   "row_count": 15
+  },
+  {
+   "table": "northwind.customers",
+   "domain": "주문관리",
+   "row_count": 8
+  },
+  {
+   "table": "northwind.employees",
+   "domain": "주문관리",
+   "row_count": 5
+  },
+  {
+   "table": "northwind.shippers",
+   "domain": "주문관리",
+   "row_count": 3
+  },
+  {
+   "table": "northwind.orders",
+   "domain": "주문관리",
+   "row_count": 25
+  },
+  {
+   "table": "northwind.order_details",
+   "domain": "주문관리",
+   "row_count": 50
+  }
+ ]
+}

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon 서버 설정</title>
+<style>
+  :root { --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
+    --blue:#2563eb; --green:#15803d; --green-soft:#e6f6ec; --red:#b91c1c; --red-soft:#fdeaea;
+    --amber:#b45309; --amber-soft:#fdf3e2; --mono:ui-monospace,Consolas,monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
+  header { background:#101a2e; color:#e8eefc; padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  header h1 { font-size:16px; margin:0 10px 0 0; } header .grow { flex:1; }
+  .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px; padding:6px 12px; cursor:pointer; font-size:13px; text-decoration:none; display:inline-block; }
+  .btn:hover { border-color:var(--blue); color:var(--blue); }
+  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  main { max-width:900px; margin:0 auto; padding:16px 20px 60px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+  h2 { font-size:14px; color:var(--sub); text-transform:uppercase; letter-spacing:.4px; border-bottom:1px solid var(--line); padding-bottom:6px; margin:0 0 12px; }
+  .row { margin-bottom:14px; }
+  label { display:block; font-size:13px; font-weight:600; margin-bottom:3px; }
+  .help { font-size:12px; color:var(--sub); margin-bottom:5px; }
+  input { width:100%; border:1px solid var(--line); border-radius:7px; padding:8px 10px; font-size:13px; font-family:var(--mono); }
+  .setbadge { font-size:11px; font-weight:700; border-radius:5px; padding:1px 7px; margin-left:6px; }
+  .setbadge.on { background:var(--green-soft); color:var(--green); }
+  .setbadge.off { background:#eef1f5; color:var(--sub); }
+  .result { border-radius:8px; padding:11px 14px; margin-top:8px; font-size:13px; display:none; white-space:pre-wrap; }
+  .result.ok { display:block; background:var(--green-soft); border:1px solid #bfe4cc; }
+  .result.bad { display:block; background:var(--red-soft); border:1px solid #efc4c4; }
+  .mini { font-size:12px; color:var(--sub); }
+  code { background:#eef1f5; border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
+  table.boot { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.boot td { padding:5px 8px; border-bottom:1px solid var(--line); }
+  #userchip { font-size:12px; color:#cfe0ff; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚙ 서버 설정</h1>
+  <span class="grow"></span>
+</header>
+<main>
+  <div class="card">
+    <div class="mini">아래 설정은 <b>메타 DB(jasql_settings)에 저장</b>되며 저장 즉시 <b>재기동 없이 적용</b>됩니다
+      (마스터 토큰·허용 Origin·Keycloak SSO). 비밀 값은 <code>••••••(set)</code>로 표시되며, 입력란을 비워두면 기존 값이 유지됩니다.
+      값을 지우려면 [비우기]를 누르세요. 플래그/환경변수로 준 값은 여기 저장된 값이 없을 때의 기본값으로 쓰입니다.</div>
+  </div>
+
+  <form onsubmit="return save(event)">
+    <div id="groups"></div>
+    <div class="card">
+      <button class="btn primary" type="submit">💾 저장 (즉시 적용)</button>
+      <div class="result" id="result"></div>
+    </div>
+  </form>
+
+  <div class="card">
+    <h2>부팅 전용 (재기동 필요 — 여기서 변경 불가)</h2>
+    <table class="boot" id="bootTable"></table>
+    <div class="mini" style="margin-top:8px">이 값들은 컨테이너/프로세스 시작 시점에만 읽힙니다. 변경하려면 환경변수·플래그를 바꿔 재기동하세요.</div>
+  </div>
+</main>
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let DEFS = [];
+
+async function api(method, path, body) {
+  const res = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+  return data;
+}
+async function init(me) {
+  if (!me.auth_enabled) { document.querySelector('main').innerHTML = '<div class="card">단독 모드(메타 DB 미설정) — 서버 설정 관리는 메타 DB가 필요합니다.</div>'; return; }
+  await load();
+}
+async function load() {
+  const d = await api('GET', '/api/settings');
+  DEFS = d.settings || [];
+  const groups = {};
+  DEFS.forEach(s => { (groups[s.group] = groups[s.group] || []).push(s); });
+  $('#groups').innerHTML = Object.entries(groups).map(([g, items]) =>
+    '<div class="card"><h2>' + esc(g) + (g.includes('SSO') ? ' <span class="setbadge ' + (d.sso_enabled ? 'on">활성' : 'off">비활성') + '</span>' : '') + '</h2>' +
+    items.map(s =>
+      '<div class="row"><label>' + esc(s.label) +
+        '<span class="setbadge ' + (s.is_set ? 'on">설정됨' : 'off">미설정') + '</span></label>' +
+      (s.help ? '<div class="help">' + esc(s.help) + '</div>' : '') +
+      '<input data-key="' + esc(s.key) + '" placeholder="' + (s.secret ? (s.is_set ? '변경하려면 새 값 입력 (비우면 유지)' : '값 입력') : esc(s.value || '값 입력')) + '"' +
+        (s.secret ? ' type="password"' : (s.is_set ? ' value="' + esc(s.value) + '"' : '')) + '>' +
+      (s.is_set ? '<button type="button" class="btn" style="margin-top:5px" onclick="clearOne(\'' + esc(s.key) + '\')">비우기</button>' : '') +
+      '</div>').join('') + '</div>').join('');
+  const b = d.boot_only || {};
+  $('#bootTable').innerHTML = Object.entries(b).map(([k, v]) =>
+    '<tr><td class="mini"><b>' + esc(k) + '</b></td><td class="mono">' + esc(v) + '</td></tr>').join('');
+}
+async function save(ev) {
+  ev.preventDefault();
+  const payload = {};
+  document.querySelectorAll('#groups input').forEach(inp => {
+    const v = inp.value;
+    // secret with placeholder-only (unchanged) → skip; others send if non-empty or explicitly changed
+    if (v !== '') payload[inp.dataset.key] = v;
+  });
+  if (Object.keys(payload).length === 0) { showResult('bad', '변경할 값을 입력하세요. (기존 값 유지는 빈 칸)'); return false; }
+  try {
+    const d = await api('PUT', '/api/settings', JSON.stringify(payload));
+    showResult('ok', '✅ 저장·적용 완료. ' + (d.note || ''));
+    await load();
+  } catch (e) { showResult('bad', '✘ ' + e.message); }
+  return false;
+}
+async function clearOne(key) {
+  if (!confirm('[' + key + '] 값을 삭제할까요? (플래그/환경변수 기본값으로 되돌아갑니다)')) return;
+  try { await api('PUT', '/api/settings', JSON.stringify({ [key]: null })); await load(); showResult('ok', '삭제되었습니다.'); }
+  catch (e) { showResult('bad', e.message); }
+}
+function showResult(cls, msg) { const el = $('#result'); el.className = 'result ' + cls; el.textContent = msg; }
+JASQL.mount({ page: 'settings', onReady: init });
+</script>
+</body>
+</html>

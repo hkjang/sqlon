@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlon 호출 통계</title>
+<style>
+  :root{
+    --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
+    --blue:#2563eb;--blue-soft:#e8efff;--green:#15803d;--green-soft:#e6f6ec;
+    --amber:#b45309;--amber-soft:#fdf3e2;--red:#b91c1c;--red-soft:#fdeaea;
+    --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
+  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header h1{font-size:16px;margin:0 10px 0 0;}
+  .grow{flex:1;}
+  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:180px;}
+  main{max-width:1400px;margin:0 auto;padding:16px 20px 90px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+  .card h2{font-size:14px;margin:0 0 12px;color:var(--sub);font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;}
+  .kpi .n{font-size:28px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px;}
+  .kpi .l{font-size:12.5px;color:var(--sub);margin-top:2px;}
+  .kpi .s{font-size:11.5px;color:var(--sub);margin-top:4px;}
+  .kpi.blue .n{color:var(--blue);} .kpi.amber .n{color:var(--amber);} .kpi.green .n{color:var(--green);}
+  .cols2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:900px){.cols2{grid-template-columns:1fr;}}
+  .bar-row{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:13px;}
+  .bar-row .lab{width:150px;flex-shrink:0;font-family:var(--mono);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .bar-row .track{flex:1;background:#eef1f5;border-radius:5px;height:16px;overflow:hidden;}
+  .bar-row .fill{height:100%;background:var(--blue);border-radius:5px;}
+  .bar-row .val{width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--sub);}
+  .toolbar{display:flex;gap:10px;align-items:center;}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 12px;font-size:13px;cursor:pointer;}
+  .btn:hover{border-color:var(--blue);color:var(--blue);}
+  .mini{font-size:12px;color:var(--sub);}
+  canvas{width:100%;height:160px;display:block;}
+  .empty{color:var(--sub);font-size:13px;padding:8px 0;}
+  .hero{background:linear-gradient(135deg,#10203c,#295a85);color:#fff;border:0;padding:20px}.hero h2{color:#fff;text-transform:none;font-size:20px;margin:0 0 4px}.hero p{margin:0;color:#cfdeed}.hero .btn{background:#fff;font-weight:700}.insight{border-left:4px solid var(--blue);padding:12px 14px;background:#f3f7fd;border-radius:0 9px 9px 0;margin-bottom:14px}.insight b{display:block;margin-bottom:2px}.fill.bad{background:var(--red)}.fill.green{background:var(--green)}.linkrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.linkbtn{color:var(--blue);text-decoration:none;background:#e8efff;padding:6px 10px;border-radius:7px;font-size:12px}
+  @media(max-width:700px){main{padding:12px}.hero .toolbar{align-items:flex-start;flex-direction:column}.bar-row .lab{width:110px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 호출 통계</h1>
+  <span class="mini" id="scopeChip"></span>
+  <input id="adminToken" type="password" placeholder="관리 토큰">
+  <span class="grow"></span>
+  <label class="mini" id="allWrap" style="display:none;color:#cfe0ff"><input type="checkbox" id="allChk"> 전체 사용자 (admin)</label>
+</header>
+<main>
+  <div class="card hero"><div class="toolbar"><div><h2>사용 흐름과 품질 신호를 한눈에 확인하세요</h2><p>호출량뿐 아니라 SQL 유효율과 실행 상태를 확인하고 개선이 필요한 작업으로 바로 이동합니다.</p></div><span class="grow"></span><div><button class="btn" id="refreshBtn">새로고침</button><div class="mini" id="updatedAt" style="color:#cbdcf5;margin-top:4px"></div></div></div></div>
+  <div class="insight" id="insight"><b>데이터를 분석하고 있습니다</b><span class="mini">잠시만 기다려주세요.</span></div>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="cols2">
+    <div class="card">
+      <h2>최근 14일 호출 추이</h2>
+      <canvas id="timeline" width="640" height="160"></canvas>
+    </div>
+    <div class="card">
+      <h2>도구별 호출</h2>
+      <div id="byTool"><div class="empty">데이터 없음</div></div>
+    </div>
+  </div>
+
+  <div class="cols2">
+    <div class="card">
+      <h2>실행 상태 분포</h2>
+      <div id="byStatus"><div class="empty">실행 기록 없음</div></div>
+    </div>
+    <div class="card" id="byUserCard" style="display:none">
+      <h2>사용자별 호출 (전체 보기)</h2>
+      <div id="byUser"></div>
+    </div>
+  </div>
+
+  <div class="card" id="clarSugCard" style="display:none">
+    <h2>재질문 학습 제안 (admin)</h2>
+    <div class="mini" style="margin-bottom:8px">같은 재질문이 반복되면 사전 보강 후보입니다 — 승격하면 재질문이 원천에서 사라집니다. <a href="/admin/editor?ds=metrics">지표사전 편집 →</a> · <a href="/admin/editor?ds=glossary">용어사전 편집 →</a></div>
+    <div id="clarSug"><div class="empty">데이터 없음</div></div>
+  </div>
+  <div class="card"><h2>다음 작업</h2><div class="linkrow"><a class="linkbtn" href="/admin/ask">새 질의 준비</a><a class="linkbtn" href="/admin/history">실패 이력 확인</a><a class="linkbtn" href="/admin/quality">메타 품질 점검</a><a class="linkbtn" href="/admin/editor">사전·지표 보강</a></div></div>
+</main>
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let IS_ADMIN = false;
+const tokenInput = $('#adminToken');
+tokenInput.value = localStorage.getItem('jasqlAdminToken') || '';
+tokenInput.addEventListener('change', () => localStorage.setItem('jasqlAdminToken', tokenInput.value));
+function headers(){ const h={}; if(tokenInput.value) h['X-Admin-Token']=tokenInput.value; return h; }
+
+async function load() {
+  const all = IS_ADMIN && $('#allChk').checked;
+  try {
+    const res = await fetch('/api/mcp-stats' + (all ? '?all=true' : ''), { headers: headers() });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'HTTP ' + res.status);
+    $('#scopeChip').textContent = d.per_user ? '전체 사용자' : '내 활동';
+    renderKPIs(d);
+    drawTimeline(d.timeline || []);
+    renderBars('#byTool', d.by_tool || {}, '도구 호출 없음');
+    renderBars('#byStatus', d.by_exec_status || {}, '실행 기록 없음');
+    $('#updatedAt').textContent='갱신 '+new Date().toLocaleTimeString();renderInsight(d);
+    if (d.per_user) {
+      $('#byUserCard').style.display = '';
+      const m = {}; (d.users || []).forEach(u => m[u.username || u.user_id] = u.count);
+      renderBars('#byUser', m, '사용자 없음');
+    } else { $('#byUserCard').style.display = 'none'; }
+  } catch (e) {
+    $('#kpis').innerHTML = '<div class="card"><div class="l">' + esc(e.message) +
+      (String(e.message).includes('meta db') ? ' — 인증 모드(메타 DB)에서만 제공됩니다.' : '') + '</div></div>';
+  }
+}
+function kpi(n, l, s, cls){ return '<div class="kpi '+(cls||'')+'"><div class="n">'+n+'</div><div class="l">'+esc(l)+'</div>'+(s?'<div class="s">'+esc(s)+'</div>':'')+'</div>'; }
+function renderKPIs(d){
+  const validRate=d.generated?Math.round((d.generated_valid||0)/d.generated*100):0;
+  $('#kpis').innerHTML =
+    kpi(d.total||0, '총 MCP 호출') +
+    kpi(d.prompts||0, '프롬프트', '사용자 질문', 'blue') +
+    kpi(validRate+'%', 'SQL 유효율', (d.generated_valid||0)+' / '+(d.generated||0), validRate>=90?'green':'amber') +
+    kpi(d.executions||0, '실행', '실제 DB 조회', 'green') +
+    kpi((d.total_rows||0).toLocaleString(), '반환 행 합계');
+}
+function renderInsight(d){const rate=d.generated?Math.round((d.generated_valid||0)/d.generated*100):null;let title='아직 판단할 데이터가 충분하지 않습니다',msg='질의와 실행 활동이 쌓이면 개선 신호를 안내합니다.';
+  if(rate!==null){if(rate>=90){title='SQL 생성 품질이 안정적입니다';msg='유효율 '+rate+'%입니다. 실행 실패 상태가 있는지 함께 확인하세요.';}else{title='SQL 생성 품질 개선이 필요합니다';msg='유효율 '+rate+'%입니다. 내 이력의 invalid 생성과 재질문 학습 제안을 우선 확인하세요.';}}
+  $('#insight').innerHTML='<b>'+esc(title)+'</b><span class="mini">'+esc(msg)+'</span>';}
+function renderBars(sel, obj, emptyMsg){
+  const entries = Object.entries(obj).sort((a,b)=>b[1]-a[1]);
+  if (!entries.length){ $(sel).innerHTML = '<div class="empty">'+esc(emptyMsg)+'</div>'; return; }
+  const max = Math.max(...entries.map(e=>e[1]));
+  $(sel).innerHTML = entries.map(([k,v]) =>
+    '<div class="bar-row"><span class="lab" title="'+esc(k)+'">'+esc(k)+'</span>'+
+    '<span class="track"><span class="fill" style="width:'+(max?Math.round(v/max*100):0)+'%"></span></span>'+
+    '<span class="val">'+v+'</span></div>').join('');
+}
+function drawTimeline(tl){
+  const c = $('#timeline'), dpr = window.devicePixelRatio || 1;
+  const W = c.clientWidth || 640, H = 160;
+  c.width = W*dpr; c.height = H*dpr;
+  const g = c.getContext('2d'); g.scale(dpr,dpr);
+  g.clearRect(0,0,W,H);
+  const pad = {l:28,r:8,t:10,b:22};
+  const max = Math.max(1, ...tl.map(d=>d.count));
+  const bw = (W-pad.l-pad.r)/tl.length;
+  // gridlines + y labels
+  g.strokeStyle='#eef1f5'; g.fillStyle='#8794a8'; g.font='10px sans-serif'; g.textAlign='right';
+  for(let i=0;i<=2;i++){ const y=pad.t+(H-pad.t-pad.b)*i/2; const val=Math.round(max*(1-i/2));
+    g.beginPath(); g.moveTo(pad.l,y); g.lineTo(W-pad.r,y); g.stroke(); g.fillText(val, pad.l-4, y+3); }
+  // bars
+  tl.forEach((d,i)=>{
+    const h=(d.count/max)*(H-pad.t-pad.b);
+    const x=pad.l+i*bw+2, y=H-pad.b-h;
+    g.fillStyle = d.count? '#2563eb':'#cbd5e6';
+    g.beginPath(); const r=3,w=Math.max(2,bw-4);
+    g.roundRect(x,y,w,Math.max(h,d.count?2:1),r); g.fill();
+  });
+  // x labels (every ~3rd)
+  g.fillStyle='#8794a8'; g.textAlign='center'; g.font='9px sans-serif';
+  tl.forEach((d,i)=>{ if(i%3===0||i===tl.length-1){ g.fillText(d.day.slice(5), pad.l+i*bw+bw/2, H-8); }});
+}
+
+$('#allChk').addEventListener('change', load);
+$('#refreshBtn').onclick=load;
+window.addEventListener('resize', () => { clearTimeout(window._rt); window._rt = setTimeout(load, 200); });
+
+async function loadClarSuggestions() {
+  try {
+    const res = await fetch('/api/clarification-suggestions', { headers: headers() });
+    if (!res.ok) return;
+    const d = await res.json();
+    const sug = d.suggestions || [];
+    $('#clarSugCard').style.display = '';
+    $('#clarSug').innerHTML = sug.length === 0
+      ? '<div class="empty">반복되는 재질문이 아직 없습니다 (2회 이상 반복 시 표시).</div>'
+      : sug.map(s2 =>
+        '<div class="bar-row"><span class="lab" title="' + esc(s2.clarification_id) + '">' + esc(s2.clarification_id) + '</span>' +
+        '<span style="flex:1;font-size:12.5px">' + esc(s2.suggestion) +
+        ' <span class="mini">(최다 답변: "' + esc(s2.top_answer) + '" ' + s2.top_answer_count + '회)</span></span>' +
+        '<span class="val">' + s2.occurrences + '회</span></div>').join('');
+  } catch (e) { /* non-fatal */ }
+}
+
+JASQL.mount({ page: 'stats', onReady(me) {
+  if (!me.auth_enabled) { $('#kpis').innerHTML = '<div class="card"><div class="l">단독 모드에서는 통계가 없습니다. 인증 모드(메타 DB)에서 MCP 활동이 집계됩니다.</div></div>'; return; }
+  IS_ADMIN = me.user && me.user.role === 'admin';
+  if (IS_ADMIN) { $('#allWrap').style.display = ''; loadClarSuggestions(); }
+  load();
+}});
+</script>
+</body>
+</html>

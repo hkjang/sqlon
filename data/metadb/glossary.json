@@ -1,0 +1,112 @@
+{
+ "entries": [
+  {
+   "term": "사용자",
+   "category": "entity",
+   "synonyms": [
+    "유저",
+    "계정",
+    "user",
+    "account",
+    "멤버"
+   ]
+  },
+  {
+   "term": "활성 사용자",
+   "category": "entity",
+   "synonyms": [
+    "active user",
+    "유효 사용자",
+    "is_active"
+   ]
+  },
+  {
+   "term": "세션",
+   "category": "entity",
+   "synonyms": [
+    "session",
+    "로그인 세션",
+    "접속"
+   ]
+  },
+  {
+   "term": "MCP 키",
+   "category": "entity",
+   "synonyms": [
+    "api key",
+    "api 키",
+    "mcp key",
+    "키"
+   ]
+  },
+  {
+   "term": "프로파일",
+   "category": "entity",
+   "synonyms": [
+    "profile",
+    "접속 프로파일",
+    "db 프로파일",
+    "커넥션"
+   ]
+  },
+  {
+   "term": "활동",
+   "category": "entity",
+   "synonyms": [
+    "activity",
+    "호출",
+    "로그",
+    "이력",
+    "audit"
+   ]
+  },
+  {
+   "term": "도구",
+   "category": "entity",
+   "synonyms": [
+    "tool",
+    "mcp tool",
+    "툴"
+   ]
+  },
+  {
+   "term": "관리자",
+   "category": "entity",
+   "synonyms": [
+    "admin",
+    "어드민"
+   ]
+  },
+  {
+   "term": "공개범위",
+   "category": "dimension",
+   "synonyms": [
+    "visibility",
+    "공유",
+    "비공개",
+    "shared",
+    "private"
+   ]
+  },
+  {
+   "term": "폐기",
+   "category": "dimension",
+   "synonyms": [
+    "revoked",
+    "revoked_at",
+    "폐기일시",
+    "회수"
+   ]
+  },
+  {
+   "term": "상태",
+   "category": "dimension",
+   "synonyms": [
+    "status",
+    "실패",
+    "성공",
+    "오류"
+   ]
+  }
+ ]
+}

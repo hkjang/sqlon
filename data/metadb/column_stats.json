@@ -1,0 +1,71 @@
+[
+ {
+  "schema_name": "public",
+  "table_name": "jamypg_mcp_activity",
+  "column_name": "tool",
+  "row_count": 51,
+  "null_ratio": 0.0,
+  "distinct_count": 5,
+  "top_values": [
+   {
+    "value": "run_sql_safely",
+    "count": 31
+   },
+   {
+    "value": "search_schema",
+    "count": 7
+   },
+   {
+    "value": "validate_sql",
+    "count": 7
+   },
+   {
+    "value": "analyze_question",
+    "count": 3
+   },
+   {
+    "value": "explain_sql",
+    "count": 3
+   }
+  ]
+ },
+ {
+  "schema_name": "public",
+  "table_name": "jamypg_mcp_activity",
+  "column_name": "elapsed_ms",
+  "row_count": 51,
+  "null_ratio": 0.0,
+  "distinct_count": 20,
+  "min": "15",
+  "max": "5000"
+ },
+ {
+  "schema_name": "public",
+  "table_name": "jamypg_users",
+  "column_name": "role",
+  "row_count": 10,
+  "null_ratio": 0.0,
+  "distinct_count": 2,
+  "top_values": [
+   {
+    "value": "user",
+    "count": 8
+   },
+   {
+    "value": "admin",
+    "count": 2
+   }
+  ]
+ },
+ {
+  "schema_name": "public",
+  "table_name": "jamypg_mcp_activity",
+  "column_name": "created_at",
+  "row_count": 51,
+  "null_ratio": 0.0,
+  "distinct_count": 30,
+  "min": "2026-07-01 09:00:00",
+  "max": "2026-07-09 15:00:00",
+  "last_updated": "20260709"
+ }
+]
