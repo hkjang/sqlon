@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<title>SQLON 변경 관리</title>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--line:#dce4ee;--ink:#172033;--sub:#607086;--blue:#2563eb;--ok:#15803d;--warn:#a16207;--bad:#b91c1c;--mono:ui-monospace,'Cascadia Code',Consolas,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif}
+header{padding:13px 26px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}
+select,input,textarea,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff;font:inherit}button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}button.danger{background:var(--bad);border-color:var(--bad);color:#fff}button.mini{padding:3px 9px;font-size:12px}button:disabled{opacity:.45;cursor:not-allowed}
+main{max-width:1500px;margin:auto;padding:20px 26px 60px}
+.notice{padding:11px 14px;background:#eef4ff;border:1px solid #c4d5f5;border-radius:10px;margin-bottom:14px;font-size:13px;color:#1d3f7a}
+.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}.message.ok{background:#f0fdf4;border-color:#b7e4c3;color:#166534}
+.cards{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:14px}.card,.panel{background:var(--card);border:1px solid var(--line);border-radius:11px}.card{padding:14px}.card small{display:block;color:var(--sub)}.card b{font-size:24px}.bad b{color:var(--bad)}.warn b{color:var(--warn)}.ok b{color:var(--ok)}
+.panel{margin-bottom:14px;overflow:hidden}.panel h2{font-size:15px;margin:0;padding:13px 15px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}.panel h2 .grow{flex:1}
+.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap;vertical-align:top}th{font-size:12px;color:#536176;background:#f8fafc}
+.muted{color:var(--sub);font-size:12px}.empty{padding:32px;text-align:center;color:var(--sub)}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;background:#eef2f7;font-size:11.5px;font-weight:700}
+.st-draft{background:#eef2f7;color:#475569}.st-review{background:#fef3c7;color:#854d0e}.st-approved{background:#dbeafe;color:#1d4ed8}.st-run{background:#ede9fe;color:#6d28d9}.st-done{background:#dcfce7;color:#166534}.st-fail{background:#fee2e2;color:#991b1b}.st-cancel{background:#f1f5f9;color:#64748b}
+.rk-low{background:#f1f5f9;color:#475569}.rk-medium{background:#e0f2fe;color:#075985}.rk-high{background:#fef3c7;color:#854d0e}.rk-critical{background:#fee2e2;color:#991b1b}.rk-emergency{background:#fae8ff;color:#86198f}
+.form{padding:15px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:11px;margin-bottom:11px}label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--sub)}label.f input,label.f select{width:100%}
+.step{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:#fafcff}.step h3{margin:0 0 8px;font-size:13px;display:flex;align-items:center}.step h3 .grow{flex:1}
+.step textarea{width:100%;min-height:44px;font-family:var(--mono);font-size:12.5px;resize:vertical}.steplabel{font-size:11.5px;color:var(--sub);margin:6px 0 3px}
+.modal{position:fixed;inset:0;background:rgba(13,18,28,.55);display:none;align-items:flex-start;justify-content:center;padding:30px 16px;z-index:60;overflow:auto}.modal.open{display:flex}
+.mpanel{width:min(960px,100%);background:#fff;border-radius:14px;box-shadow:0 30px 70px rgba(0,0,0,.3)}
+.mhead{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:16px 20px;display:flex;align-items:center;gap:12px;border-radius:14px 14px 0 0}.mhead h2{margin:0;font-size:17px}.mhead .x{margin-left:auto;border:0;background:#f1f3f6;border-radius:50%;width:32px;height:32px;font-size:18px}
+.mbody{padding:18px 20px}.kv{display:grid;grid-template-columns:130px 1fr;gap:6px 12px;font-size:13px;margin-bottom:14px}.kv dt{color:var(--sub)}.kv dd{margin:0;word-break:break-word}
+.sqlbox{font-family:var(--mono);font-size:12.5px;background:#f7f9fc;border:1px solid var(--line);border-radius:8px;padding:9px 11px;white-space:pre-wrap;word-break:break-word;margin:3px 0 8px}
+.sqlbox.comp{background:#fff7f5;border-color:#f3cdc4}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:14px 20px;border-top:1px solid var(--line)}
+@media(max-width:950px){.cards{grid-template-columns:repeat(3,1fr)}main{padding:15px}.kv{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>변경 관리</h1><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><button class="primary" id="refresh">새로고침</button><button id="newToggle">➕ 변경계획 작성</button><span class="grow"></span><span class="muted" id="fresh">조회 전</span></header>
+<main>
+  <div class="notice">모든 쓰기 작업은 <b>변경계획 → 제출 → 승인 → 실행 → 검증</b> 흐름을 따릅니다. 각 단계에는 실행 문장과 함께 <b>검증 문장·보상(롤백) 문장</b>이 필수이며, 중간 이상 위험은 승인 없이 실행할 수 없습니다. 실행·롤백을 포함한 모든 결정은 감사 로그에 기록됩니다.</div>
+  <div id="messages"></div>
+  <section class="cards">
+    <div class="card"><small>전체</small><b id="kTotal">-</b></div>
+    <div class="card warn"><small>승인 대기</small><b id="kReview">-</b></div>
+    <div class="card"><small>실행 대기</small><b id="kApproved">-</b></div>
+    <div class="card"><small>실행 중</small><b id="kRunning">-</b></div>
+    <div class="card bad"><small>실패·롤백 필요</small><b id="kFailed">-</b></div>
+    <div class="card ok"><small>완료</small><b id="kDone">-</b></div>
+  </section>
+
+  <section class="panel" id="newPanel" style="display:none">
+    <h2>새 변경계획 <span class="muted">— 이 단계에서는 DB가 변경되지 않습니다</span></h2>
+    <div class="form">
+      <div class="grid">
+        <label class="f">변경 ID<input id="fId"></label>
+        <label class="f">대상 프로파일<select id="fProfile"></select></label>
+        <label class="f">대상 객체 (인스턴스/스키마/객체)<input id="fTarget" placeholder="예: public.orders"></label>
+        <label class="f">위험도<select id="fRisk">
+          <option value="low">낮음 — 승인 불필요</option>
+          <option value="medium" selected>중간 — 승인 1인</option>
+          <option value="high">높음 — 승인 1인</option>
+          <option value="critical">치명적 — 서로 다른 2인 승인</option>
+          <option value="emergency">비상 — 사후 승인 1인</option>
+        </select></label>
+        <label class="f">유지보수 창 (선택)<input id="fWindow" placeholder="예: 토 02:00-04:00 KST"></label>
+      </div>
+      <label class="f" style="margin-bottom:11px">변경 사유 (업무·운영 목적)<input id="fReason" placeholder="예: 조회 지연 개선을 위한 인덱스 추가"></label>
+      <div id="steps"></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="mini" id="addStep">단계 추가</button>
+        <span class="muted">각 단계는 실행 문장, 사후 검증 문장, 보상(롤백) 문장을 모두 포함해야 합니다.</span>
+        <span class="grow" style="flex:1"></span>
+        <button class="primary" id="createPlan">변경계획 생성 (draft)</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>변경계획 목록 <span class="grow"></span><label class="muted" style="display:flex;gap:6px;align-items:center">상태 <select id="filterState"><option value="">전체</option></select></label></h2>
+    <div class="scroll"><table><thead><tr><th>ID</th><th>프로파일</th><th>대상</th><th>위험도</th><th>상태</th><th>승인</th><th>생성</th><th>갱신</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="9" class="empty">조회 전</td></tr></tbody></table></div>
+  </section>
+</main>
+
+<div class="modal" id="detail"><div class="mpanel">
+  <div class="mhead"><div><div class="muted" id="dState"></div><h2 id="dTitle"></h2></div><button class="x" id="dClose" aria-label="닫기">×</button></div>
+  <div class="mbody" id="dBody"></div>
+  <div class="actions" id="dActions"></div>
+</div></div>
+
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const token=$('#adminToken');token.value=localStorage.getItem('sqlonAdminToken')||localStorage.getItem('jasqlAdminToken')||'';token.onchange=()=>localStorage.setItem('sqlonAdminToken',token.value);
+function headers(extra){const h=Object.assign({Accept:'application/json','Content-Type':'application/json'},extra||{});if(token.value)h['X-Admin-Token']=token.value;return h}
+function when(v){if(!v)return '-';const d=new Date(v);return isNaN(d)?esc(v):d.toLocaleString('ko-KR')}
+async function call(method,path,body,extra){const r=await fetch(path,{method:method,headers:headers(extra),body:body?JSON.stringify(body):undefined});const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.error||r.statusText);return b}
+function note(text,kind){$('#messages').innerHTML='<div class="message '+(kind||'')+'">'+esc(text)+'</div>';if(kind==='ok')setTimeout(()=>{$('#messages').innerHTML=''},4500)}
+
+const STATES={draft:['초안','st-draft'],analyzing:['분석 중','st-draft'],review_required:['승인 대기','st-review'],approved:['승인됨','st-approved'],scheduled:['예약됨','st-approved'],executing:['실행 중','st-run'],verifying:['검증 중','st-run'],completed:['완료','st-done'],failed:['실패','st-fail'],rollback_required:['롤백 필요','st-fail'],rolling_back:['롤백 중','st-run'],rolled_back:['롤백 완료','st-cancel'],cancelled:['취소됨','st-cancel']};
+const RISKS={low:['낮음','rk-low'],medium:['중간','rk-medium'],high:['높음','rk-high'],critical:['치명적','rk-critical'],emergency:['비상','rk-emergency']};
+function stBadge(s){const m=STATES[s]||[s,'st-draft'];return '<span class="badge '+m[1]+'">'+esc(m[0])+'</span>'}
+function rkBadge(r){const m=RISKS[r]||[r,'rk-low'];return '<span class="badge '+m[1]+'">'+esc(m[0])+'</span>'}
+
+let plans=[],profiles=[];
+async function loadProfiles(){try{const b=await call('GET','/api/db-profiles');profiles=b.profiles||[];$('#fProfile').innerHTML=profiles.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.id)+(p.name?' — '+esc(p.name):'')+' · '+esc(p.type)+'</option>').join('')||'<option value="">프로파일 없음</option>'}catch(e){/* 목록 화면은 프로파일 없이도 동작 */}}
+async function load(){$('#fresh').textContent='조회 중…';try{const b=await call('GET','/api/changes');plans=b.data||[];render();$('#fresh').textContent='최신 조회 '+when(b.collected_at)}catch(e){note('변경계획 조회 실패: '+e.message,'error');$('#fresh').textContent='조회 실패'}}
+function render(){
+  const c={review:0,approved:0,running:0,failed:0,done:0};
+  plans.forEach(p=>{if(p.state==='review_required')c.review++;else if(p.state==='approved'||p.state==='scheduled')c.approved++;else if(p.state==='executing'||p.state==='verifying'||p.state==='rolling_back')c.running++;else if(p.state==='failed'||p.state==='rollback_required')c.failed++;else if(p.state==='completed')c.done++});
+  $('#kTotal').textContent=plans.length;$('#kReview').textContent=c.review;$('#kApproved').textContent=c.approved;$('#kRunning').textContent=c.running;$('#kFailed').textContent=c.failed;$('#kDone').textContent=c.done;
+  const seen=[...new Set(plans.map(p=>p.state))];
+  $('#filterState').innerHTML='<option value="">전체</option>'+seen.map(s=>'<option value="'+esc(s)+'"'+(s===filter?' selected':'')+'>'+esc((STATES[s]||[s])[0])+'</option>').join('');
+  const list=filter?plans.filter(p=>p.state===filter):plans;
+  $('#rows').innerHTML=list.length?list.map(p=>'<tr><td class="muted" style="font-family:var(--mono)">'+esc(p.id)+'</td><td>'+esc(p.profile_id)+'</td><td>'+esc(p.target)+'</td><td>'+rkBadge(p.risk)+'</td><td>'+stBadge(p.state)+'</td><td>'+((p.approvals||[]).length)+'/'+esc(p.required_approvals)+'</td><td class="muted">'+when(p.created_at)+'</td><td class="muted">'+when(p.updated_at)+'</td><td><button class="mini" data-open="'+esc(p.id)+'">상세·작업</button></td></tr>').join(''):'<tr><td colspan="9" class="empty">'+(plans.length?'해당 상태의 변경계획이 없습니다.':'등록된 변경계획이 없습니다. ➕ 변경계획 작성으로 시작하세요.')+'</td></tr>';
+  document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openDetail(b.dataset.open));
+}
+let filter='';$('#filterState').onchange=e=>{filter=e.target.value;render()};
+
+/* 상세 + 상태별 작업 */
+function openDetail(id){
+  const p=plans.find(x=>x.id===id);if(!p)return;
+  $('#dTitle').textContent=p.id;$('#dState').innerHTML=stBadge(p.state)+' '+rkBadge(p.risk);
+  const steps=(p.steps||[]).map(s=>'<div class="step"><h3>단계 '+esc(s.order)+'</h3><div class="steplabel">실행 문장</div><div class="sqlbox">'+esc(s.command)+'</div><div class="steplabel">사후 검증</div><div class="sqlbox">'+esc(s.verification)+'</div><div class="steplabel">보상(롤백) 문장</div><div class="sqlbox comp">'+esc(s.compensation)+'</div></div>').join('');
+  const approvals=(p.approvals||[]).length?('<table><thead><tr><th>승인 ID</th><th>승인자</th><th>시각</th></tr></thead><tbody>'+p.approvals.map(a=>'<tr><td style="font-family:var(--mono)">'+esc(a.id)+'</td><td>'+esc(a.actor)+'</td><td class="muted">'+when(a.at)+'</td></tr>').join('')+'</tbody></table>'):'<div class="muted">승인 이력 없음</div>';
+  $('#dBody').innerHTML='<dl class="kv">'+
+    '<dt>대상 프로파일</dt><dd>'+esc(p.profile_id)+'</dd><dt>대상 객체</dt><dd><b>'+esc(p.target)+'</b></dd>'+
+    '<dt>변경 사유</dt><dd>'+esc(p.reason)+'</dd>'+
+    '<dt>필요 승인</dt><dd>'+((p.approvals||[]).length)+' / '+esc(p.required_approvals)+'</dd>'+
+    (p.maintenance_window?'<dt>유지보수 창</dt><dd>'+esc(p.maintenance_window)+'</dd>':'')+
+    (p.expected_lock?'<dt>예상 잠금</dt><dd>'+esc(p.expected_lock)+'</dd>':'')+
+    ((p.preconditions||[]).length?'<dt>사전 조건</dt><dd>'+p.preconditions.map(esc).join('<br>')+'</dd>':'')+
+    '<dt>생성 / 갱신</dt><dd>'+when(p.created_at)+' / '+when(p.updated_at)+'</dd></dl>'+
+    '<h3 style="font-size:14px;margin:0 0 8px">실행 단계 ('+(p.steps||[]).length+')</h3>'+steps+
+    '<h3 style="font-size:14px;margin:14px 0 8px">승인 이력</h3>'+approvals;
+  const acts=[];
+  if(p.state==='draft')acts.push(btn('제출 (검토 요청)','primary',()=>act('POST','/api/changes/'+encodeURIComponent(p.id)+'/submit',null,null,'제출됨')));
+  if(p.state==='review_required')acts.push(btn('승인','primary',()=>act('POST','/api/changes/'+encodeURIComponent(p.id)+'/approve',null,null,'승인이 기록되었습니다')));
+  if(p.state==='approved'||p.state==='scheduled')acts.push(btn('실행','danger',()=>executePlan(p)));
+  if(p.state==='rollback_required')acts.push(btn('보상 작업 실행 (롤백)','danger',()=>{if(confirm('['+p.target+'] 승인된 보상 작업을 역순으로 실행합니다. 계속할까요?'))act('POST','/api/changes/'+encodeURIComponent(p.id)+'/rollback',null,null,'롤백 완료')}));
+  if(['draft','analyzing','review_required','approved','scheduled'].includes(p.state))acts.push(btn('취소','',()=>{if(confirm('['+p.id+'] 변경계획을 취소합니다. 취소된 계획도 이력으로 남습니다.'))act('POST','/api/changes/'+encodeURIComponent(p.id)+'/cancel',null,null,'취소됨')}));
+  $('#dActions').innerHTML='';acts.forEach(a=>$('#dActions').appendChild(a));
+  if(!acts.length)$('#dActions').innerHTML='<span class="muted">이 상태에서 수행할 수 있는 작업이 없습니다.</span>';
+  $('#detail').classList.add('open');
+}
+function btn(label,cls,fn){const b=document.createElement('button');if(cls)b.className=cls;b.textContent=label;b.onclick=fn;return b}
+async function act(method,path,body,extra,okMsg){try{await call(method,path,body,extra);$('#detail').classList.remove('open');note(okMsg,'ok');await load()}catch(e){note('작업 실패: '+e.message,'error')}}
+function executePlan(p){
+  // 최종 실행 전 대상 재확인 (UX-DNG-004) + 실행/보상 문장 개수 안내
+  const summary='프로파일 ['+p.profile_id+'] 대상 ['+p.target+']에 승인된 '+(p.steps||[]).length+'개 단계를 실행합니다.\n각 단계는 실행 직전 재검증과 사후 검증을 거치며, 실패 시 rollback_required로 전환됩니다.';
+  let extra=null;
+  if(p.required_approvals>0){
+    const ids=(p.approvals||[]).map(a=>a.id);
+    if(!ids.length){note('승인 ID가 없습니다. 먼저 승인을 받으세요.','error');return}
+    const chosen=ids.length===1?ids[0]:prompt('사용할 승인 ID를 입력하세요:\n'+ids.join('\n'),ids[ids.length-1]);
+    if(!chosen)return;extra={'X-Approval-ID':chosen.trim()};
+  }
+  if(!confirm(summary+'\n\n계속할까요?'))return;
+  act('POST','/api/changes/'+encodeURIComponent(p.id)+'/execute',null,extra,'실행 및 검증 완료');
+}
+$('#dClose').onclick=()=>$('#detail').classList.remove('open');
+$('#detail').onclick=e=>{if(e.target.id==='detail')$('#detail').classList.remove('open')};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#detail').classList.remove('open')});
+
+/* 새 변경계획 */
+function stepRow(i){
+  const div=document.createElement('div');div.className='step';
+  div.innerHTML='<h3>단계 <span class="n">'+i+'</span><span class="grow"></span><button class="mini" type="button" data-del>삭제</button></h3>'+
+    '<div class="steplabel">실행 문장 (command)</div><textarea data-k="command" placeholder="예: CREATE INDEX CONCURRENTLY idx_orders_created ON public.orders(created_at)"></textarea>'+
+    '<div class="steplabel">사후 검증 (verification) — 읽기 전용 풀로 실행</div><textarea data-k="verification" placeholder="예: SELECT 1 FROM pg_indexes WHERE indexname=\'idx_orders_created\'"></textarea>'+
+    '<div class="steplabel">보상(롤백) 문장 (compensation)</div><textarea data-k="compensation" placeholder="예: DROP INDEX IF EXISTS idx_orders_created"></textarea>';
+  div.querySelector('[data-del]').onclick=()=>{div.remove();renumber()};
+  return div;
+}
+function renumber(){document.querySelectorAll('#steps .step .n').forEach((el,i)=>el.textContent=i+1)}
+$('#addStep').onclick=()=>{$('#steps').appendChild(stepRow(document.querySelectorAll('#steps .step').length+1))};
+function suggestId(){const d=new Date(),z=n=>String(n).padStart(2,'0');return 'chg-'+d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+'-'+z(d.getHours())+z(d.getMinutes())+z(d.getSeconds())}
+$('#newToggle').onclick=()=>{const p=$('#newPanel');const open=p.style.display!=='none';p.style.display=open?'none':'';if(!open){if(!$('#fId').value)$('#fId').value=suggestId();if(!document.querySelectorAll('#steps .step').length)$('#addStep').click();p.scrollIntoView({behavior:'smooth'})}};
+$('#createPlan').onclick=async()=>{
+  const steps=[...document.querySelectorAll('#steps .step')].map((el,i)=>({order:i+1,command:el.querySelector('[data-k=command]').value.trim(),verification:el.querySelector('[data-k=verification]').value.trim(),compensation:el.querySelector('[data-k=compensation]').value.trim()}));
+  const plan={id:$('#fId').value.trim(),profile_id:$('#fProfile').value,target:$('#fTarget').value.trim(),reason:$('#fReason').value.trim(),risk:$('#fRisk').value,maintenance_window:$('#fWindow').value.trim(),steps:steps};
+  if(!plan.id||!plan.profile_id||!plan.target||!plan.reason){note('ID, 프로파일, 대상, 사유는 필수입니다.','error');return}
+  if(!steps.length||steps.some(s=>!s.command||!s.verification||!s.compensation)){note('모든 단계에 실행·검증·보상 문장이 필요합니다. 보상 문장이 없는 변경은 생성할 수 없습니다.','error');return}
+  try{await call('POST','/api/changes',plan,{'Idempotency-Key':plan.id});note('변경계획이 생성되었습니다 (draft). 목록에서 제출→승인→실행을 진행하세요.','ok');$('#newPanel').style.display='none';$('#fId').value='';$('#fTarget').value='';$('#fReason').value='';$('#steps').innerHTML='';await load()}catch(e){note('생성 실패: '+e.message,'error')}
+};
+$('#refresh').onclick=load;
+JASQL.mount({page:'changes',onReady:async()=>{await loadProfiles();await load()}});
+</script>
+</body></html>

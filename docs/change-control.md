@@ -73,8 +73,10 @@ draft/analyzing/review_required/approved/scheduled → cancelled
 
 | 인터페이스 | 표면 |
 | --- | --- |
+| 웹 콘솔 | `/admin/changes` — 변경계획 목록·작성·제출·승인·실행·롤백·취소, 단계별 실행/검증/보상 문장 표시 |
 | MCP | `create_change_plan`, `evaluate_change_risk`, `submit_change`, `approve_change`, `execute_approved_change`, `verify_change`, `rollback_change`, `cancel_change` |
 | REST | `GET /api/changes`(목록, 최신순), `POST /api/changes`, `GET /api/changes/{id}`, `POST /api/changes/{id}/submit`, `/approve`, `/execute`, `/rollback`, `/cancel` |
 
-두 표면 모두 동일한 `internal/change.Service`를 호출하므로 정책이 갈라질
-수 없습니다. REST 변경 API는 DBA 권한(`requireDBA`)을 요구합니다.
+세 표면 모두 동일한 `internal/change.Service`를 호출하므로 정책이 갈라질
+수 없습니다. REST 변경 API는 DBA 권한(`requireDBA`)을 요구하며, 웹 콘솔의
+실행 버튼도 승인 ID(`X-Approval-ID`)와 실행 전 대상 재확인을 거칩니다.
