@@ -103,6 +103,10 @@ Oracle 기본 Provider는 AWR, ASH, ADDM, `DBA_HIST_*`,
 모니터링 계정의 가시 범위에 따라 결과가 제한될 수 있으며, 이 경우
 limitation으로 표시됩니다(권한 부족은 `permission_denied`로 구분).
 
+웹 콘솔 **보안 · 권한**(`/admin/security`) 화면에서 프로파일별로 심각도
+필터와 함께 조회할 수 있습니다. 발견 항목의 조치는 변경 관리의 승인
+흐름으로 수행합니다.
+
 ## 운영 저장소와 보존
 
 단독 모드는 `<data>/operations/snapshots/YYYYMMDD.jsonl`에 append-only JSONL로

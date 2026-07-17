@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<title>SQLON 보안 · 권한</title>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--line:#dce4ee;--ink:#172033;--sub:#607086;--blue:#2563eb;--ok:#15803d;--warn:#a16207;--bad:#b91c1c;--mono:ui-monospace,'Cascadia Code',Consolas,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif}
+header{padding:13px 26px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}
+select,input,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff}button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}
+main{max-width:1400px;margin:auto;padding:20px 26px 60px}
+.context{padding:11px 14px;background:#17243b;color:#e9f0ff;border-radius:10px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap}.context span{padding-right:9px;border-right:1px solid #42516b}.context span:last-child{border:0}
+.notice{padding:11px 14px;background:#eef4ff;border:1px solid #c4d5f5;border-radius:10px;margin-bottom:14px;font-size:13px;color:#1d3f7a}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:14px}.card small{display:block;color:var(--sub)}.card b{font-size:24px}.bad b{color:var(--bad)}.warn b{color:var(--warn)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:11px;margin-bottom:14px;overflow:hidden}.panel h2{font-size:15px;margin:0;padding:13px 15px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}.panel h2 .grow{flex:1}
+.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap}th{font-size:12px;color:#536176;background:#f8fafc}
+.muted{color:var(--sub);font-size:12px}.empty{padding:32px;text-align:center;color:var(--sub)}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:700;background:#eef2f7;color:#475569}
+.sev-critical{background:#fee2e2;color:#991b1b}.sev-warning{background:#fef3c7;color:#854d0e}.sev-info{background:#e0f2fe;color:#075985}
+.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}
+.filterbtn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 11px;font-size:12.5px;cursor:pointer}.filterbtn.active{background:#17243b;color:#fff;border-color:#17243b}
+@media(max-width:950px){.cards{grid-template-columns:repeat(2,1fr)}main{padding:15px}}
+</style>
+</head>
+<body>
+<header><h1>보안 · 권한</h1><select id="profile" aria-label="DB 프로파일"></select><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><button class="primary" id="refresh">새로고침</button><span class="grow"></span><span class="muted" id="fresh">수집 전</span></header>
+<main>
+  <div class="context" id="context"><span>환경 -</span><span>업무서비스 -</span><span>엔진 -</span><span>인스턴스 -</span><span>역할 -</span><span>수집 시각 -</span></div>
+  <div class="notice">읽기 전용 권한 진단입니다. 여기서 발견한 항목의 <b>조치(권한 회수·계정 잠금)는 반드시 변경 관리의 승인 흐름</b>으로 수행하세요. 이 화면은 어떤 변경도 실행하지 않습니다.</div>
+  <div id="messages"></div>
+  <section class="cards">
+    <div class="card"><small>진단 대상 계정</small><b id="kPrincipals">-</b></div>
+    <div class="card bad"><small>치명적 항목</small><b id="kCritical">-</b></div>
+    <div class="card warn"><small>경고 항목</small><b id="kWarning">-</b></div>
+    <div class="card"><small>전체 발견</small><b id="kTotal">-</b></div>
+  </section>
+  <section class="panel">
+    <h2>권한 과다 · 위험 항목 <span class="grow"></span>
+      <button class="filterbtn active" data-sev="">전체</button>
+      <button class="filterbtn" data-sev="critical">치명적</button>
+      <button class="filterbtn" data-sev="warning">경고</button>
+    </h2>
+    <div class="scroll"><table><thead><tr><th>대상 (principal)</th><th>종류</th><th>심각도</th><th>세부</th></tr></thead><tbody id="rows"><tr><td colspan="4" class="empty">수집 전</td></tr></tbody></table></div>
+  </section>
+</main>
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let profiles=[],findings=[],sevFilter='';
+const token=$('#adminToken');token.value=localStorage.getItem('sqlonAdminToken')||localStorage.getItem('jasqlAdminToken')||'';token.onchange=()=>localStorage.setItem('sqlonAdminToken',token.value);
+function headers(){const h={Accept:'application/json'};if(token.value)h['X-Admin-Token']=token.value;return h}
+function when(v){if(!v)return '-';const d=new Date(v);return isNaN(d)?esc(v):d.toLocaleString('ko-KR')}
+const KIND_KO={superuser:'SUPERUSER',dba_role:'DBA 역할',dangerous_privilege:'위험 권한',wildcard_host:'와일드카드 호스트',bypass_rls:'RLS 우회',expired_password:'만료 비밀번호'};
+const SEV_KO={critical:'치명적',warning:'경고',info:'정보'};
+async function get(path){const r=await fetch(path,{headers:headers()});const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.error||r.statusText);return b}
+async function loadProfiles(){const b=await get('/api/db-profiles');profiles=b.profiles||[];const last=localStorage.getItem('sqlonObserveProfile');$('#profile').innerHTML=profiles.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===last?' selected':'')+'>'+esc(p.service_name||p.name||p.id)+' · '+esc(p.type)+'</option>').join('')||'<option value="">프로파일 없음</option>';$('#profile').onchange=()=>{localStorage.setItem('sqlonObserveProfile',$('#profile').value);load()}}
+function showMessages(items,error){$('#messages').innerHTML=(items||[]).map(x=>'<div class="message '+(error?'error':'')+'">'+esc(x)+'</div>').join('')}
+function context(profile,collected){$('#context').innerHTML=['환경 '+(profile.environment||'-'),'업무서비스 '+(profile.service_name||'-'),'엔진 '+(profile.type||'-'),'인스턴스 '+(profile.name||profile.id||'-'),'역할 '+(profile.role||'-'),'수집 시각 '+when(collected)].map(x=>'<span>'+esc(x)+'</span>').join('')}
+function renderRows(){
+  const list=sevFilter?findings.filter(f=>f.severity===sevFilter):findings;
+  $('#rows').innerHTML=list.length?list.map(f=>'<tr><td><b>'+esc(f.principal)+'</b></td><td><span class="badge">'+esc(KIND_KO[f.kind]||f.kind)+'</span></td><td><span class="badge sev-'+esc(f.severity)+'">'+esc(SEV_KO[f.severity]||f.severity)+'</span></td><td>'+esc(f.detail||'-')+'</td></tr>').join(''):'<tr><td colspan="4" class="empty">'+(findings.length?'해당 심각도의 항목이 없습니다.':'정상 수집되었으며 권한 과다 항목이 없습니다.')+'</td></tr>';
+}
+function render(body){
+  const d=body.data||{};findings=(d.findings||[]).slice().sort((a,b)=>({critical:0,warning:1,info:2}[a.severity]??3)-({critical:0,warning:1,info:2}[b.severity]??3));
+  const crit=findings.filter(f=>f.severity==='critical').length,warn=findings.filter(f=>f.severity==='warning').length;
+  $('#kPrincipals').textContent=d.principals??'-';$('#kCritical').textContent=crit;$('#kWarning').textContent=warn;$('#kTotal').textContent=findings.length;
+  renderRows();
+  return [...(body.warnings||[]),...(body.limitations||[])];
+}
+async function load(){const id=$('#profile').value;if(!id)return;$('#fresh').textContent='수집 중…';
+  try{const body=await get('/api/observability/security?profile='+encodeURIComponent(id));const profile=profiles.find(p=>p.id===id)||{};context(profile,body.collected_at);$('#fresh').textContent='최신 수집 '+when(body.collected_at)+' · '+esc(body.trace_id||'');
+    const msgs=render(body);if(body.status==='unsupported'||body.status==='permission_denied')showMessages(msgs.length?msgs:['이 프로파일에서는 권한 진단을 수집할 수 없습니다.'],body.status==='permission_denied');else showMessages(msgs,false);
+  }catch(e){showMessages(['수집 실패: '+e.message+' — 데이터 없음과 수집 실패는 서로 다른 상태입니다.'],true);$('#fresh').textContent='수집 실패'}}
+document.querySelectorAll('.filterbtn').forEach(b=>b.onclick=()=>{sevFilter=b.dataset.sev;document.querySelectorAll('.filterbtn').forEach(x=>x.classList.toggle('active',x===b));renderRows()});
+$('#refresh').onclick=load;JASQL.mount({page:'security',onReady:async()=>{try{await loadProfiles();await load()}catch(e){showMessages(['프로파일 조회 실패: '+e.message],true)}}});
+</script>
+</body></html>

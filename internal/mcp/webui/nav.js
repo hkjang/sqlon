@@ -24,6 +24,7 @@
       { key: 'workload', href: '/admin/workload', icon: '📈', label: '워크로드', show: 'always' },
       { key: 'capacity', href: '/admin/workload#capacity', icon: '💾', label: '객체 · 용량', show: 'always' },
       { key: 'availability', href: '/admin/availability', icon: '🔁', label: '복제 · 백업', show: 'always' },
+      { key: 'security', href: '/admin/security', icon: '🔐', label: '보안 · 권한', show: 'always' },
       { key: 'dba',      href: '/admin/dba',     icon: '🩺', label: '인시던트 · 진단', show: 'always' },
       { key: 'alerts',   href: '/admin/alerts',  icon: '🚨', label: '장애 · 경고 알림', show: 'always' },
       { key: 'changes',  href: '/admin/changes', icon: '📋', label: '변경 관리', show: 'dba' },
@@ -56,6 +57,7 @@
   // "❓ 가이드" button. Keyed by the page key passed to JASQL.mount({page}).
   var GUIDES = {
     sessions: '## 세션 · 잠금\n\n선택한 DB의 읽기 전용 시스템 뷰를 조회해 활성·장기 세션과 blocker→blocked 관계를 표시합니다.\n\n- SQL 실행시간과 트랜잭션 지속시간은 별도 열입니다.\n- Oracle은 `INST_ID:SID:SERIAL#`를 세션 키로 사용합니다.\n- SYS·SYSTEM·백그라운드·복제 세션은 보호 대상으로 표시합니다.\n- SQL 본문과 bind 값은 민감정보 보호를 위해 표시하지 않습니다.\n- 권한 부족·라이선스 정책·수집 실패는 빈 목록과 구분됩니다.\n\n> 이 화면은 관찰 전용입니다. 취소·종료는 승인된 변경계획을 통해서만 수행합니다.',
+    security: '## 보안 · 권한\n\n선택한 DB의 사용자·권한 상태를 읽기 전용으로 진단합니다.\n\n- **PostgreSQL**: 로그인 가능한 비기본 SUPERUSER(치명적), RLS 우회 로그인 역할, 만료 비밀번호(`pg_roles`).\n- **MySQL/MariaDB**: SUPER/FILE/PROCESS 등 위험 권한, 와일드카드 호스트(%) 고권한 계정(`information_schema.USER_PRIVILEGES`).\n- **Oracle**: 비기본 계정의 DBA 역할(치명적), GRANT ANY 계열 위험 시스템 권한, 만료됐지만 잠기지 않은 계정(`DBA_*` 뷰).\n\n> 조치(권한 회수·계정 잠금)는 반드시 **변경 관리**의 승인 흐름으로 수행하세요. 이 화면은 진단만 하며 어떤 변경도 실행하지 않습니다. 모니터링 계정의 가시 범위에 따라 결과가 제한될 수 있습니다.',
     availability: '## 복제 · 백업\n\n선택한 DB의 복제 토폴로지와 백업·아카이브 상태를 읽기 전용 시스템 뷰로 관찰합니다.\n\n### 복제\n- 역할(primary/replica/standby/standalone)과 구성 요소별 상태·지연을 표시합니다.\n- PostgreSQL: standby·복제 슬롯·WAL receiver / MySQL·MariaDB: 채널별 IO/SQL 스레드 / Oracle: Data Guard lag·archive destination(base 라이선스 뷰만).\n- **lag = -1은 "측정 불가"** 이며 0(지연 없음)과 다른 상태입니다.\n\n### 백업\n- 지속 아카이빙(PITR 기반) 활성 여부: PostgreSQL archive_mode, MySQL/MariaDB binlog, Oracle ARCHIVELOG.\n- PostgreSQL WAL 아카이버 성공/실패, Oracle RMAN 최근 작업과 FRA 사용률을 표시합니다.\n- pgBackRest·XtraBackup 등 **외부 백업 도구의 잡 상태는 DB 서버가 보고하지 못하므로 포함되지 않습니다** — 별도 연동 전까지 이 화면만으로 백업이 안전하다고 판단하지 마세요.\n\n> 복제 중단·백업 실패는 플릿 위험도에도 자동 반영됩니다(운영 현황 화면).',
     workload: '## 워크로드 · 용량\n\n대상 DB의 실제 누적 시스템 카운터를 주기적으로 저장하고 이전 스냅숏과 비교해 QPS/TPS와 용량 증가량을 계산합니다.\n\n- **저장 데이터 조회**는 대상 DB를 다시 조회하지 않습니다.\n- **지금 수집**은 엔진 Provider의 고정된 읽기 전용 시스템 쿼리만 실행합니다.\n- Top SQL은 SQL 원문 없이 fingerprint/SQL ID와 통계만 표시합니다.\n- Oracle 기본 수집은 AWR/ASH/ADDM/Tuning Advisor를 사용하지 않습니다.\n- 첫 스냅숏에는 비교 기준이 없어 변화율이 표시되지 않습니다.\n\n> 권한 부족, 부분 수집, 보존 상한은 limitation으로 표시되며 정상 데이터로 숨기지 않습니다.',
     ask: '## 질의 (NL2SQL)\n\n자연어 질문으로 SQL을 만들고 실행합니다.\n\n1. 질문을 입력하면 **prepare_sql_context**가 테이블·컬럼·조인·시간조건·검증 힌트를 한 번에 묶어 줍니다.\n2. 응답이 **재질문(needs_clarification)** 이면 제시된 질문에 답한 뒤 다시 실행하세요.\n3. `ready`가 되면 스켈레톤의 `/* SLOT */`만 채워 SQL을 완성합니다.\n4. **검증 → 실행계획 → 실행** 순서로 진행합니다.\n\n> 팁: 특정 DB 프로파일의 카탈로그로 질의하려면 profile을 지정하세요(멀티 DB).',
