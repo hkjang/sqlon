@@ -119,7 +119,7 @@ func (rt Runtime) Run(ctx context.Context, args []string) error {
 		return fmt.Errorf("unsupported transport %q: use http or stdio", cfg.transport)
 	}
 
-	srv := mcp.NewServer(cat, mcp.Options{Endpoint: cfg.endpoint, AllowedOrigins: splitCSV(cfg.allowOrigins), Stateful: !cfg.stateless, SSEPost: cfg.ssePost, AdminToken: cfg.adminToken, FeedbackTenantID: cfg.feedbackTenant, OpenMetadataURL: cfg.omURL, OpenMetadataToken: cfg.omToken})
+	srv := mcp.NewServer(cat, mcp.Options{Endpoint: cfg.endpoint, AllowedOrigins: splitCSV(cfg.allowOrigins), Stateful: !cfg.stateless, SSEPost: cfg.ssePost, AdminToken: cfg.adminToken, FeedbackTenantID: cfg.feedbackTenant, OpenMetadataURL: cfg.omURL, OpenMetadataToken: cfg.omToken, AlertWebhookURL: cfg.digestWebhook})
 	if metaSvc != nil {
 		var oidc *mcp.OIDCProvider
 		if cfg.oidcIssuer != "" && cfg.oidcClientID != "" && cfg.oidcSecret != "" && cfg.oidcRedirect != "" {

@@ -47,6 +47,7 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/openmetadata", s.guardPage(s.serveWebUI("webui/openmetadata.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/profile-catalogs", s.guardPage(s.serveWebUI("webui/profile-catalogs.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/dba", s.guardPage(s.serveWebUI("webui/dba.html", "text/html; charset=utf-8")))
+	mux.HandleFunc("GET /admin/alerts", s.guardPage(s.serveWebUI("webui/alerts.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/changes", s.guardPage(s.serveWebUI("webui/changes.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/users", s.guardAdminPage(s.serveWebUI("webui/users.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/keys", s.guardPage(s.serveWebUI("webui/keys.html", "text/html; charset=utf-8")))

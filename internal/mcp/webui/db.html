@@ -206,6 +206,9 @@
       <button class="btn" onclick="qSubmitAsync()" title="장기 쿼리를 백그라운드로 제출하고 폴링합니다">⏳ 비동기 실행</button>
       <button class="btn" onclick="copySQL()">📋 SQL 복사</button>
       <span class="grow" style="flex:1"></span>
+      <button class="btn" onclick="openIndexSimulator()">🔍 인덱스 시뮬레이터</button>
+      <button class="btn" onclick="findUnusedIndexes()">🗑 미사용 인덱스</button>
+      <button class="btn" onclick="auditConfig()">⚙ 설정 튬닝 감사</button>
       <span class="mini">Ctrl/⌘+Enter=미리보기</span>
       <span class="mini" id="qStat"></span>
     </div>
@@ -252,6 +255,55 @@
     <table class="t"><thead><tr><th>사용자</th><th>권한</th><th>부여자</th><th>일시</th><th></th></tr></thead>
       <tbody id="grantRows"></tbody></table>
     <div class="result" id="grantResult"></div>
+  </div>
+
+  <!-- 인덱스 시뮬레이터 카드 -->
+  <div class="card" id="indexSimCard" style="display:none">
+    <div class="toolbar" style="justify-content:space-between">
+      <h2 style="margin:0">🔍 감상 인덱스 성능 시뮬레이터</h2>
+      <button class="btn" onclick="$('#indexSimCard').style.display='none'">닫기</button>
+    </div>
+    <div class="mini" style="margin-bottom:10px">실제 테이블에 인덱스를 생성하지 않고, 감상 인덱스가 SQL 성능(Cost)에 미치는 영향을 시뮬레이텘합니다. (PostgreSQL의 경우 hypopg 확장 기능 지원 시 실측 계획 반영)</div>
+    <div class="toolbar">
+      <input id="simTable" placeholder="대상 테이블명 (예: orders)" style="min-width:200px; padding:6px;">
+      <input id="simColumns" placeholder="인덱스 컬럼 목록 (콤마 구분, 예: user_id, status)" style="min-width:320px; padding:6px;">
+      <button class="btn primary" onclick="runIndexSimulation()">⚡ 시뮬레이션 실행</button>
+    </div>
+    <div id="simResult" class="result"></div>
+  </div>
+
+  <!-- 미사용 인덱스 카드 -->
+  <div class="card" id="unusedIndexesCard" style="display:none">
+    <div class="toolbar" style="justify-content:space-between">
+      <h2 style="margin:0">🗑 미사용 인덱스 정리 도우미</h2>
+      <button class="btn" onclick="$('#unusedIndexesCard').style.display='none'">닫기</button>
+    </div>
+    <div class="mini" style="margin-bottom:10px">조회(Read) 쿠리에서 사용되지 않고 쓰기(CUD) 성능만 떨어트리는 미사용 인덱스들을 찾아 정리 스크립트를 제안합니다.</div>
+    <table class="t">
+      <thead><tr><th>테이블</th><th>인덱스</th><th>크기</th><th>조회 횟수</th><th>정리 SQL</th></tr></thead>
+      <tbody id="unusedRows"><tr><td colspan="5" class="mini">조회 결겼가 여기에 표시됭니다.</td></tr></tbody>
+    </table>
+    <div id="unusedResult" class="result"></div>
+  </div>
+
+  <!-- 설정 Audit 카드 -->
+  <div class="card" id="configAuditCard" style="display:none">
+    <div class="toolbar" style="justify-content:space-between">
+      <h2 style="margin:0">⚙ 설정 튬닝 감사 & 가읽드</h2>
+      <button class="btn" onclick="$('#configAuditCard').style.display='none'">닫기</button>
+    </div>
+    <div class="mini" style="margin-bottom:10px">현재 덼이터베이스의 메멘리·커넥션 설정 변수들을 시스템 스팩 대비 분석하여 최적의 촬천값을 제안합니다.</div>
+    <div class="toolbar">
+      <label class="mini">시스템 RAM 스팩 (GB)&nbsp;
+        <input id="auditRAM" type="number" value="8" style="width:70px; padding:6px;"></label>
+      <button class="btn primary" onclick="runConfigAudit()">⚙ 설정 진단 실행</button>
+    </div>
+    <div id="auditSummary" class="result info" style="display:none"></div>
+    <table class="t" id="auditTable" style="display:none; margin-top:10px;">
+      <thead><tr><th>설정 항목</th><th>현재값</th><th>촬천값</th><th>상태</th><th>설명</th></tr></thead>
+      <tbody id="auditRows"></tbody>
+    </table>
+    <div id="auditResult" class="result"></div>
   </div>
 </main>
 
@@ -557,25 +609,215 @@ async function qValidate() {
     showQ(cat.valid && con.valid ? 'ok' : 'bad', msg);
   } catch (e) { showQ('bad', e.message); }
 }
+function renderExplainTree(lp) {
+  if (!lp || !lp.steps || lp.steps.length === 0) return "";
+  const steps = lp.steps;
+  const rootSteps = steps.filter(s => s.parent_id === 0);
+  
+  function buildNodeHTML(step) {
+    const children = steps.filter(s => s.parent_id === step.id);
+    let childHTML = "";
+    if (children.length > 0) {
+      childHTML = "<div style=\"margin-left: 24px; border-left: 2px dashed #cbd5e1; padding-left: 12px; margin-top: 4px;\">" +
+        children.map(buildNodeHTML).join("") +
+        "</div>";
+    }
+    
+    let op = step.operation.toLowerCase();
+    let icon = "⚙️";
+    if (op.includes("scan") || op.includes("fetch")) icon = "🔍";
+    else if (op.includes("join")) icon = "🔗";
+    else if (op.includes("sort") || op.includes("group") || op.includes("hash")) icon = "🔀";
+    
+    let isHighCost = step.cost > 50000;
+    let badgeStyle = isHighCost ? "background: #fecaca; color: #b91c1c; font-weight: bold;" : "background: #e2e8f0; color: #475569;";
+    
+    return "<div style=\"margin-bottom: 10px; font-family: var(--mono); font-size: 13px;\">" +
+      "<div>" + icon + " <b style=\"color: #1e293b;\">" + esc(step.operation) + "</b>" +
+      (step.options ? " (<span style=\"color: #4f46e5;\">" + esc(step.options) + "</span>)" : "") +
+      (step.object_name ? " on <span style=\"color: #0891b2;\">" + esc(step.object_name) + "</span>" : "") +
+      " <span style=\"font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; " + badgeStyle + "\">Cost: " + step.cost + "</span>" +
+      (step.cardinality ? " <span style=\"font-size: 11px; color: #64748b;\">(Est. " + step.cardinality + " rows)</span>" : "") +
+      "</div>" +
+      (step.filter_predicates ? "<div style=\"font-size: 11.5px; color: #94a3b8; margin-left: 24px;\">Filter: <code>" + esc(step.filter_predicates) + "</code></div>" : "") +
+      childHTML +
+      "</div>";
+  }
+  
+  return "<div style=\"background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-top: 10px;\">" +
+    "<h4 style=\"margin: 0 0 10px 0; color: #334155; font-size: 14px;\">🌳 실행 계획 트리 시각화</h4>" +
+    rootSteps.map(buildNodeHTML).join("") +
+    "</div>";
+}
+
 async function qExplain() {
-  showQ('info', '실행계획 분석 중…');
+  showQ("info", "실행계획 분석 중…");
   try {
-    const r = await api('POST', '/api/query/explain', JSON.stringify({ profile_id: $('#qProfile').value, sql: $('#sqlBox').value }));
+    const r = await api("POST", "/api/query/explain", JSON.stringify({ profile_id: $("#qProfile").value, sql: $("#sqlBox").value }));
     const st = r.static || {};
-    let msg = '정적 분석: risk=' + st.risk + ' (score ' + st.risk_score + ')';
+    let msg = "<b>정적 분석:</b> risk=" + esc(st.risk) + " (score " + st.risk_score + ")";
     if (r.live_plan_error) {
-      msg += '\n실측 EXPLAIN PLAN 불가: ' + r.live_plan_error;
-      showQ('info', msg); return;
+      msg += "<br><span style=\"color:var(--red)\">실측 EXPLAIN PLAN 불가:</span> " + esc(r.live_plan_error);
+      const el = $("#qResult"); el.className = "result info"; el.innerHTML = msg; return;
     }
     const lp = r.live_plan;
-    msg += '\n실측 EXPLAIN PLAN: risk=' + lp.risk + ' (score ' + lp.risk_score + ') · cost ' + lp.total_cost + ' · 최대 예상행 ' + lp.max_cardinality;
-    (lp.risk_factors || []).forEach(f => msg += '\n  ⚠ ' + f);
-    (lp.suggestions || []).forEach(s2 => msg += '\n  → ' + s2);
-    msg += '\n\n플랜 스텝:';
-    (lp.steps || []).forEach(s2 => msg += '\n  ' + '  '.repeat(s2.depth) + s2.operation + (s2.options ? ' (' + s2.options + ')' : '') +
-      (s2.object_name ? ' ' + s2.object_name : '') + (s2.cardinality ? ' ~' + s2.cardinality + '행' : '') + (s2.cost ? ' cost=' + s2.cost : ''));
-    showQ(lp.risk === 'high' ? 'bad' : (lp.risk === 'medium' ? 'info' : 'ok'), msg);
-  } catch (e) { showQ('bad', e.message); }
+    msg += "<br><b>실측 EXPLAIN PLAN:</b> risk=<span class="b " + (lp.risk === "high" ? "bad" : (lp.risk === "medium" ? "warn" : "ok")) + "\">" + esc(lp.risk) + "</span> (score " + lp.risk_score + ") · cost " + lp.total_cost + " · 최대 예상행 " + lp.max_cardinality;
+    
+    if (lp.risk_factors && lp.risk_factors.length) {
+      msg += "<br><br><b>⚠️ 위험 요인:</b><br>" + lp.risk_factors.map(f => "  ⚠ " + esc(f)).join("<br>");
+    }
+    if (lp.suggestions && lp.suggestions.length) {
+      msg += "<br><br><b>💡 AI 튬닝 권장사항:</b><br>" + lp.suggestions.map(s => "  → " + esc(s)).join("<br>");
+    }
+    
+    const treeHTML = renderExplainTree(lp);
+    const el = $("#qResult");
+    el.className = "result " + (lp.risk === "high" ? "bad" : (lp.risk === "medium" ? "info" : "ok"));
+    el.innerHTML = "<div>" + msg + "</div>" + treeHTML;
+  } catch (e) { showQ("bad", e.message); }
+}
+
+/* ---------- DBA/SRE Tools ---------- */
+function openIndexSimulator() {
+  $('#indexSimCard').style.display = 'block';
+  $('#simResult').style.display = 'none';
+  $('#simTable').value = '';
+  $('#simColumns').value = '';
+  window.scrollTo({ top: $('#indexSimCard').offsetTop - 80, behavior: 'smooth' });
+}
+
+async function runIndexSimulation() {
+  const table = $('#simTable').value.trim();
+  const columns = $('#simColumns').value.split(',').map(c => c.trim()).filter(Boolean);
+  const sql = $('#sqlBox').value;
+  const profileId = $('#qProfile').value;
+  
+  if (!profileId) { alert('프로파일을 먼저 선택하세요.'); return; }
+  if (!table || columns.length === 0) { alert('테이블명과 컬럼을 입력하세요.'); return; }
+  
+  const resEl = $('#simResult');
+  resEl.className = 'result info';
+  resEl.style.display = 'block';
+  resEl.textContent = '감상 인덱스 시뮬레이션 수행 중...';
+  
+  try {
+    const r = await api('POST', '/api/query/simulate-index', JSON.stringify({
+      profile_id: profileId,
+      table_name: table,
+      columns: columns,
+      sql: sql
+    }));
+    
+    if (!r.ok) {
+      resEl.className = 'result bad';
+      resEl.textContent = '시뮬레이션 실픨: ' + (r.message || 'unknown error');
+      return;
+    }
+    
+    let html = '<h3>⚡ 시뮬레이션 결겼</h3>' +
+      '<div><b>엔진:</b> ' + esc(r.engine) + '</div>' +
+      '<div><b>원본 비용 (Cost):</b> ' + r.original_cost + '</div>' +
+      '<div><b>감상 인덱스 반영 후 비용:</b> ' + r.simulated_cost + '</div>' +
+      '<div><b>비용 절감율 (Est. Savings):</b> <span class="b ' + (r.savings_pct > 50 ? 'ok' : 'gray') + '">' + r.savings_pct.toFixed(1) + '%</span></div>' +
+      '<div style="margin-top: 10px; font-weight: bold; color: var(--blue);">' + esc(r.message) + '</div>';
+      
+    if (r.plan_steps && r.plan_steps.length > 0) {
+      html += '<div style="margin-top: 10px;"><b>시뮬레이션 계획 단계:</b><pre style="background: #eef1f5; padding: 10px; border-radius: 6px; font-family: var(--mono); font-size: 12px; overflow: auto;">' + 
+        r.plan_steps.map(esc).join('\n') + '</pre></div>';
+    }
+    
+    resEl.className = 'result ok';
+    resEl.innerHTML = html;
+  } catch (e) {
+    resEl.className = 'result bad';
+    resEl.textContent = '에러 발생: ' + e.message;
+  }
+}
+
+async function findUnusedIndexes() {
+  const profileId = $('#qProfile').value;
+  if (!profileId) { alert('프로파일을 먼저 선택하세요.'); return; }
+  
+  $('#unusedIndexesCard').style.display = 'block';
+  $('#unusedResult').style.display = 'none';
+  $('#unusedRows').innerHTML = '<tr><td colspan="5" class="mini">조회 중…</td></tr>';
+  window.scrollTo({ top: $('#unusedIndexesCard').offsetTop - 80, behavior: 'smooth' });
+  
+  try {
+    const r = await api('GET', '/api/db/unused-indexes?profile_id=' + encodeURIComponent(profileId));
+    const list = r.unused_indexes || [];
+    
+    if (list.length === 0) {
+      $('#unusedRows').innerHTML = '<tr><td colspan="5" class="mini">🎉 미사용 인덱스가 압거나 통계 수집 데이터가 부족합니다.</td></tr>';
+      return;
+    }
+    
+    $('#unusedRows').innerHTML = list.map(idx => {
+      const sizeMB = idx.size_bytes ? (idx.size_bytes / (1024 * 1024)).toFixed(2) + ' MB' : '-';
+      return '<tr>' +
+        '<td class="mono">' + esc(idx.table_name) + '</td>' +
+        '<td class="mono">' + esc(idx.index_name) + '</td>' +
+        '<td>' + sizeMB + '</td>' +
+        '<td>' + idx.scan_count + '</td>' +
+        '<td><code style="cursor: pointer;" onclick="navigator.clipboard.writeText(this.textContent); toast(\'SQL 복사 완료\');" title="크릭 시 복사">' + esc(idx.drop_script) + '</code></td>' +
+        '</tr>';
+    }).join('');
+  } catch (e) {
+    $('#unusedRows').innerHTML = '<tr><td colspan="5" class="mini err" style="color:var(--red)">실픨: ' + esc(e.message) + '</td></tr>';
+  }
+}
+
+function auditConfig() {
+  $('#configAuditCard').style.display = 'block';
+  $('#auditTable').style.display = 'none';
+  $('#auditSummary').style.display = 'none';
+  $('#auditResult').style.display = 'none';
+  window.scrollTo({ top: $('#configAuditCard').offsetTop - 80, behavior: 'smooth' });
+}
+
+async function runConfigAudit() {
+  const ram = Number($('#auditRAM').value) || 8;
+  const profileId = $('#qProfile').value;
+  if (!profileId) { alert('프로파일을 먼저 선택하세요.'); return; }
+  
+  const resEl = $('#auditResult');
+  resEl.className = 'result info';
+  resEl.style.display = 'block';
+  resEl.textContent = '설정 분석 중...';
+  
+  try {
+    const r = await api('POST', '/api/db/config-audit', JSON.stringify({
+      profile_id: profileId,
+      system_ram_gb: ram
+    }));
+    
+    if (!r.ok) {
+      resEl.className = 'result bad';
+      resEl.textContent = '진단 실픨: ' + (r.summary || 'unknown error');
+      return;
+    }
+    
+    $('#auditSummary').style.display = 'block';
+    $('#auditSummary').innerHTML = '📋 <b>설정 요약:</b> ' + esc(r.summary);
+    
+    const list = r.variables || [];
+    $('#auditRows').innerHTML = list.map(v => {
+      const badgeCls = v.status === 'critical' ? 'b bad' : (v.status === 'warning' ? 'b warn' : 'b ok');
+      return '<tr>' +
+        '<td class="mono"><b>' + esc(v.name) + '</b></td>' +
+        '<td class="mono">' + esc(v.value) + '</td>' +
+        '<td class="mono" style="color: var(--blue);">' + esc(v.recommended) + '</td>' +
+        '<td><span class="' + badgeCls + '">' + esc(v.status.toUpperCase()) + '</span></td>' +
+        '<td class="mini">' + esc(v.description) + '</td>' +
+        '</tr>';
+    }).join('');
+    
+    $('#auditTable').style.display = 'table';
+    resEl.style.display = 'none';
+  } catch (e) {
+    resEl.className = 'result bad';
+    resEl.textContent = '진단 실픨: ' + e.message;
+  }
 }
 async function qMeta() {
   try {

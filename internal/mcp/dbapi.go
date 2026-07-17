@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"sqlon/internal/catalog"
+	"sqlon/internal/collector"
 	"sqlon/internal/dbconn"
 	"sqlon/internal/meta"
 )
@@ -621,6 +622,80 @@ func (s *Server) registerDBAPI(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "columns": cols})
+	})
+	mux.HandleFunc("POST /api/query/simulate-index", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := s.requireQueryActor(w, r)
+		if !ok {
+			return
+		}
+		var req struct {
+			ProfileID string   `json:"profile_id"`
+			Table     string   `json:"table_name"`
+			Columns   []string `json:"columns"`
+			SQL       string   `json:"sql"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := s.canUseProfileID(r.Context(), actor, req.ProfileID); err != nil {
+			writeAPIError(w, http.StatusForbidden, err)
+			return
+		}
+		res, err := s.DB.VerifyHypotheticalIndex(r.Context(), req.ProfileID, req.Table, req.Columns, req.SQL)
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+	})
+	mux.HandleFunc("GET /api/db/unused-indexes", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := s.requireQueryActor(w, r)
+		if !ok {
+			return
+		}
+		profileID := r.URL.Query().Get("profile_id")
+		if err := s.canUseProfileID(r.Context(), actor, profileID); err != nil {
+			writeAPIError(w, http.StatusForbidden, err)
+			return
+		}
+		list, err := s.DB.ListUnusedIndexes(r.Context(), profileID)
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"unused_indexes": list})
+	})
+	mux.HandleFunc("POST /api/db/config-audit", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := s.requireQueryActor(w, r)
+		if !ok {
+			return
+		}
+		var req struct {
+			ProfileID    string `json:"profile_id"`
+			SystemRAM_GB int    `json:"system_ram_gb"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := s.canUseProfileID(r.Context(), actor, req.ProfileID); err != nil {
+			writeAPIError(w, http.StatusForbidden, err)
+			return
+		}
+		res, err := s.DB.AuditConfiguration(r.Context(), req.ProfileID, req.SystemRAM_GB)
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+	})
+	mux.HandleFunc("GET /api/db/alerts", func(w http.ResponseWriter, r *http.Request) {
+		_, ok := s.requireActor(w, r)
+		if !ok {
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"alerts": collector.GetAlerts()})
 	})
 	mux.HandleFunc("GET /api/query/history", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := s.requireActor(w, r)

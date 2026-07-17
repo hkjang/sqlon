@@ -24,6 +24,7 @@
       { key: 'workload', href: '/admin/workload', icon: '📈', label: '워크로드', show: 'always' },
       { key: 'capacity', href: '/admin/workload#capacity', icon: '💾', label: '객체 · 용량', show: 'always' },
       { key: 'dba',      href: '/admin/dba',     icon: '🩺', label: '인시던트 · 진단', show: 'always' },
+      { key: 'alerts',   href: '/admin/alerts',  icon: '🚨', label: '장애 · 경고 알림', show: 'always' },
       { key: 'changes',  href: '/admin/changes', icon: '📋', label: '변경 관리', show: 'dba' },
       { key: 'dba-console', href: '/admin/dba-console', icon: '🛢', label: 'DBA 콘솔', show: 'dba' },
       { key: 'db',       href: '/admin/db',      icon: '🔌', label: 'DB 플릿 설정', show: 'always' },

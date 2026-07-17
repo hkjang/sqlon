@@ -34,13 +34,14 @@ type Service struct {
 	// ExpectedInterval is used only to report freshness. The runtime sets it
 	// before serving requests; collection scheduling remains owned by the app.
 	ExpectedInterval time.Duration
+	AlertWebhookURL  string
 }
 
 // New builds the collection service. providers is the engine-name→provider
 // map, normally adapters.CollectorProviders() — injected so this package
 // never depends on concrete engine implementations.
 func New(manager *dbconn.Manager, store storage.OperationalStore, providers map[string]Provider) *Service {
-	return &Service{Queryer: manager, Source: manager, Store: store, Providers: NewRegistry(providers), Engines: engine.NewDefaultRegistry(), Now: time.Now, Concurrency: 4, ExpectedInterval: time.Minute}
+	return &Service{Queryer: manager, Source: manager, Store: store, Providers: NewRegistry(providers), Engines: engine.NewDefaultRegistry(), Now: time.Now, Concurrency: 4, ExpectedInterval: time.Minute, AlertWebhookURL: ""}
 }
 
 // FreshnessThreshold returns the maximum accepted snapshot age. SQLON's
@@ -108,6 +109,7 @@ func (s *Service) CollectProfile(ctx context.Context, raw dbconn.Profile, persis
 		result.Snapshot.Limitations = append(result.Snapshot.Limitations, "첫 스냅숏이므로 QPS/TPS와 용량 증가율은 다음 수집부터 계산됩니다.")
 	}
 	addEvidence(&result.Snapshot)
+	RunAlertingEngine(ctx, &result.Snapshot, previous, s.AlertWebhookURL)
 	if len(result.Snapshot.Warnings) > 0 || len(result.Snapshot.Limitations) > 0 {
 		result.Status = "partial"
 	}

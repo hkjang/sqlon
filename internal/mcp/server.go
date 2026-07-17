@@ -51,6 +51,8 @@ type Options struct {
 	// curated metadata and exporting jamypg-owned descriptions.
 	OpenMetadataURL   string
 	OpenMetadataToken string
+
+	AlertWebhookURL string
 }
 
 type Server struct {
@@ -148,11 +150,14 @@ func NewServer(c *catalog.Catalog, opts Options) *Server {
 	if changeLoadErr != nil {
 		log.Printf("sqlon: change-plan store: some persisted plans could not be restored: %v", changeLoadErr)
 	}
+	coll := collector.New(dbManager, storage.NewFileStore(c.DataDir), adapters.CollectorProviders())
+	coll.AlertWebhookURL = opts.AlertWebhookURL
+
 	s := &Server{
 		Options:         opts,
 		dataDir:         c.DataDir,
 		DB:              dbManager,
-		Collector:       collector.New(dbManager, storage.NewFileStore(c.DataDir), adapters.CollectorProviders()),
+		Collector:       coll,
 		Observability:   observability.New(dbManager, adapters.ObservabilityProviders(), adapters.ReplicationProviders()),
 		Changes:         changes,
 		sessions:        map[string]time.Time{},
