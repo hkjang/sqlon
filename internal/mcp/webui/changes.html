@@ -60,7 +60,13 @@ main{max-width:1500px;margin:auto;padding:20px 26px 60px}
           <option value="critical">치명적 — 서로 다른 2인 승인</option>
           <option value="emergency">비상 — 사후 승인 1인</option>
         </select></label>
-        <label class="f">유지보수 창 (선택)<input id="fWindow" placeholder="예: 토 02:00-04:00 KST"></label>
+        <label class="f">유지보수 창 메모 (표시용)<input id="fWindow" placeholder="예: 토 02:00-04:00 KST"></label>
+      </div>
+      <div class="grid" style="align-items:end">
+        <label class="f">실행 허용 창 요일 (선택, UTC)<select id="fWinDay"><option value="">매일</option><option value="mon">월</option><option value="tue">화</option><option value="wed">수</option><option value="thu">목</option><option value="fri">금</option><option value="sat">토</option><option value="sun">일</option></select></label>
+        <label class="f">시작 (UTC, HH:MM)<input id="fWinStart" placeholder="예: 17:00"></label>
+        <label class="f">종료 (UTC, HH:MM)<input id="fWinEnd" placeholder="예: 19:00"></label>
+        <span class="muted" style="font-size:11.5px">시작·종료를 채우면 <b>이 창 밖에서는 실행이 차단</b>됩니다(비상 위험 제외). UTC 기준이며 자정을 넘겨 지정할 수 있습니다.</span>
       </div>
       <label class="f" style="margin-bottom:11px">변경 사유 (업무·운영 목적)<input id="fReason" placeholder="예: 조회 지연 개선을 위한 인덱스 추가"></label>
       <div id="steps"></div>
@@ -126,6 +132,7 @@ function openDetail(id){
     '<dt>변경 사유</dt><dd>'+esc(p.reason)+'</dd>'+
     '<dt>필요 승인</dt><dd>'+((p.approvals||[]).length)+' / '+esc(p.required_approvals)+'</dd>'+
     (p.maintenance_window?'<dt>유지보수 창</dt><dd>'+esc(p.maintenance_window)+'</dd>':'')+
+    ((p.maintenance_windows||[]).length?'<dt>실행 허용 창 (UTC)</dt><dd>'+p.maintenance_windows.map(w=>esc((w.days&&w.days.length?w.days.join(','):'매일')+' '+w.start+'–'+w.end)).join('<br>')+' <span class="muted">— 이 창 밖 실행 차단(비상 제외)</span></dd>':'')+
     (p.expected_lock?'<dt>예상 잠금</dt><dd>'+esc(p.expected_lock)+'</dd>':'')+
     ((p.preconditions||[]).length?'<dt>사전 조건</dt><dd>'+p.preconditions.map(esc).join('<br>')+'</dd>':'')+
     '<dt>생성 / 갱신</dt><dd>'+when(p.created_at)+' / '+when(p.updated_at)+'</dd></dl>'+
@@ -200,6 +207,12 @@ $('#newToggle').onclick=()=>{const p=$('#newPanel');const open=p.style.display!=
 $('#createPlan').onclick=async()=>{
   const steps=[...document.querySelectorAll('#steps .step')].map((el,i)=>({order:i+1,command:el.querySelector('[data-k=command]').value.trim(),verification:el.querySelector('[data-k=verification]').value.trim(),compensation:el.querySelector('[data-k=compensation]').value.trim()}));
   const plan={id:$('#fId').value.trim(),profile_id:$('#fProfile').value,target:$('#fTarget').value.trim(),reason:$('#fReason').value.trim(),risk:$('#fRisk').value,maintenance_window:$('#fWindow').value.trim(),steps:steps};
+  const winStart=$('#fWinStart').value.trim(),winEnd=$('#fWinEnd').value.trim();
+  if(winStart||winEnd){
+    if(!/^\d{1,2}:\d{2}$/.test(winStart)||!/^\d{1,2}:\d{2}$/.test(winEnd)){note('실행 허용 창은 시작·종료를 모두 HH:MM(UTC)으로 입력하세요.','error');return}
+    const win={start:winStart,end:winEnd};const day=$('#fWinDay').value;if(day)win.days=[day];
+    plan.maintenance_windows=[win];
+  }
   if(!plan.id||!plan.profile_id||!plan.target||!plan.reason){note('ID, 프로파일, 대상, 사유는 필수입니다.','error');return}
   if(!steps.length||steps.some(s=>!s.command||!s.verification||!s.compensation)){note('모든 단계에 실행·검증·보상 문장이 필요합니다. 보상 문장이 없는 변경은 생성할 수 없습니다.','error');return}
   try{await call('POST','/api/changes',plan,{'Idempotency-Key':plan.id});note('변경계획이 생성되었습니다 (draft). 목록에서 제출→승인→실행을 진행하세요.','ok');$('#newPanel').style.display='none';$('#fId').value='';$('#fTarget').value='';$('#fReason').value='';$('#steps').innerHTML='';await load()}catch(e){note('생성 실패: '+e.message,'error')}

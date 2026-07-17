@@ -65,11 +65,30 @@ draft/analyzing/review_required/approved/scheduled → cancelled
 - 웹 콘솔의 변경계획 작성 폼에서 단계별 "안전 템플릿"으로 사용할 수
   있습니다.
 
+## 유지보수 창 (실행 시간 제약)
+
+`maintenance_window`는 표시용 자유 텍스트이고, 실행을 실제로 제약하려면
+구조화된 `maintenance_windows`(배열)를 사용합니다.
+
+```json
+"maintenance_windows": [{ "days": ["sat", "sun"], "start": "17:00", "end": "19:00" }]
+```
+
+- 시각은 **UTC 기준 HH:MM**이며, `end`가 `start`보다 크지 않으면 자정을
+  넘겨 다음 날로 이어집니다(창의 시작 요일 기준).
+- `days`가 비면 매일입니다.
+- 창이 설정된 비-비상(non-emergency) 계획은 창 밖에서 실행할 수 없습니다.
+  차단은 상태를 바꾸지 않는 **재시도 가능한 거부**이므로, 창이 열리면 같은
+  승인된 계획이 그대로 실행됩니다.
+- **emergency 위험도는 창을 우회**합니다 — 장애 대응이 유지보수 일정에
+  막히지 않도록 합니다.
+
 ## 실행 경로
 
 - 실행은 `execute_approved_change`(MCP) 또는 `POST /api/changes/{id}/execute`
   (REST, 승인 필요 위험도에는 `X-Approval-ID` 헤더 필수)만 가능합니다.
-- 실행 직전 재검증(Revalidate): DBA 실행 자격 증명 존재 + 연결 확인.
+- 실행 직전 재검증(Revalidate): DBA 실행 자격 증명 존재 + 연결 확인, 그리고
+  구조화된 유지보수 창 게이트 통과.
 - 각 단계의 `command`는 쓰기 가능 관리 풀로, `verification`은 읽기 전용
   풀로 실행됩니다.
 - 실패 시 `rollback_required`로 전이되며, `rollback_change`가 보상 작업을

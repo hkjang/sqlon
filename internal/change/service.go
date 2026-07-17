@@ -300,6 +300,13 @@ func (s *Service) Execute(ctx context.Context, id string, runner Runner) (Plan, 
 		s.mu.Unlock()
 		return Plan{}, errors.New("required approvals are missing")
 	}
+	// Enforce the maintenance window before any state change: an out-of-window
+	// non-emergency plan stays Approved and remains runnable once the window
+	// opens, so this is a retryable refusal, not a failure.
+	if allowed, reason := p.MaintenanceGate(s.now()); !allowed {
+		s.mu.Unlock()
+		return p, fmt.Errorf("실행이 유지보수 창에 의해 차단되었습니다: %s", reason)
+	}
 	if err := p.Transition(Executing, s.now()); err != nil {
 		s.mu.Unlock()
 		return Plan{}, err

@@ -38,23 +38,27 @@ const (
 // Plan is structured before it reaches a write-capable executor. SQL fields
 // remain evidence only; execution must use the approved plan ID and steps.
 type Plan struct {
-	ID                string     `json:"id"`
-	ProfileID         string     `json:"profile_id"`
-	Target            string     `json:"target"`
-	State             State      `json:"state"`
-	Risk              Risk       `json:"risk"`
-	Reason            string     `json:"reason"`
-	PreState          any        `json:"pre_state,omitempty"`
-	Impact            any        `json:"impact,omitempty"`
-	ExpectedLock      string     `json:"expected_lock,omitempty"`
-	EstimatedDuration string     `json:"estimated_duration,omitempty"`
-	Preconditions     []string   `json:"preconditions,omitempty"`
-	MaintenanceWindow string     `json:"maintenance_window,omitempty"`
-	Steps             []Step     `json:"steps"`
-	RequiredApprovals int        `json:"required_approvals"`
-	Approvals         []Approval `json:"approvals,omitempty"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	ID                string   `json:"id"`
+	ProfileID         string   `json:"profile_id"`
+	Target            string   `json:"target"`
+	State             State    `json:"state"`
+	Risk              Risk     `json:"risk"`
+	Reason            string   `json:"reason"`
+	PreState          any      `json:"pre_state,omitempty"`
+	Impact            any      `json:"impact,omitempty"`
+	ExpectedLock      string   `json:"expected_lock,omitempty"`
+	EstimatedDuration string   `json:"estimated_duration,omitempty"`
+	Preconditions     []string `json:"preconditions,omitempty"`
+	MaintenanceWindow string   `json:"maintenance_window,omitempty"`
+	// MaintenanceWindows, when set, are enforced at execution time: a
+	// non-emergency plan cannot execute outside them. MaintenanceWindow above
+	// remains a free-text human note.
+	MaintenanceWindows []Window   `json:"maintenance_windows,omitempty"`
+	Steps              []Step     `json:"steps"`
+	RequiredApprovals  int        `json:"required_approvals"`
+	Approvals          []Approval `json:"approvals,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 type Step struct {
 	Order        int    `json:"order"`
@@ -86,6 +90,11 @@ func (p *Plan) Validate() error {
 	}
 	if p.RequiredApprovals < 0 {
 		return errors.New("required_approvals cannot be negative")
+	}
+	for i, w := range p.MaintenanceWindows {
+		if err := w.Validate(); err != nil {
+			return fmt.Errorf("maintenance window %d: %w", i+1, err)
+		}
 	}
 	return nil
 }
