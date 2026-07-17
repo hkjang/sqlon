@@ -232,6 +232,35 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": s.Changes.List(), "collected_at": time.Now().UTC()})
 	})
+	// Structured-action → change step template. Generates safely-quoted
+	// command/verification/compensation SQL for reversible privileged
+	// operations; changes nothing on the target DB.
+	mux.HandleFunc("POST /api/changes/template", func(w http.ResponseWriter, r *http.Request) {
+		if !s.requireDBA(w, r) {
+			return
+		}
+		var req struct {
+			Profile string         `json:"profile"`
+			Action  string         `json:"action"`
+			Order   int            `json:"order"`
+			Args    map[string]any `json:"args"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		dialect, err := s.dbaDialect(r.Context(), req.Profile)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		step, err := buildChangeStep(dialect, req.Action, req.Order, req.Args)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": step, "dialect": dialect})
+	})
 	mux.HandleFunc("POST /api/changes", func(w http.ResponseWriter, r *http.Request) {
 		if !s.requireDBA(w, r) {
 			return

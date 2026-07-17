@@ -164,11 +164,34 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#detail').classLi
 function stepRow(i){
   const div=document.createElement('div');div.className='step';
   div.innerHTML='<h3>단계 <span class="n">'+i+'</span><span class="grow"></span><button class="mini" type="button" data-del>삭제</button></h3>'+
+    '<div class="steplabel">안전 템플릿 — 구조화된 권한 작업에서 안전 인용된 SQL을 자동 생성 (선택)</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'+
+      '<select data-tpl-action style="min-width:150px"><option value="">직접 작성</option><option value="create_user">사용자 생성</option><option value="create_database">데이터베이스 생성</option><option value="grant">권한 부여</option><option value="revoke">권한 회수</option></select>'+
+      '<input data-tpl-args placeholder=\'인자 JSON 예: {"username":"app_user"}\' style="flex:1;min-width:200px;font-family:var(--mono);font-size:12px">'+
+      '<button class="mini" type="button" data-tpl-gen>생성</button>'+
+    '</div>'+
     '<div class="steplabel">실행 문장 (command)</div><textarea data-k="command" placeholder="예: CREATE INDEX CONCURRENTLY idx_orders_created ON public.orders(created_at)"></textarea>'+
     '<div class="steplabel">사후 검증 (verification) — 읽기 전용 풀로 실행</div><textarea data-k="verification" placeholder="예: SELECT 1 FROM pg_indexes WHERE indexname=\'idx_orders_created\'"></textarea>'+
     '<div class="steplabel">보상(롤백) 문장 (compensation)</div><textarea data-k="compensation" placeholder="예: DROP INDEX IF EXISTS idx_orders_created"></textarea>';
   div.querySelector('[data-del]').onclick=()=>{div.remove();renumber()};
+  div.querySelector('[data-tpl-gen]').onclick=()=>generateStep(div);
   return div;
+}
+async function generateStep(div){
+  const action=div.querySelector('[data-tpl-action]').value;
+  if(!action){note('생성할 액션을 선택하세요 (또는 SQL을 직접 작성하세요).','error');return}
+  const profile=$('#fProfile').value;if(!profile){note('먼저 대상 프로파일을 선택하세요.','error');return}
+  let args={};const raw=div.querySelector('[data-tpl-args]').value.trim();
+  if(raw){try{args=JSON.parse(raw)}catch(e){note('인자 JSON 형식이 올바르지 않습니다: '+e.message,'error');return}}
+  const order=[...document.querySelectorAll('#steps .step')].indexOf(div)+1;
+  try{
+    const b=await call('POST','/api/changes/template',{profile:profile,action:action,order:order,args:args});
+    const s=b.data||{};
+    div.querySelector('[data-k=command]').value=s.command||'';
+    div.querySelector('[data-k=verification]').value=s.verification||'';
+    div.querySelector('[data-k=compensation]').value=s.compensation||'';
+    note('안전 인용된 SQL을 생성했습니다 ('+esc(b.dialect||'')+'). 실행 전 검토하세요.','ok');
+  }catch(e){note('템플릿 생성 실패: '+e.message,'error')}
 }
 function renumber(){document.querySelectorAll('#steps .step .n').forEach((el,i)=>el.textContent=i+1)}
 $('#addStep').onclick=()=>{$('#steps').appendChild(stepRow(document.querySelectorAll('#steps .step').length+1))};

@@ -317,6 +317,14 @@ var openAPISpec = `{
         "responses": {"201":{"description":"created plan"},"400":{"description":"검증 실패"},"401":{"description":"인증 필요"},"403":{"description":"DBA 권한 필요"}}
       }
     },
+    "/api/changes/template": {
+      "post": {
+        "tags": ["changes"], "summary": "구조화된 액션 → 변경계획 단계 생성",
+        "description": "create_user/create_database/grant/revoke 같은 되돌릴 수 있는 권한 작업을 방언별 안전 인용된 command·verification·compensation 단계로 생성합니다. DB를 변경하지 않으며, 되돌릴 수 없는 작업과 비밀번호는 거부합니다. 생성된 단계를 검토 후 POST /api/changes의 steps에 포함하세요.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": {"200":{"description":"generated change step"},"400":{"description":"지원하지 않는 액션·잘못된 인자·비밀번호 포함"},"401":{"description":"인증 필요"},"403":{"description":"DBA 권한 필요"}}
+      }
+    },
     "/api/changes/{id}": {
       "get": {
         "tags": ["changes"], "summary": "변경계획 상세",

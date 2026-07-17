@@ -70,7 +70,7 @@ AI-generated changes were not accepted automatically. The project owner remained
 This combination allowed Codex to accelerate implementation while GPT-5.6 supported architectural reasoning and systematic review, with human judgment controlling the final result.
 
 **📚 상세 문서**: [docs/README.md](docs/README.md) — 아키텍처, MCP 도구
-레퍼런스(93종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
+레퍼런스(94종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
 가이드(18종), REST API, DB 커넥터, 운영/평가/보안/개발자 가이드.
 
 ## Quick Start
@@ -444,6 +444,7 @@ Invoke-RestMethod `
 
 - `create_change_plan` — 대상·사유·사전 상태·영향·잠금·선행조건과 실행/검증/보상 단계를 포함한 변경 초안 생성
 - `evaluate_change_risk` — 서버 정책 기준 위험도와 필수 승인 수 평가
+- `build_change_step` — 구조화된 권한 작업(create_user·create_database·grant·revoke)을 방언별 안전 인용으로 변경계획 단계(실행·검증·보상)로 생성. DB를 변경하지 않으며 되돌릴 수 없는 작업은 직접 작성, 비밀번호는 계획에 저장 불가
 - `submit_change` — 초안을 분석 및 검토 대기 상태로 제출
 - `approve_change` — 현재 DBA 자격으로 승인하고 추적 가능한 승인 ID 발급
 - `execute_approved_change` — 승인 ID 확인, 실행 직전 재검증, 승인 단계 실행 및 사후 검증

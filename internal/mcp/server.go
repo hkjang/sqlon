@@ -548,6 +548,12 @@ func (s *Server) tools() []map[string]any {
 		tool("evaluate_change_risk", "서버 정책으로 위험도와 필요한 승인 수를 평가합니다. 클라이언트가 승인 수를 낮출 수 없습니다.", objectSchema(map[string]any{
 			"risk": str("low | medium | high | critical | emergency"),
 		}, []string{"risk"})),
+		tool("build_change_step", "구조화된 권한 작업을 변경계획 단계(실행·검증·보상)로 안전하게 생성합니다. 객체명은 방언별로 인용되어 SQL 주입을 막습니다. 이 호출은 DB를 변경하지 않고 단계 초안만 반환합니다. 지원 액션: create_user, create_database, grant, revoke (되돌릴 수 있고 검증 가능한 작업). 되돌릴 수 없는 작업(DROP 등)은 실행·검증·보상을 직접 작성하세요. 비밀번호는 계획에 저장할 수 없습니다.", objectSchema(map[string]any{
+			"profile": str("대상 DB 프로파일 ID (방언 결정)"),
+			"action":  str("create_user | create_database | grant | revoke"),
+			"order":   integer("단계 순번 (기본 1)"),
+			"args":    map[string]any{"type": "object", "description": "액션 인자: username / name·owner·encoding / privileges·object·grantee·with_grant"},
+		}, []string{"profile", "action"})),
 		tool("submit_change", "변경계획 초안을 분석/검토 상태로 제출합니다. 중간 이상 위험은 승인 전 실행할 수 없습니다.", objectSchema(map[string]any{"id": str("Change request id")}, []string{"id"})),
 		tool("approve_change", "검토 대기 중인 변경을 현재 DBA 자격으로 승인합니다. 치명적 변경은 서로 다른 2인의 승인이 필요합니다.", objectSchema(map[string]any{"id": str("Change request id")}, []string{"id"})),
 		tool("execute_approved_change", "승인 ID와 실행 직전 재검증을 거쳐 승인된 불변 단계만 실행하고 사후 검증합니다.", objectSchema(map[string]any{
@@ -931,6 +937,7 @@ var adminOnlyTools = map[string]bool{
 var dbaTools = map[string]bool{
 	"create_change_plan":      true,
 	"evaluate_change_risk":    true,
+	"build_change_step":       true,
 	"submit_change":           true,
 	"approve_change":          true,
 	"execute_approved_change": true,
@@ -1444,6 +1451,25 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return map[string]any{"status": "error", "error": err.Error()}, nil
 		}
 		return map[string]any{"status": "ok", "risk": a.Risk, "required_approvals": required}, nil
+	case "build_change_step":
+		var a struct {
+			Profile string         `json:"profile"`
+			Action  string         `json:"action"`
+			Order   int            `json:"order"`
+			Args    map[string]any `json:"args"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		dialect, err := s.dbaDialect(ctx, a.Profile)
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error()}, nil
+		}
+		step, err := buildChangeStep(dialect, a.Action, a.Order, a.Args)
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error()}, nil
+		}
+		return map[string]any{"status": "ok", "data": step, "dialect": dialect}, nil
 	case "submit_change":
 		var a struct {
 			ID string `json:"id"`

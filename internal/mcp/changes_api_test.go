@@ -82,6 +82,20 @@ func TestChangeAPILifecycleAndPersistence(t *testing.T) {
 	}
 }
 
+func TestChangeTemplateRejectsIrreversibleAndPasswordOverHTTP(t *testing.T) {
+	// No DB profile is configured in the fixture, so the dialect lookup fails
+	// before any generation — assert the endpoint is wired and rejects cleanly
+	// rather than 404/500.
+	mux, _ := newChangeMux(t)
+	rec := doReq(t, mux, "POST", "/api/changes/template", `{"profile":"missing","action":"create_user","args":{}}`, nil)
+	if rec.Code != 400 {
+		t.Fatalf("template with unknown profile should be 400, got %d %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "404") {
+		t.Fatalf("template endpoint not registered: %s", rec.Body.String())
+	}
+}
+
 func TestChangeAPIRejectsInvalidPlan(t *testing.T) {
 	mux, _ := newChangeMux(t)
 

@@ -36,6 +36,35 @@ draft/analyzing/review_required/approved/scheduled → cancelled
 `verification`(사후 검증 문장), `compensation`(보상/역작업 문장)을 모두
 포함해야 검증을 통과합니다. 보상 작업이 없는 변경은 생성 자체가 거부됩니다.
 
+## 안전 단계 템플릿 (구조화된 권한 작업)
+
+되돌릴 수 있고 검증 가능한 권한 작업은 손으로 SQL을 쓰지 않고 **구조화된
+액션**에서 단계를 생성할 수 있습니다. `build_change_step`(MCP) /
+`POST /api/changes/template`(REST)는 `{profile, action, args}`를 받아
+방언별로 **안전하게 인용된**(SEC-011) `command`·`verification`·
+`compensation` 3종을 반환합니다. 이 호출은 DB를 변경하지 않습니다.
+
+| 액션 | command | 보상(compensation) |
+| --- | --- | --- |
+| `create_user` | CREATE ROLE/USER (NOLOGIN·기본 호스트) | DROP ROLE/USER IF EXISTS |
+| `create_database` | CREATE DATABASE (owner·encoding) | DROP DATABASE IF EXISTS |
+| `grant` | GRANT … TO grantee | REVOKE … FROM grantee |
+| `revoke` | REVOKE … FROM grantee | GRANT … TO grantee |
+
+규칙:
+
+- 객체명은 방언별 인용 함수로 감싸므로 식별자 주입이 불가능하며, 제어
+  문자가 든 식별자와 문장 구분자(`;`)가 든 권한/객체는 거부됩니다.
+- **비밀번호는 계획에 저장할 수 없습니다** — 비밀번호 없이 계정을 만들고
+  secret 참조로 별도 설정하세요(SEC-002/SEC-007).
+- 되돌릴 수 없는 작업(DROP, 파괴적 파라미터 변경 등)은 템플릿을 제공하지
+  않습니다. 운영자가 실행·검증·보상을 직접 작성해 자동 복구에 대한 잘못된
+  기대를 갖지 않도록 합니다.
+- 이것이 레거시 `dba_*` 안전 SQL 빌더의 유일한 사용처입니다 — 직접 실행이
+  아니라 승인 흐름을 타는 단계 생성기로만 살아 있습니다(요건 §14).
+- 웹 콘솔의 변경계획 작성 폼에서 단계별 "안전 템플릿"으로 사용할 수
+  있습니다.
+
 ## 실행 경로
 
 - 실행은 `execute_approved_change`(MCP) 또는 `POST /api/changes/{id}/execute`
@@ -74,8 +103,8 @@ draft/analyzing/review_required/approved/scheduled → cancelled
 | 인터페이스 | 표면 |
 | --- | --- |
 | 웹 콘솔 | `/admin/changes` — 변경계획 목록·작성·제출·승인·실행·롤백·취소, 단계별 실행/검증/보상 문장 표시 |
-| MCP | `create_change_plan`, `evaluate_change_risk`, `submit_change`, `approve_change`, `execute_approved_change`, `verify_change`, `rollback_change`, `cancel_change` |
-| REST | `GET /api/changes`(목록, 최신순), `POST /api/changes`, `GET /api/changes/{id}`, `POST /api/changes/{id}/submit`, `/approve`, `/execute`, `/rollback`, `/cancel` |
+| MCP | `create_change_plan`, `evaluate_change_risk`, `build_change_step`, `submit_change`, `approve_change`, `execute_approved_change`, `verify_change`, `rollback_change`, `cancel_change` |
+| REST | `GET /api/changes`(목록, 최신순), `POST /api/changes`, `POST /api/changes/template`, `GET /api/changes/{id}`, `POST /api/changes/{id}/submit`, `/approve`, `/execute`, `/rollback`, `/cancel` |
 
 세 표면 모두 동일한 `internal/change.Service`를 호출하므로 정책이 갈라질
 수 없습니다. REST 변경 API는 DBA 권한(`requireDBA`)을 요구하며, 웹 콘솔의
