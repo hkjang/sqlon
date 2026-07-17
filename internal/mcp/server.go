@@ -1201,7 +1201,7 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 		if err != nil {
 			return map[string]any{"status": "error", "warnings": []string{err.Error()}, "data": []any{}}, nil
 		}
-		return fleet.NewWithOperations(s.DB, s.Collector).HealthProfiles(ctx, profiles), nil
+		return fleet.NewWithOperations(s.DB, s.Collector, s.Observability).HealthProfiles(ctx, profiles), nil
 	case "list_sessions":
 		var a struct {
 			Profile string `json:"profile"`

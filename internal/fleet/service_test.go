@@ -9,6 +9,7 @@ import (
 	"sqlon/internal/collector"
 	"sqlon/internal/dbconn"
 	"sqlon/internal/engine"
+	"sqlon/internal/observability"
 )
 
 type fakeOperationalHistory struct {
@@ -130,6 +131,84 @@ func TestHealthProfilesPromotesStoredCapacityRisk(t *testing.T) {
 	}
 	if got.OperationalAt == nil || len(got.Evidence) < 2 || h.Status != "degraded" {
 		t.Fatalf("operational evidence context missing: %+v", h)
+	}
+}
+
+type fakeReplicationObserver struct {
+	responses map[string]observability.Response[observability.ReplicationData]
+}
+
+func (f fakeReplicationObserver) Replication(_ context.Context, p dbconn.Profile) observability.Response[observability.ReplicationData] {
+	return f.responses[p.ID]
+}
+
+func TestHealthProfilesEscalatesBrokenReplicationAndEnrichesRole(t *testing.T) {
+	now := time.Date(2026, 7, 17, 4, 0, 0, 0, time.UTC)
+	p := &fakeProber{
+		drivers: map[string]bool{"postgres": true, "mysql": true},
+		results: map[string]dbconn.PingResult{
+			"replica-broken": {ProfileID: "replica-broken", OK: true, ElapsedMs: 5},
+			"primary-ok":     {ProfileID: "primary-ok", OK: true, ElapsedMs: 5},
+		},
+	}
+	s := fixedService(p)
+	s.Replication = fakeReplicationObserver{responses: map[string]observability.Response[observability.ReplicationData]{
+		"replica-broken": {
+			Status:      "critical",
+			Data:        observability.ReplicationData{ProfileID: "replica-broken", Engine: "mysql", Role: "replica", Nodes: []observability.ReplicationNode{{Name: "default", Healthy: false}}},
+			Evidence:    []observability.Evidence{{Code: "REPLICATION_BROKEN", Severity: "critical", Summary: "복제 구성 요소가 비정상 상태입니다", CollectedAt: now}},
+			CollectedAt: now,
+		},
+		"primary-ok": {
+			Status:      "ok",
+			Data:        observability.ReplicationData{ProfileID: "primary-ok", Engine: "postgres", Role: "primary", Nodes: []observability.ReplicationNode{{Name: "standby1", Healthy: true}}},
+			Evidence:    []observability.Evidence{{Code: "REPLICATION_STATUS_COLLECTED", Severity: "info", CollectedAt: now}},
+			CollectedAt: now,
+		},
+	}}
+
+	h := s.HealthProfiles(context.Background(), []dbconn.Profile{
+		{ID: "replica-broken", Type: "mysql", Criticality: "critical"},
+		{ID: "primary-ok", Type: "postgres"},
+	})
+	broken := h.Data[0]
+	if broken.ID != "replica-broken" || broken.Status != StatusCritical || broken.RiskScore != 88 || broken.Role != "replica" {
+		t.Fatalf("broken replication did not escalate fleet risk: %+v", broken)
+	}
+	foundBrokenEvidence := false
+	for _, evidence := range broken.Evidence {
+		if evidence.Code == "REPLICATION_BROKEN" {
+			foundBrokenEvidence = true
+		}
+	}
+	if !foundBrokenEvidence {
+		t.Fatalf("REPLICATION_BROKEN evidence missing: %+v", broken.Evidence)
+	}
+	healthy := h.Data[1]
+	if healthy.Role != "primary" || healthy.Status != StatusHealthy {
+		t.Fatalf("healthy primary misclassified: %+v", healthy)
+	}
+}
+
+func TestHealthProfilesReplicationCollectionFailureIsVisibleNotFatal(t *testing.T) {
+	p := &fakeProber{
+		drivers: map[string]bool{"postgres": true},
+		results: map[string]dbconn.PingResult{"prod": {ProfileID: "prod", OK: true, ElapsedMs: 5}},
+	}
+	s := fixedService(p)
+	s.Replication = fakeReplicationObserver{responses: map[string]observability.Response[observability.ReplicationData]{
+		"prod": {Status: "permission_denied", Data: observability.ReplicationData{Role: "unknown"}},
+	}}
+	h := s.HealthProfiles(context.Background(), []dbconn.Profile{{ID: "prod", Type: "postgres"}})
+	got := h.Data[0]
+	found := false
+	for _, evidence := range got.Evidence {
+		if evidence.Code == "REPLICATION_STATUS_UNAVAILABLE" {
+			found = true
+		}
+	}
+	if !found || got.Status == StatusFailed {
+		t.Fatalf("replication visibility gap not surfaced correctly: %+v", got)
 	}
 }
 

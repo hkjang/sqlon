@@ -16,6 +16,7 @@ import (
 	"sqlon/internal/collector"
 	"sqlon/internal/dbconn"
 	"sqlon/internal/engine"
+	"sqlon/internal/observability"
 )
 
 type Status string
@@ -106,6 +107,7 @@ type Service struct {
 	Now         func() time.Time
 	Concurrency int
 	Operations  operationalHistory
+	Replication replicationObserver
 }
 
 type operationalHistory interface {
@@ -113,13 +115,20 @@ type operationalHistory interface {
 	FreshnessThreshold() time.Duration
 }
 
+// replicationObserver is the live replication-status observation dependency
+// (normally *observability.Service).
+type replicationObserver interface {
+	Replication(context.Context, dbconn.Profile) observability.Response[observability.ReplicationData]
+}
+
 func New(db *dbconn.Manager) *Service {
 	return &Service{Source: db, Prober: db, Engines: engine.NewDefaultRegistry(), Now: time.Now, Concurrency: 8}
 }
 
-func NewWithOperations(db *dbconn.Manager, operations operationalHistory) *Service {
+func NewWithOperations(db *dbconn.Manager, operations operationalHistory, replication replicationObserver) *Service {
 	s := New(db)
 	s.Operations = operations
+	s.Replication = replication
 	return s
 }
 
@@ -259,7 +268,51 @@ func (s *Service) probe(ctx context.Context, p dbconn.Profile) Instance {
 		i.Evidence = append(i.Evidence, Evidence{Code: "PLAINTEXT_SECRET_REF", Severity: "critical", Summary: "평문 자격증명 참조가 구성됨", CollectedAt: i.CollectedAt})
 	}
 	s.applyOperationalEvidence(ctx, p, &i)
+	s.applyReplicationEvidence(ctx, p, adapter, &i)
 	return i
+}
+
+// applyReplicationEvidence enriches the instance with its observed replication
+// role and escalates risk when replication is broken or lagging. It runs only
+// for engines that declare the Replication capability and only when a live
+// observer is configured.
+func (s *Service) applyReplicationEvidence(ctx context.Context, p dbconn.Profile, adapter engine.Adapter, instance *Instance) {
+	if s.Replication == nil || !adapter.Capabilities.Replication {
+		return
+	}
+	res := s.Replication.Replication(ctx, p)
+	// Enrich the operator-declared role only when none was declared
+	// (ApplyDefaults fills an empty role with "unspecified").
+	declared := strings.ToLower(strings.TrimSpace(instance.Role))
+	if (declared == "" || declared == "unspecified") && res.Data.Role != "" && res.Data.Role != "unknown" {
+		instance.Role = res.Data.Role
+	}
+	observed := map[string]any{"role": res.Data.Role, "nodes": len(res.Data.Nodes)}
+	switch res.Status {
+	case "permission_denied", "error":
+		promoteRisk(instance, StatusWarning, 35, "medium")
+		instance.Evidence = append(instance.Evidence, Evidence{Code: "REPLICATION_STATUS_UNAVAILABLE", Severity: "medium", Summary: "복제 상태를 확인할 수 없습니다", Observed: observed, CollectedAt: res.CollectedAt})
+		return
+	case "unsupported", "policy_blocked":
+		instance.Evidence = append(instance.Evidence, Evidence{Code: "REPLICATION_STATUS_UNAVAILABLE", Severity: "info", Summary: "이 배포판/정책에서는 복제 상태를 수집하지 않습니다", Observed: observed, CollectedAt: res.CollectedAt})
+		return
+	}
+	escalated := false
+	for _, finding := range res.Evidence {
+		switch finding.Code {
+		case "REPLICATION_BROKEN":
+			promoteRisk(instance, StatusCritical, 88, "critical")
+			instance.Evidence = append(instance.Evidence, Evidence{Code: finding.Code, Severity: "critical", Summary: finding.Summary, Observed: finding.Attributes, CollectedAt: res.CollectedAt})
+			escalated = true
+		case "REPLICATION_LAG_HIGH":
+			promoteRisk(instance, StatusWarning, 55, "high")
+			instance.Evidence = append(instance.Evidence, Evidence{Code: finding.Code, Severity: "high", Summary: finding.Summary, Observed: finding.Attributes, CollectedAt: res.CollectedAt})
+			escalated = true
+		}
+	}
+	if !escalated {
+		instance.Evidence = append(instance.Evidence, Evidence{Code: "REPLICATION_STATUS_COLLECTED", Severity: "info", Summary: "복제 상태 수집 완료", Observed: observed, CollectedAt: res.CollectedAt})
+	}
 }
 
 func (s *Service) applyOperationalEvidence(ctx context.Context, p dbconn.Profile, instance *Instance) {
@@ -382,7 +435,7 @@ func addSummary(summary *Summary, i Instance) {
 }
 
 func limitations() []string {
-	return []string{"플릿 위험도는 현재 연결·구성 상태와 저장된 워크로드·용량 근거를 결합합니다. 복제·백업 위험은 해당 Provider 구현 후 추가됩니다."}
+	return []string{"플릿 위험도는 현재 연결·구성 상태, 저장된 워크로드·용량 근거와 실시간 복제 상태를 결합합니다. 백업 위험은 Backup Provider 구현 후 추가됩니다."}
 }
 
 func (s *Service) now() time.Time {

@@ -79,7 +79,7 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		if !ok {
 			return
 		}
-		writeJSON(w, http.StatusOK, fleet.NewWithOperations(s.DB, s.Collector).HealthProfiles(ctx, profiles))
+		writeJSON(w, http.StatusOK, fleet.NewWithOperations(s.DB, s.Collector, s.Observability).HealthProfiles(ctx, profiles))
 	})
 	// Session and lock observation use fixed engine-native system queries. The
 	// profile is resolved only from the caller's permission-filtered fleet.
