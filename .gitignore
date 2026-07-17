@@ -9,9 +9,9 @@ jamypg-mcp-linux
 jamypg-mcp-*.exe
 # Local Go build artifacts. Release binaries belong in CI artifacts, never in
 # the source repository.
-jamypg-mcp
-sqlon
-sqlon_test_bin
+/jamypg-mcp
+/sqlon
+/sqlon_test_bin
 data/*/metasync/
 data/*/reviews/
 data/*/openmetadata.json
