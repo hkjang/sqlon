@@ -102,15 +102,15 @@ func TestMySQLDSN(t *testing.T) {
 func TestWrapLimit(t *testing.T) {
 	pg, _ := DialectFor("postgres")
 	my, _ := DialectFor("mysql")
-	if got := pg.WrapLimit("SELECT * FROM t;", 101); got != "SELECT * FROM (SELECT * FROM t) AS jamypg_q LIMIT 101" {
+	if got := pg.WrapLimit("SELECT * FROM t;", 101); got != "SELECT * FROM (SELECT * FROM t) AS sqlon_q LIMIT 101" {
 		t.Fatalf("pg wrap: %q", got)
 	}
-	if got := my.WrapLimit("SELECT * FROM t", 5); got != "SELECT * FROM (SELECT * FROM t) AS jamypg_q LIMIT 5" {
+	if got := my.WrapLimit("SELECT * FROM t", 5); got != "SELECT * FROM (SELECT * FROM t) AS sqlon_q LIMIT 5" {
 		t.Fatalf("mysql wrap: %q", got)
 	}
 	// WITH on mysql: appended LIMIT, no derived-table wrap
 	got := my.WrapLimit("WITH c AS (SELECT 1 AS x) SELECT x FROM c", 7)
-	if strings.Contains(got, "jamypg_q") || !strings.HasSuffix(got, "LIMIT 7") {
+	if strings.Contains(got, "sqlon_q") || !strings.HasSuffix(got, "LIMIT 7") {
 		t.Fatalf("mysql WITH wrap: %q", got)
 	}
 	// WITH + existing trailing LIMIT stays untouched
@@ -126,7 +126,7 @@ func TestWrapLimit(t *testing.T) {
 
 func TestCountWrap(t *testing.T) {
 	pg, _ := DialectFor("postgres")
-	if got := pg.CountWrap("SELECT a FROM t;"); got != "SELECT COUNT(*) FROM (SELECT a FROM t) AS jamypg_q" {
+	if got := pg.CountWrap("SELECT a FROM t;"); got != "SELECT COUNT(*) FROM (SELECT a FROM t) AS sqlon_q" {
 		t.Fatalf("count wrap: %q", got)
 	}
 }

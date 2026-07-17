@@ -63,7 +63,7 @@ var DatasetRegistry = []DatasetInfo{
 		Name: "sql_examples", File: "sql_datasets.json", Required: false, Editable: true, Format: "json-array",
 		Description: "골든 질문-SQL 예제(few-shot). intent 시그니처 매칭, 검색 부스트, 날짜 컬럼 선택, 골든셋 생성의 원천.",
 		Schema:      "[{id, question, target_sql, target_domain, target_table, target_column, target_intent, target_difficulty}]",
-		UsedBy:      []string{"search_examples", "search_schema", "analyze_question", "build_sql_skeleton", "jamypg-goldgen"},
+		UsedBy:      []string{"search_examples", "search_schema", "analyze_question", "build_sql_skeleton", "sqlon-goldgen"},
 	},
 	{
 		Name: "subject_areas", File: "meta_subject_areas.json", Required: false, Editable: true, Format: "json-array",
@@ -117,7 +117,7 @@ var DatasetRegistry = []DatasetInfo{
 		Name: "golden_queries", File: "golden_queries.json", Required: false, Editable: true, Format: "json-array",
 		Description: "평가용 골든 쿼리셋. run_evaluation과 CI(go test)가 정확도 회귀를 측정.",
 		Schema:      "[{id, question, expected_tables[], expected_columns[], expected_metrics[], expected_sql, note}]",
-		UsedBy:      []string{"run_evaluation", "jamypg-eval", "go test"},
+		UsedBy:      []string{"run_evaluation", "sqlon-eval", "go test"},
 	},
 	{
 		Name: "learned_rules", File: "learned_rules.json", Required: false, Editable: true, Format: "json-array",

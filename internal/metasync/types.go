@@ -1,5 +1,5 @@
 // Package metasync implements automated source-database metadata collection,
-// snapshotting, and incremental change detection (JAMYPG 자동 메타데이터 관리,
+// snapshotting, and incremental change detection (SQLON 자동 메타데이터 관리,
 // FR-META-001..005). Its guiding principle is that PHYSICAL metadata (schemas,
 // tables, columns, constraints, indexes, comments, row-count stats) is
 // collected automatically, while BUSINESS meaning (logical names, metrics,

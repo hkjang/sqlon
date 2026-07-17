@@ -52,7 +52,7 @@ func TestQuoter(t *testing.T) {
 	if pg.ident("Order Date") != `"Order Date"` {
 		t.Errorf("pg ident: %s", pg.ident("Order Date"))
 	}
-	if pg.sample("s", "t", 100) != `(SELECT * FROM "s"."t" LIMIT 100) "jamypg_sample"` {
+	if pg.sample("s", "t", 100) != `(SELECT * FROM "s"."t" LIMIT 100) "sqlon_sample"` {
 		t.Errorf("pg sample: %s", pg.sample("s", "t", 100))
 	}
 	my := newQuoter("mysql")

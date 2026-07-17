@@ -129,11 +129,11 @@ func (d postgresDialect) BuildDSN(p Profile, password string) (string, error) {
 }
 
 func (postgresDialect) WrapLimit(sqlText string, limit int) string {
-	return fmt.Sprintf("SELECT * FROM (%s) AS jamypg_q LIMIT %d", trimSQL(sqlText), limit)
+	return fmt.Sprintf("SELECT * FROM (%s) AS sqlon_q LIMIT %d", trimSQL(sqlText), limit)
 }
 
 func (postgresDialect) CountWrap(sqlText string) string {
-	return fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS jamypg_q", trimSQL(sqlText))
+	return fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS sqlon_q", trimSQL(sqlText))
 }
 
 // PostgreSQL-specific dangerous statements and functions. Entries ending in
@@ -224,11 +224,11 @@ func (mysqlDialect) WrapLimit(sqlText string, limit int) string {
 		}
 		return fmt.Sprintf("%s LIMIT %d", trimmed, limit)
 	}
-	return fmt.Sprintf("SELECT * FROM (%s) AS jamypg_q LIMIT %d", trimmed, limit)
+	return fmt.Sprintf("SELECT * FROM (%s) AS sqlon_q LIMIT %d", trimmed, limit)
 }
 
 func (mysqlDialect) CountWrap(sqlText string) string {
-	return fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS jamypg_q", trimSQL(sqlText))
+	return fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS sqlon_q", trimSQL(sqlText))
 }
 
 // MySQL/MariaDB-specific dangerous statements and functions.

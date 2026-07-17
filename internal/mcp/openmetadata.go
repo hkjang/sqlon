@@ -15,9 +15,9 @@ import (
 
 // OpenMetadata integration (bidirectional). Import pulls curated business
 // metadata (descriptions, display names, PII tags, glossary) from an
-// OpenMetadata server and proposes it as jamypg candidates — preview by
+// OpenMetadata server and proposes it as sqlon candidates — preview by
 // default, explicit apply to merge into overrides/glossary (gaps only,
-// operator curation protected). Export pushes jamypg-owned logical names /
+// operator curation protected). Export pushes sqlon-owned logical names /
 // descriptions back to OpenMetadata for columns it lacks (dry-run by default).
 
 // omConfigFile is the persisted, restart-free connection config, stored next to
@@ -227,7 +227,7 @@ func (s *Server) omBuildImport(ctx context.Context, scope string, maxTables int,
 	return imp, len(tables), warnings, nil
 }
 
-// omDrift reports where jamypg and OpenMetadata diverge (gaps / conflicts).
+// omDrift reports where sqlon and OpenMetadata diverge (gaps / conflicts).
 func (s *Server) omDrift(ctx context.Context, scope string, maxTables int) map[string]any {
 	imp, fetched, warnings, err := s.omBuildImport(ctx, scope, maxTables, false)
 	if err != nil {
@@ -241,7 +241,7 @@ func (s *Server) omDrift(ctx context.Context, scope string, maxTables int) map[s
 	return res
 }
 
-// omExport pushes jamypg logical names / descriptions to OpenMetadata columns
+// omExport pushes sqlon logical names / descriptions to OpenMetadata columns
 // that lack a description there. dryRun (default) returns the plan only.
 func (s *Server) omExport(ctx context.Context, scope string, maxTables int, dryRun bool) map[string]any {
 	c, err := s.omClient()
@@ -279,7 +279,7 @@ func (s *Server) omExport(ctx context.Context, scope string, maxTables int, dryR
 			if jc == nil {
 				continue
 			}
-			desc := jamypgColumnDescription(jt, jc)
+			desc := sqlonColumnDescription(jt, jc)
 			if desc == "" {
 				continue
 			}
@@ -298,7 +298,7 @@ func (s *Server) omExport(ctx context.Context, scope string, maxTables int, dryR
 	}
 
 	res := map[string]any{
-		"source":  "jamypg",
+		"source":  "sqlon",
 		"target":  c.BaseURL,
 		"dry_run": dryRun,
 		"planned": len(plan),
@@ -315,9 +315,9 @@ func (s *Server) omExport(ctx context.Context, scope string, maxTables int, dryR
 	return res
 }
 
-// omExportLineage pushes jamypg's relation graph to OpenMetadata as table-level
+// omExportLineage pushes sqlon's relation graph to OpenMetadata as table-level
 // lineage edges (fromEntity = referenced/parent table, toEntity = base/child
-// table). This maps jamypg's FK-style relationships to OpenMetadata's
+// table). This maps sqlon's FK-style relationships to OpenMetadata's
 // relationship lineage; it is NOT ETL data-flow. dryRun (default) returns the
 // plan only.
 func (s *Server) omExportLineage(ctx context.Context, scope string, maxTables int, dryRun bool) map[string]any {
@@ -329,7 +329,7 @@ func (s *Server) omExportLineage(ctx context.Context, scope string, maxTables in
 	if terr != nil && len(tables) == 0 {
 		return map[string]any{"error": "list tables failed: " + terr.Error()}
 	}
-	// map jamypg-form schema.table (uppercased) → OpenMetadata entity id
+	// map sqlon-form schema.table (uppercased) → OpenMetadata entity id
 	idByFQN := map[string]string{}
 	for _, t := range tables {
 		if fqn := openmetadata.SchemaTable(t.FullyQualifiedName); fqn != "" && t.ID != "" {
@@ -366,7 +366,7 @@ func (s *Server) omExportLineage(ctx context.Context, scope string, maxTables in
 			continue
 		}
 		if !dryRun {
-			desc := "jamypg relation " + r.BaseColumn + " → " + r.ReferenceColumn
+			desc := "sqlon relation " + r.BaseColumn + " → " + r.ReferenceColumn
 			if perr := c.AddTableLineage(ctx, fromID, toID, desc); perr != nil {
 				e.Error = perr.Error()
 				failed++
@@ -379,14 +379,14 @@ func (s *Server) omExportLineage(ctx context.Context, scope string, maxTables in
 	}
 
 	res := map[string]any{
-		"source":    "jamypg",
+		"source":    "sqlon",
 		"target":    c.BaseURL,
 		"dry_run":   dryRun,
 		"relations": len(s.cat().Relations),
 		"planned":   len(plan) - skipped,
 		"skipped":   skipped,
 		"edges":     plan,
-		"note":      "jamypg 관계(FK)를 OpenMetadata 관계형 lineage로 매핑합니다(ETL 데이터흐름 아님). from=참조(부모), to=기준(자식) 테이블.",
+		"note":      "sqlon 관계(FK)를 OpenMetadata 관계형 lineage로 매핑합니다(ETL 데이터흐름 아님). from=참조(부모), to=기준(자식) 테이블.",
 	}
 	if !dryRun {
 		res["pushed"] = pushed
@@ -398,9 +398,9 @@ func (s *Server) omExportLineage(ctx context.Context, scope string, maxTables in
 	return res
 }
 
-// jamypgColumnDescription renders a description jamypg can contribute back:
+// sqlonColumnDescription renders a description sqlon can contribute back:
 // prefer an explicit description, else compose from logical name.
-func jamypgColumnDescription(t *catalog.Table, c *catalog.Column) string {
+func sqlonColumnDescription(t *catalog.Table, c *catalog.Column) string {
 	if strings.TrimSpace(c.Description) != "" {
 		return c.Description
 	}

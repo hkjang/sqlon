@@ -22,7 +22,7 @@ import (
 //  5. operator preference — routing.priority (1 = highest) and
 //     routing.default (fallback when nothing else matches).
 //
-// The decision policy mirrors the ambiguous-table rule elsewhere in jamypg:
+// The decision policy mirrors the ambiguous-table rule elsewhere in sqlon:
 // route automatically only when there is one clear winner; otherwise return
 // the ranked candidates and make the caller (LLM → user) choose explicitly.
 

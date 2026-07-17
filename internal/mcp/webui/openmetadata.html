@@ -214,8 +214,8 @@ function driftTable(title, items, cls){
     : '<tr><th>테이블</th><th>컬럼</th><th>필드</th><th>값</th></tr>';
   var rows = items.map(function(x){
     var v = cls==='conflict'
-      ? '<td>'+esc(x.jamypg_value||'')+'</td><td>'+esc(x.ext_value||'')+'</td>'
-      : '<td>'+esc(x.jamypg_value||x.ext_value||'')+'</td>';
+      ? '<td>'+esc(x.sqlon_value||'')+'</td><td>'+esc(x.ext_value||'')+'</td>'
+      : '<td>'+esc(x.sqlon_value||x.ext_value||'')+'</td>';
     return '<tr><td class="mono">'+esc(x.table)+'</td><td class="mono">'+esc(x.column||'')+'</td><td>'+esc(x.field)+'</td>'+v+'</tr>';
   }).join('');
   return '<div style="margin-top:10px"><b>'+esc(title)+'</b> ('+items.length+')<table><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div>';
@@ -227,11 +227,11 @@ function doDrift(){
       raw(d);
       if(d.error){flash(false,d.error);return;}
       var c=d.counts||{};
-      $('drCounts').innerHTML='<span>import 후보 <b>'+(c.jamypg_gaps||0)+'</b></span>'+
+      $('drCounts').innerHTML='<span>import 후보 <b>'+(c.sqlon_gaps||0)+'</b></span>'+
         '<span>충돌 <b>'+(c.conflicts||0)+'</b></span><span>export 후보 <b>'+(c.ext_gaps||0)+'</b></span>'+
         '<span class="mini">비교 테이블 '+(d.resolved_tables||0)+'</span>';
       var html = driftTable('충돌 (사람 결정 필요)', d.conflicts, 'conflict')+
-        driftTable('sqlon 설명 비어있음 (import 가능)', d.jamypg_gaps, 'gap')+
+        driftTable('sqlon 설명 비어있음 (import 가능)', d.sqlon_gaps, 'gap')+
         driftTable('OpenMetadata 공백 → export 후보', d.ext_gaps, 'gap');
       $('drTables').innerHTML = (html || '<div class="empty">불일치가 없습니다. 두 카탈로그가 정렬돼 있습니다.</div>')+warnings(d);
       flash(true,'대조 완료');

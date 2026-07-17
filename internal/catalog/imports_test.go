@@ -29,7 +29,7 @@ func TestImportExternalPreviewOnlyGaps(t *testing.T) {
 		Source: "openmetadata",
 		Columns: []ExternalColumnMeta{
 			{Table: "public.customer", Column: "cust_no", LogicalName: "고객번호", Description: "고객 식별자", PII: true},
-			{Table: "public.customer", Column: "status", LogicalName: "상태(OM)"}, // jamypg already has one → skip
+			{Table: "public.customer", Column: "status", LogicalName: "상태(OM)"}, // sqlon already has one → skip
 			{Table: "public.unknown", Column: "x", LogicalName: "y"},            // unknown table → skipped
 		},
 		Glossary: []ExternalGlossaryTerm{{Term: "고객", Synonyms: []string{"customer"}}},
@@ -107,12 +107,12 @@ func TestDiffExternalMetadataClassifies(t *testing.T) {
 	imp := ExternalImport{
 		Source: "openmetadata",
 		Columns: []ExternalColumnMeta{
-			{Table: "public.customer", Column: "cust_no", LogicalName: "고객번호", PII: true}, // jamypg empty → jamypg_gap (name + pii)
+			{Table: "public.customer", Column: "cust_no", LogicalName: "고객번호", PII: true}, // sqlon empty → sqlon_gap (name + pii)
 			{Table: "public.customer", Column: "status", LogicalName: "상태(OM)"},           // both differ → conflict
 		},
 	}
 	res := c.DiffExternalMetadata(imp)
-	gaps := res["jamypg_gaps"].([]driftItem)
+	gaps := res["sqlon_gaps"].([]driftItem)
 	conflicts := res["conflicts"].([]driftItem)
 
 	var nameGap, piiGap bool
@@ -129,7 +129,7 @@ func TestDiffExternalMetadataClassifies(t *testing.T) {
 	}
 	var statusConflict bool
 	for _, cf := range conflicts {
-		if cf.Column == "STATUS" && cf.Field == "logical_name" && cf.JamypgValue == "상태(수기)" && cf.ExtValue == "상태(OM)" {
+		if cf.Column == "STATUS" && cf.Field == "logical_name" && cf.SqlonValue == "상태(수기)" && cf.ExtValue == "상태(OM)" {
 			statusConflict = true
 		}
 	}
@@ -137,7 +137,7 @@ func TestDiffExternalMetadataClassifies(t *testing.T) {
 		t.Fatalf("expected a STATUS logical_name conflict: %+v", conflicts)
 	}
 	counts := res["counts"].(map[string]int)
-	if counts["conflicts"] < 1 || counts["jamypg_gaps"] < 2 {
+	if counts["conflicts"] < 1 || counts["sqlon_gaps"] < 2 {
 		t.Fatalf("counts wrong: %+v", counts)
 	}
 }
@@ -148,7 +148,7 @@ func TestStageExternalImportFeedsReviewQueue(t *testing.T) {
 		Source: "openmetadata",
 		Columns: []ExternalColumnMeta{
 			{Table: "public.customer", Column: "cust_no", LogicalName: "고객번호", Description: "고객 식별자", PII: true},
-			{Table: "public.customer", Column: "status", LogicalName: "상태(OM)"}, // jamypg already set → skip
+			{Table: "public.customer", Column: "status", LogicalName: "상태(OM)"}, // sqlon already set → skip
 		},
 	}
 	res := c.StageExternalImport(imp)

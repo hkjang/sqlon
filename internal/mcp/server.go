@@ -35,7 +35,7 @@ const ProtocolVersion = "2025-06-18"
 
 // Version is the SQLON server version, surfaced in serverInfo, /auth/me, and
 // the web UI (sidebar footer). It is a var so release builds can inject the
-// git tag via -ldflags "-X jamypg/internal/mcp.Version=<v>", keeping the
+// git tag via -ldflags "-X sqlon/internal/mcp.Version=<v>", keeping the
 // reported version in lockstep with the release instead of drifting.
 var Version = "0.58.0"
 
@@ -48,7 +48,7 @@ type Options struct {
 	FeedbackTenantID string // server-owned workspace/tenant scope for feedback
 
 	// OpenMetadata integration (optional): base URL + bot JWT for importing
-	// curated metadata and exporting jamypg-owned descriptions.
+	// curated metadata and exporting sqlon-owned descriptions.
 	OpenMetadataURL   string
 	OpenMetadataToken string
 
@@ -212,7 +212,7 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
 	if s.authEnabled() {
 		u, err := s.authenticate(r)
 		if err != nil {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="jamypg-mcp"`)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="sqlon"`)
 			http.Error(w, "authentication required: pass an MCP key via Authorization: Bearer ssk_... or X-MCP-Key (manage keys at /admin/keys)", http.StatusUnauthorized)
 			return
 		}
@@ -749,14 +749,14 @@ func (s *Server) tools() []map[string]any {
 		}, []string{"decisions"})),
 		tool("get_metadata_digest", "One compact operational-health snapshot of the catalog: metadata quality score + release-gate status, the candidate review backlog (pending/approved/rejected), golden-promotion candidate count, and catalog size + load warnings, with a one-line headline. Read-only; use for a daily ops glance or to drive an alert.", objectSchema(map[string]any{}, nil)),
 		tool("openmetadata_status", "Test connectivity and auth to the configured OpenMetadata server and report its version. Use before import/export to confirm the -openmetadata-url / token are set.", objectSchema(map[string]any{}, nil)),
-		tool("import_openmetadata", "Import curated business metadata (table/column display names → logical names, descriptions, PII tags → pii/semantic_type, glossary terms) from OpenMetadata into jamypg. Proposes candidates for GAPS ONLY (never overwrites operator curation), matched to catalog tables by schema.table. apply=false (default) previews; apply=true merges into overrides.json/glossary.json with backups and reloads the catalog (admin); to_review=true stages logical-name/description gaps into the review queue for human approval (review_candidates → decide_candidates → apply_approved_candidates).", objectSchema(map[string]any{
+		tool("import_openmetadata", "Import curated business metadata (table/column display names → logical names, descriptions, PII tags → pii/semantic_type, glossary terms) from OpenMetadata into sqlon. Proposes candidates for GAPS ONLY (never overwrites operator curation), matched to catalog tables by schema.table. apply=false (default) previews; apply=true merges into overrides.json/glossary.json with backups and reloads the catalog (admin); to_review=true stages logical-name/description gaps into the review queue for human approval (review_candidates → decide_candidates → apply_approved_candidates).", objectSchema(map[string]any{
 			"scope":            str("OpenMetadata database/schema FQN to scope the import (e.g. 'service.db' or 'service.db.schema'); omit for all"),
 			"max_tables":       integer("Max tables to fetch (default 500)"),
 			"include_glossary": boolSchema("Also import glossary terms (default true)"),
 			"apply":            boolSchema("true → merge into dataset files + reload (admin); false → preview only (default)"),
 			"to_review":        boolSchema("true → stage logical-name/description gaps into the review queue instead of applying"),
 		}, nil)),
-		tool("openmetadata_drift", "Reconciliation report: compare sqlon's catalog against OpenMetadata and classify every logical-name/description/PII divergence as jamypg_gap (sqlon empty, OM has → import candidate), conflict (both differ → human decision), or ext_gap (sqlon has, OM empty → export candidate). Read-only, writes nothing. Use for governance / keeping the two catalogs aligned.", objectSchema(map[string]any{
+		tool("openmetadata_drift", "Reconciliation report: compare sqlon's catalog against OpenMetadata and classify every logical-name/description/PII divergence as sqlon_gap (sqlon empty, OM has → import candidate), conflict (both differ → human decision), or ext_gap (sqlon has, OM empty → export candidate). Read-only, writes nothing. Use for governance / keeping the two catalogs aligned.", objectSchema(map[string]any{
 			"scope":      str("OpenMetadata database/schema FQN to scope; omit for all"),
 			"max_tables": integer("Max tables to compare (default 500)"),
 		}, nil)),
@@ -2367,7 +2367,7 @@ func (s *Server) putDatasetLocked(name string, content json.RawMessage, force bo
 
 func storedNote(inDB bool) string {
 	if inDB {
-		return "postgres meta DB (jamypg_datasets)"
+		return "postgres meta DB (sqlon_meta.datasets)"
 	}
 	return "file (db_profiles dir)"
 }

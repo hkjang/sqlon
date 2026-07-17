@@ -32,5 +32,5 @@ func (q quoter) sample(schema, table string, limit int) string {
 	if limit <= 0 {
 		return full
 	}
-	return "(SELECT * FROM " + full + " LIMIT " + itoa(limit) + ") " + q.ident("jamypg_sample")
+	return "(SELECT * FROM " + full + " LIMIT " + itoa(limit) + ") " + q.ident("sqlon_sample")
 }

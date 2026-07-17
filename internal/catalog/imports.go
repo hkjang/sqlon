@@ -10,7 +10,7 @@ import (
 // External metadata import (OpenMetadata et al.). This is the catalog-side,
 // source-agnostic pipeline: a caller (e.g. the OpenMetadata connector) hands
 // over neutral column/table/glossary metadata, and the catalog resolves it
-// against the compiled model, proposes candidates ONLY for gaps jamypg lacks,
+// against the compiled model, proposes candidates ONLY for gaps sqlon lacks,
 // and either previews them (default) or merges them into overrides.json /
 // glossary.json with backups. Business meaning still never lands silently:
 // preview is the default and apply is an explicit second act; existing
@@ -18,7 +18,7 @@ import (
 
 // ExternalColumnMeta is one column's curated metadata from an external catalog.
 type ExternalColumnMeta struct {
-	Table       string // jamypg form "schema.table"
+	Table       string // sqlon form "schema.table"
 	Column      string
 	LogicalName string
 	Description string
@@ -81,7 +81,7 @@ func (c *Catalog) ImportExternalMetadata(imp ExternalImport, apply bool, now tim
 		return e
 	}
 
-	// ---- columns: propose only where jamypg lacks the value ----
+	// ---- columns: propose only where sqlon lacks the value ----
 	for _, cm := range imp.Columns {
 		t, ok := c.ResolveTable(cm.Table)
 		if !ok {
@@ -218,23 +218,23 @@ func (c *Catalog) ImportExternalMetadata(imp ExternalImport, apply bool, now tim
 	return res
 }
 
-// driftItem is one field-level divergence between jamypg and an external
+// driftItem is one field-level divergence between sqlon and an external
 // catalog.
 type driftItem struct {
-	Table       string `json:"table"`
-	Column      string `json:"column,omitempty"`
-	Field       string `json:"field"` // logical_name | description | pii
-	JamypgValue string `json:"jamypg_value,omitempty"`
-	ExtValue    string `json:"ext_value,omitempty"`
+	Table      string `json:"table"`
+	Column     string `json:"column,omitempty"`
+	Field      string `json:"field"` // logical_name | description | pii
+	SqlonValue string `json:"sqlon_value,omitempty"`
+	ExtValue   string `json:"ext_value,omitempty"`
 }
 
-// DiffExternalMetadata reconciles jamypg against an external catalog without
+// DiffExternalMetadata reconciles sqlon against an external catalog without
 // writing anything. It classifies each field as:
-//   - jamypg_gap: jamypg is empty, the external catalog has a value (import candidate)
+//   - sqlon_gap: sqlon is empty, the external catalog has a value (import candidate)
 //   - conflict:   both have values and they differ (needs a human decision)
-//   - ext_gap:    jamypg has a value, the external catalog is empty (export candidate)
+//   - ext_gap:    sqlon has a value, the external catalog is empty (export candidate)
 func (c *Catalog) DiffExternalMetadata(imp ExternalImport) map[string]any {
-	jamypgGaps := []driftItem{}
+	sqlonGaps := []driftItem{}
 	conflicts := []driftItem{}
 	extGaps := []driftItem{}
 	resolved := map[string]bool{}
@@ -244,11 +244,11 @@ func (c *Catalog) DiffExternalMetadata(imp ExternalImport) map[string]any {
 		jv, ev = strings.TrimSpace(jv), strings.TrimSpace(ev)
 		switch {
 		case jv == "" && ev != "":
-			jamypgGaps = append(jamypgGaps, driftItem{Table: table, Column: column, Field: field, ExtValue: ev})
+			sqlonGaps = append(sqlonGaps, driftItem{Table: table, Column: column, Field: field, ExtValue: ev})
 		case jv != "" && ev == "":
-			extGaps = append(extGaps, driftItem{Table: table, Column: column, Field: field, JamypgValue: jv})
+			extGaps = append(extGaps, driftItem{Table: table, Column: column, Field: field, SqlonValue: jv})
 		case jv != "" && ev != "" && !strings.EqualFold(jv, ev):
-			conflicts = append(conflicts, driftItem{Table: table, Column: column, Field: field, JamypgValue: jv, ExtValue: ev})
+			conflicts = append(conflicts, driftItem{Table: table, Column: column, Field: field, SqlonValue: jv, ExtValue: ev})
 		}
 	}
 
@@ -268,9 +268,9 @@ func (c *Catalog) DiffExternalMetadata(imp ExternalImport) map[string]any {
 		// PII is a boolean: represent divergence directionally.
 		switch {
 		case !col.PII && cm.PII:
-			jamypgGaps = append(jamypgGaps, driftItem{Table: t.FQN, Column: col.Name, Field: "pii", ExtValue: "true"})
+			sqlonGaps = append(sqlonGaps, driftItem{Table: t.FQN, Column: col.Name, Field: "pii", ExtValue: "true"})
 		case col.PII && !cm.PII:
-			extGaps = append(extGaps, driftItem{Table: t.FQN, Column: col.Name, Field: "pii", JamypgValue: "true"})
+			extGaps = append(extGaps, driftItem{Table: t.FQN, Column: col.Name, Field: "pii", SqlonValue: "true"})
 		}
 	}
 	for _, tm := range imp.Tables {
@@ -293,14 +293,14 @@ func (c *Catalog) DiffExternalMetadata(imp ExternalImport) map[string]any {
 	return map[string]any{
 		"source":          imp.Source,
 		"resolved_tables": len(resolved),
-		"jamypg_gaps":     jamypgGaps, // import candidates (external → jamypg)
-		"conflicts":       conflicts,  // divergent values; reconcile manually
-		"ext_gaps":        extGaps,    // export candidates (jamypg → external)
+		"sqlon_gaps":      sqlonGaps, // import candidates (external → sqlon)
+		"conflicts":       conflicts, // divergent values; reconcile manually
+		"ext_gaps":        extGaps,   // export candidates (sqlon → external)
 		"counts": map[string]int{
-			"jamypg_gaps": len(jamypgGaps), "conflicts": len(conflicts), "ext_gaps": len(extGaps),
+			"sqlon_gaps": len(sqlonGaps), "conflicts": len(conflicts), "ext_gaps": len(extGaps),
 		},
 		"skipped_tables": skippedList,
-		"note":           "읽기 전용 대조입니다. jamypg_gaps는 import, ext_gaps는 export 후보이며 conflicts는 사람이 어느 쪽을 채택할지 결정해야 합니다.",
+		"note":           "읽기 전용 대조입니다. sqlon_gaps는 import, ext_gaps는 export 후보이며 conflicts는 사람이 어느 쪽을 채택할지 결정해야 합니다.",
 	}
 }
 
