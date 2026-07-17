@@ -36,8 +36,11 @@ type Service struct {
 	ExpectedInterval time.Duration
 }
 
-func New(manager *dbconn.Manager, store storage.OperationalStore) *Service {
-	return &Service{Queryer: manager, Source: manager, Store: store, Providers: NewRegistry(), Engines: engine.NewDefaultRegistry(), Now: time.Now, Concurrency: 4, ExpectedInterval: time.Minute}
+// New builds the collection service. providers is the engine-name→provider
+// map, normally adapters.CollectorProviders() — injected so this package
+// never depends on concrete engine implementations.
+func New(manager *dbconn.Manager, store storage.OperationalStore, providers map[string]Provider) *Service {
+	return &Service{Queryer: manager, Source: manager, Store: store, Providers: NewRegistry(providers), Engines: engine.NewDefaultRegistry(), Now: time.Now, Concurrency: 4, ExpectedInterval: time.Minute}
 }
 
 // FreshnessThreshold returns the maximum accepted snapshot age. SQLON's

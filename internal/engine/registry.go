@@ -7,24 +7,12 @@ import (
 	"sync"
 )
 
-// Adapter is an engine declaration and optional role-provider bundle.
+// Adapter declares an engine and its capability set. Role-provider
+// implementations live in internal/engine/<engine> packages and are bound to
+// the consuming services by internal/engine/adapters.
 type Adapter struct {
 	Name         string
 	Capabilities CapabilitySet
-	Connector    Connector
-	Metadata     MetadataProvider
-	Sessions     SessionProvider
-	Locks        LockProvider
-	Dialect      DialectProvider
-	QueryGuard   QueryGuard
-	Workload     WorkloadProvider
-	Explain      ExplainProvider
-	Storage      StorageProvider
-	Replication  ReplicationProvider
-	Backup       BackupProvider
-	Security     SecurityProvider
-	Admin        AdminProvider
-	Maintenance  MaintenanceProvider
 }
 
 // Registry centralizes adapter lookup. It rejects duplicate names so a build
@@ -36,9 +24,10 @@ type Registry struct {
 
 func NewRegistry() *Registry { return &Registry{adapters: make(map[string]Adapter)} }
 
-// NewDefaultRegistry is the only product-level engine-name declaration.
-// Service packages consume capabilities from this registry and never switch
-// on postgres/mysql/mariadb/oracle themselves.
+// NewDefaultRegistry is the product-level capability declaration for every
+// supported engine. Service packages consume capabilities from this registry
+// and never switch on postgres/mysql/mariadb/oracle themselves. The matching
+// role-provider implementations are wired by internal/engine/adapters.
 func NewDefaultRegistry() *Registry {
 	r := NewRegistry()
 	declarations := []Adapter{

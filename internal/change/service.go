@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 )
@@ -37,6 +38,10 @@ func (s *Service) Rollback(ctx context.Context, id string, runner Runner) (Plan,
 		s.mu.Unlock()
 		return Plan{}, err
 	}
+	if err := s.persistLocked(p); err != nil {
+		s.mu.Unlock()
+		return Plan{}, err
+	}
 	s.plans[id] = p
 	s.mu.Unlock()
 	for i := len(p.Steps) - 1; i >= 0; i-- {
@@ -51,7 +56,7 @@ func (s *Service) Rollback(ctx context.Context, id string, runner Runner) (Plan,
 		return Plan{}, err
 	}
 	s.plans[id] = p
-	return p, nil
+	return p, s.persistLocked(p)
 }
 
 func (s *Service) failRollback(id string, cause error) (Plan, error) {
@@ -60,21 +65,95 @@ func (s *Service) failRollback(id string, cause error) (Plan, error) {
 	p := s.plans[id]
 	_ = p.Transition(Failed, s.now())
 	s.plans[id] = p
+	if perr := s.persistLocked(p); perr != nil {
+		return p, errors.Join(cause, perr)
+	}
 	return p, cause
 }
 
-// Service is the shared API/MCP change-control service. It stores plans in
-// memory for the standalone mode; storage adapters can implement persistence
-// without changing approval or transition policy.
+// Service is the shared API/MCP change-control service. In-memory state is
+// authoritative for the running process; when a Store is attached, every
+// mutation is written through so plans, approvals, and execution outcomes
+// survive a restart. Pure state transitions (create, submit, approve, cancel,
+// execution start) commit to memory only after a successful persist, so a
+// disk error leaves the plan untouched and the call retryable. Outcome states
+// recorded after privileged SQL already ran (completed, failed,
+// rollback_required, rolled_back) commit to memory regardless and report the
+// persistence error alongside — the fact on the database always wins.
 type Service struct {
 	mu          sync.RWMutex
 	plans       map[string]Plan
 	idempotency map[string]string
+	store       Store
 	now         func() time.Time
 }
 
 func NewService() *Service {
 	return &Service{plans: map[string]Plan{}, idempotency: map[string]string{}, now: time.Now}
+}
+
+// NewServiceWithStore restores persisted plans and idempotency keys from the
+// store and write-through-persists every subsequent mutation. On a partial
+// load failure it returns the service with the recoverable subset alongside
+// the error so the caller can surface the loss instead of hiding it.
+func NewServiceWithStore(store Store) (*Service, error) {
+	s := NewService()
+	s.store = store
+	if store == nil {
+		return s, nil
+	}
+	plans, idempotency, err := store.Load()
+	for _, p := range plans {
+		s.plans[p.ID] = p
+	}
+	for key, id := range idempotency {
+		s.idempotency[key] = id
+	}
+	return s, err
+}
+
+// persistLocked writes a plan through to the store. Callers must hold s.mu.
+func (s *Service) persistLocked(p Plan) error {
+	if s.store == nil {
+		return nil
+	}
+	if err := s.store.SavePlan(p); err != nil {
+		return fmt.Errorf("change plan %q was applied in memory but could not be persisted: %w", p.ID, err)
+	}
+	return nil
+}
+
+// persistIdempotencyLocked snapshots the idempotency map to the store.
+// Callers must hold s.mu.
+func (s *Service) persistIdempotencyLocked() error {
+	if s.store == nil {
+		return nil
+	}
+	snapshot := make(map[string]string, len(s.idempotency))
+	for key, id := range s.idempotency {
+		snapshot[key] = id
+	}
+	if err := s.store.SaveIdempotency(snapshot); err != nil {
+		return fmt.Errorf("change idempotency keys could not be persisted: %w", err)
+	}
+	return nil
+}
+
+// List returns every known plan, newest first.
+func (s *Service) List() []Plan {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Plan, 0, len(s.plans))
+	for _, p := range s.plans {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].CreatedAt.After(out[j].CreatedAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
 }
 func (s *Service) Create(p Plan, key string) (Plan, error) {
 	s.mu.Lock()
@@ -104,9 +183,15 @@ func (s *Service) Create(p Plan, key string) (Plan, error) {
 	}
 	p.CreatedAt = s.now().UTC()
 	p.UpdatedAt = p.CreatedAt
+	if err := s.persistLocked(p); err != nil {
+		return Plan{}, err
+	}
 	s.plans[p.ID] = p
 	if key != "" {
 		s.idempotency[key] = p.ID
+		if err := s.persistIdempotencyLocked(); err != nil {
+			return p, err
+		}
 	}
 	return p, nil
 }
@@ -131,6 +216,9 @@ func (s *Service) Submit(id string) (Plan, error) {
 		next = Approved
 	}
 	if err := p.Transition(next, s.now()); err != nil {
+		return Plan{}, err
+	}
+	if err := s.persistLocked(p); err != nil {
 		return Plan{}, err
 	}
 	s.plans[id] = p
@@ -168,6 +256,9 @@ func (s *Service) Approve(id, actor string) (Plan, error) {
 			return Plan{}, err
 		}
 	}
+	if err := s.persistLocked(p); err != nil {
+		return Plan{}, err
+	}
 	s.plans[id] = p
 	return p, nil
 }
@@ -180,6 +271,9 @@ func (s *Service) Cancel(id string) (Plan, error) {
 		return Plan{}, fmt.Errorf("change plan %q not found", id)
 	}
 	if err := p.Transition(Cancelled, s.now()); err != nil {
+		return Plan{}, err
+	}
+	if err := s.persistLocked(p); err != nil {
 		return Plan{}, err
 	}
 	s.plans[id] = p
@@ -210,6 +304,13 @@ func (s *Service) Execute(ctx context.Context, id string, runner Runner) (Plan, 
 		s.mu.Unlock()
 		return Plan{}, err
 	}
+	// Persist the executing marker before any privileged SQL runs: if the
+	// process dies mid-execution, a restart must show the plan as in-flight
+	// rather than silently reverting it to approved-and-runnable.
+	if err := s.persistLocked(p); err != nil {
+		s.mu.Unlock()
+		return Plan{}, err
+	}
 	s.plans[id] = p
 	s.mu.Unlock()
 	if err := runner.Revalidate(ctx, p); err != nil {
@@ -233,7 +334,7 @@ func (s *Service) Execute(ctx context.Context, id string, runner Runner) (Plan, 
 		return Plan{}, err
 	}
 	s.plans[id] = p
-	return p, nil
+	return p, s.persistLocked(p)
 }
 
 func (s *Service) fail(id string, cause error) (Plan, error) {
@@ -244,5 +345,8 @@ func (s *Service) fail(id string, cause error) (Plan, error) {
 		_ = p.Transition(RollbackRequired, s.now())
 	}
 	s.plans[id] = p
+	if perr := s.persistLocked(p); perr != nil {
+		return p, errors.Join(cause, perr)
+	}
 	return p, cause
 }

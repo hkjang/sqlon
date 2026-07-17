@@ -20,8 +20,11 @@ type Service struct {
 	Now       func() time.Time
 }
 
-func New(queryer SystemQueryer) *Service {
-	return &Service{Queryer: queryer, Providers: NewRegistry(), Engines: engine.NewDefaultRegistry(), Now: time.Now}
+// New builds the observation service. providers is the engine-name→provider
+// map, normally adapters.ObservabilityProviders() — injected so this package
+// never depends on concrete engine implementations.
+func New(queryer SystemQueryer, providers map[string]Provider) *Service {
+	return &Service{Queryer: queryer, Providers: NewRegistry(providers), Engines: engine.NewDefaultRegistry(), Now: time.Now}
 }
 
 func (s *Service) Sessions(ctx context.Context, raw dbconn.Profile) Response[SessionData] {

@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"sqlon/internal/dbconn"
 )
@@ -18,6 +17,9 @@ type SystemQueryer interface {
 	SystemQuery(context.Context, string, string, ...any) ([]map[string]any, error)
 }
 
+// Provider is the session/lock observation role. Engine implementations live
+// in internal/engine/<engine> and are wired by internal/engine/adapters; this
+// package owns the result model, protection policy, and service logic only.
 type Provider interface {
 	Sessions(context.Context, SystemQueryer, dbconn.Profile) ([]Session, error)
 	Locks(context.Context, SystemQueryer, dbconn.Profile) ([]LockEdge, error)
@@ -29,13 +31,15 @@ const SnapshotRowLimit = 10_000
 
 type Registry struct{ providers map[string]Provider }
 
-func NewRegistry() *Registry {
-	return &Registry{providers: map[string]Provider{
-		"postgres": postgresProvider{},
-		"mysql":    mysqlProvider{},
-		"mariadb":  mariadbProvider{},
-		"oracle":   oracleProvider{},
-	}}
+// NewRegistry builds a provider registry from an engine-name→implementation
+// map (normally adapters.ObservabilityProviders()). A nil map yields an empty
+// registry, which reports every engine as unsupported.
+func NewRegistry(providers map[string]Provider) *Registry {
+	normalized := make(map[string]Provider, len(providers))
+	for name, provider := range providers {
+		normalized[strings.ToLower(strings.TrimSpace(name))] = provider
+	}
+	return &Registry{providers: normalized}
 }
 
 func (r *Registry) Get(engine string) (Provider, bool) {
@@ -54,7 +58,9 @@ func rowValue(row map[string]any, names ...string) any {
 	return nil
 }
 
-func textValue(row map[string]any, names ...string) string {
+// Text and Int read a column case-insensitively from a system-query row,
+// trying the given names in order. Exported for the engine adapter packages.
+func Text(row map[string]any, names ...string) string {
 	v := rowValue(row, names...)
 	if v == nil {
 		return ""
@@ -62,7 +68,7 @@ func textValue(row map[string]any, names ...string) string {
 	return strings.TrimSpace(fmt.Sprint(v))
 }
 
-func intValue(row map[string]any, names ...string) int64 {
+func Int(row map[string]any, names ...string) int64 {
 	v := rowValue(row, names...)
 	switch n := v.(type) {
 	case int:
@@ -78,7 +84,10 @@ func intValue(row map[string]any, names ...string) int64 {
 	return n
 }
 
-func sessionKey(parts ...string) string {
+// SessionKey joins the non-empty parts into the engine-agnostic session key
+// (Oracle uses INST_ID:SID:SERIAL# so a recycled SID can never be confused
+// with the session that previously held it).
+func SessionKey(parts ...string) string {
 	clean := make([]string, 0, len(parts))
 	for _, part := range parts {
 		if strings.TrimSpace(part) != "" {
@@ -88,7 +97,10 @@ func sessionKey(parts ...string) string {
 	return strings.Join(clean, ":")
 }
 
-func protectSession(engine, user, state, application string) (bool, string) {
+// ProtectSession is the product-wide policy marking sessions that must never
+// be cancelled or terminated. It is deliberately owned here — engine adapters
+// classify their sessions through this single policy.
+func ProtectSession(engine, user, state, application string) (bool, string) {
 	u := strings.ToUpper(strings.TrimSpace(user))
 	a := strings.ToLower(application)
 	s := strings.ToLower(state)
@@ -110,7 +122,8 @@ func protectSession(engine, user, state, application string) (bool, string) {
 	return false, ""
 }
 
-func sortSessions(items []Session) {
+// SortSessions orders sessions longest-running first for operator triage.
+func SortSessions(items []Session) {
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].DurationSeconds != items[j].DurationSeconds {
 			return items[i].DurationSeconds > items[j].DurationSeconds
@@ -118,5 +131,3 @@ func sortSessions(items []Session) {
 		return items[i].SessionKey < items[j].SessionKey
 	})
 }
-
-func nowUTC() time.Time { return time.Now().UTC() }

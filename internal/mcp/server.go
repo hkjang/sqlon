@@ -24,6 +24,7 @@ import (
 	"sqlon/internal/change"
 	"sqlon/internal/collector"
 	"sqlon/internal/dbconn"
+	"sqlon/internal/engine/adapters"
 	"sqlon/internal/fleet"
 	"sqlon/internal/meta"
 	"sqlon/internal/observability"
@@ -53,19 +54,20 @@ type Options struct {
 }
 
 type Server struct {
-	catalogPtr   atomic.Pointer[catalog.Catalog]
-	Options      Options
-	DB           *dbconn.Manager
-	Collector    *collector.Service
-	Changes      *change.Service
-	Meta         *meta.Service // nil = standalone mode (auth disabled)
-	OIDC         *OIDCProvider // nil = SSO disabled
-	mu           sync.Mutex
-	dataMu       sync.Mutex        // serializes dataset mutations + catalog reloads
-	settingsMu   sync.RWMutex      // guards Options.AdminToken/AllowedOrigins/OIDC live updates
-	bootDefaults map[string]string // flag/env setting values captured at EnableMeta
-	sessions     map[string]time.Time
-	events       map[string]uint64
+	catalogPtr    atomic.Pointer[catalog.Catalog]
+	Options       Options
+	DB            *dbconn.Manager
+	Collector     *collector.Service
+	Observability *observability.Service
+	Changes       *change.Service
+	Meta          *meta.Service // nil = standalone mode (auth disabled)
+	OIDC          *OIDCProvider // nil = SSO disabled
+	mu            sync.Mutex
+	dataMu        sync.Mutex        // serializes dataset mutations + catalog reloads
+	settingsMu    sync.RWMutex      // guards Options.AdminToken/AllowedOrigins/OIDC live updates
+	bootDefaults  map[string]string // flag/env setting values captured at EnableMeta
+	sessions      map[string]time.Time
+	events        map[string]uint64
 	// pendingClar tracks blocking clarification questions per MCP session:
 	// prepare_sql_context sets them when it withholds the skeleton and clears
 	// them once the (re-)call succeeds; run_sql_safely refuses to execute
@@ -139,12 +141,20 @@ func NewServer(c *catalog.Catalog, opts Options) *Server {
 		opts.FeedbackTenantID = "default"
 	}
 	dbManager := dbconn.NewManager(c.DataDir)
+	// Change plans are durable: approvals and execution outcomes must survive a
+	// restart. A load error is surfaced (never swallowed) but boots the server
+	// with the recoverable subset; new mutations still persist.
+	changes, changeLoadErr := change.NewServiceWithStore(change.NewFileStore(filepath.Join(c.DataDir, "changes")))
+	if changeLoadErr != nil {
+		log.Printf("sqlon: change-plan store: some persisted plans could not be restored: %v", changeLoadErr)
+	}
 	s := &Server{
 		Options:         opts,
 		dataDir:         c.DataDir,
 		DB:              dbManager,
-		Collector:       collector.New(dbManager, storage.NewFileStore(c.DataDir)),
-		Changes:         change.NewService(),
+		Collector:       collector.New(dbManager, storage.NewFileStore(c.DataDir), adapters.CollectorProviders()),
+		Observability:   observability.New(dbManager, adapters.ObservabilityProviders()),
+		Changes:         changes,
 		sessions:        map[string]time.Time{},
 		events:          map[string]uint64{},
 		pendingClar:     map[string][]string{},
@@ -1203,7 +1213,7 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 		if !ok {
 			return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
 		}
-		return observability.New(s.DB).Sessions(ctx, profile), nil
+		return s.Observability.Sessions(ctx, profile), nil
 	case "get_lock_tree":
 		var a struct {
 			Profile string `json:"profile"`
@@ -1219,7 +1229,7 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 		if !ok {
 			return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
 		}
-		return observability.New(s.DB).Locks(ctx, profile), nil
+		return s.Observability.Locks(ctx, profile), nil
 	case "get_workload_summary", "get_top_sql", "get_storage_status":
 		var a struct {
 			Profile string `json:"profile"`

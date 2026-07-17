@@ -16,7 +16,6 @@ import (
 	"sqlon/internal/change"
 	"sqlon/internal/dbconn"
 	"sqlon/internal/fleet"
-	"sqlon/internal/observability"
 )
 
 //go:embed webui
@@ -97,7 +96,7 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 			writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted"))
 			return
 		}
-		writeJSON(w, http.StatusOK, observability.New(s.DB).Sessions(ctx, profile))
+		writeJSON(w, http.StatusOK, s.Observability.Sessions(ctx, profile))
 	})
 	mux.HandleFunc("GET /api/observability/locks", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := s.requireQueryActor(w, r); !ok {
@@ -112,7 +111,7 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 			writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted"))
 			return
 		}
-		writeJSON(w, http.StatusOK, observability.New(s.DB).Locks(ctx, profile))
+		writeJSON(w, http.StatusOK, s.Observability.Locks(ctx, profile))
 	})
 	for path, kind := range map[string]string{
 		"/api/observability/workload": "workload",
@@ -179,6 +178,12 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	// Change management is intentionally separate from the legacy DBA executor.
 	// Plan creation and approval are shared service calls; no endpoint here can
 	// execute privileged SQL.
+	mux.HandleFunc("GET /api/changes", func(w http.ResponseWriter, r *http.Request) {
+		if !s.requireDBA(w, r) {
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": s.Changes.List(), "collected_at": time.Now().UTC()})
+	})
 	mux.HandleFunc("POST /api/changes", func(w http.ResponseWriter, r *http.Request) {
 		if !s.requireDBA(w, r) {
 			return
@@ -271,6 +276,41 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		}
 		s.appendAudit(audit)
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": p, "collected_at": time.Now().UTC()})
+	})
+	// Rollback runs the approved plan's compensation steps in reverse. It is
+	// only reachable from rollback_required, i.e. after an approved execution
+	// failed — so no separate approval id is required, matching MCP semantics.
+	mux.HandleFunc("POST /api/changes/{id}/rollback", func(w http.ResponseWriter, r *http.Request) {
+		if !s.requireDBA(w, r) {
+			return
+		}
+		id := r.PathValue("id")
+		p, err := s.Changes.Rollback(r.Context(), id, approvedChangeRunner{server: s})
+		actor := "dba"
+		if u := userFrom(r.Context()); u != nil {
+			actor = u.Username
+		}
+		audit := map[string]any{"ts": time.Now().UTC().Format(time.RFC3339Nano), "tool": "sqlon:change_rollback", "change_id": id, "actor": actor, "db_profile_id": p.ProfileID}
+		if err != nil {
+			audit["is_error"] = true
+			audit["error"] = err.Error()
+			s.appendAudit(audit)
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		s.appendAudit(audit)
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": p, "collected_at": time.Now().UTC()})
+	})
+	mux.HandleFunc("POST /api/changes/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
+		if !s.requireDBA(w, r) {
+			return
+		}
+		p, err := s.Changes.Cancel(r.PathValue("id"))
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": p})
 	})
 	mux.HandleFunc("GET /api/metadata/quality", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("gate") == "true" {

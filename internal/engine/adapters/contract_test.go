@@ -1,0 +1,155 @@
+package adapters_test
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"sqlon/internal/dbconn"
+	"sqlon/internal/engine"
+	"sqlon/internal/engine/adapters"
+)
+
+// contractQueryer answers each engine's fixed system queries with minimal
+// plausible rows and records every query for read-only/license assertions.
+type contractQueryer struct {
+	queries []string
+	rows    []map[string]any
+}
+
+func (q *contractQueryer) SystemQuery(_ context.Context, _ string, query string, _ ...any) ([]map[string]any, error) {
+	q.queries = append(q.queries, query)
+	if q.rows != nil {
+		return q.rows, nil
+	}
+	upper := strings.ToUpper(query)
+	switch {
+	case strings.Contains(upper, "PG_STAT_DATABASE"):
+		return []map[string]any{{"transactions": 100, "commits": 90, "rollbacks": 10, "active_connections": 3}}, nil
+	case strings.Contains(upper, "GLOBAL_STATUS"):
+		return []map[string]any{{"queries": 100, "commits": 90, "rollbacks": 10, "active_connections": 3}}, nil
+	case strings.Contains(upper, "V$SYSSTAT"):
+		return []map[string]any{{"queries": 100, "commits": 90, "rollbacks": 10}}, nil
+	case strings.Contains(upper, "PG_STAT_ACTIVITY") || strings.Contains(upper, "EVENTS_WAITS_SUMMARY") || strings.Contains(upper, "V$SYSTEM_EVENT"):
+		return []map[string]any{{"wait_class": "I/O", "wait_event": "read", "wait_count": 2, "time_ms": 5}}, nil
+	case strings.Contains(upper, "PG_STAT_STATEMENTS") || strings.Contains(upper, "EVENTS_STATEMENTS_SUMMARY") || strings.Contains(upper, "GV$SQL"):
+		return []map[string]any{{"fingerprint": "hash1", "calls": 4, "elapsed_ms": 20, "reads": 8, "rows": 2}}, nil
+	case strings.Contains(upper, "GV$SESSION"):
+		return []map[string]any{{"active_connections": 3, "running_connections": 1}}, nil
+	case strings.Contains(upper, "PG_DATABASE_SIZE") || strings.Contains(upper, "INFORMATION_SCHEMA.TABLES") || strings.Contains(upper, "DBA_TABLESPACE_USAGE_METRICS"):
+		return []map[string]any{{"scope": "database", "name": "app", "used_bytes": 1000, "allocated_bytes": 2000, "usage_percent": 50}}, nil
+	default:
+		return []map[string]any{}, nil
+	}
+}
+
+func assertReadOnlyBaseLicense(t *testing.T, query string) {
+	t.Helper()
+	upper := strings.ToUpper(strings.TrimSpace(query))
+	if !strings.HasPrefix(upper, "SELECT") {
+		t.Fatalf("non-read-only provider query: %s", query)
+	}
+	for _, forbidden := range []string{"INSERT ", "UPDATE ", "DELETE ", "ALTER ", "DROP ", "ACTIVE_SESSION_HISTORY", "DBA_HIST", "DBMS_WORKLOAD_REPOSITORY", "DBMS_SQLTUNE"} {
+		if strings.Contains(upper, forbidden) {
+			t.Fatalf("provider query contains write/licensed feature %q: %s", forbidden, query)
+		}
+	}
+}
+
+// TestEveryDeclaredEngineHasProvidersForItsCapabilities pins wiring to the
+// capability declaration: an engine declaring Workload/Sessions/LockTree must
+// have a registered implementation, and no implementation may exist for an
+// undeclared engine.
+func TestEveryDeclaredEngineHasProvidersForItsCapabilities(t *testing.T) {
+	engines := engine.NewDefaultRegistry()
+	workload := adapters.CollectorProviders()
+	observation := adapters.ObservabilityProviders()
+	for _, name := range engines.Names() {
+		adapter, _ := engines.Get(name)
+		if adapter.Capabilities.Workload {
+			if _, ok := workload[name]; !ok {
+				t.Errorf("engine %s declares Workload but has no collector provider", name)
+			}
+		}
+		if adapter.Capabilities.Sessions || adapter.Capabilities.LockTree {
+			if _, ok := observation[name]; !ok {
+				t.Errorf("engine %s declares Sessions/LockTree but has no observability provider", name)
+			}
+		}
+	}
+	for name := range workload {
+		if _, ok := engines.Get(name); !ok {
+			t.Errorf("collector provider %s has no capability declaration", name)
+		}
+	}
+	for name := range observation {
+		if _, ok := engines.Get(name); !ok {
+			t.Errorf("observability provider %s has no capability declaration", name)
+		}
+	}
+}
+
+func TestAllProvidersCollectCommonWorkloadCapacityContract(t *testing.T) {
+	providers := adapters.CollectorProviders()
+	for _, engineName := range []string{"postgres", "mysql", "mariadb", "oracle"} {
+		t.Run(engineName, func(t *testing.T) {
+			provider, ok := providers[engineName]
+			if !ok {
+				t.Fatal("provider missing")
+			}
+			q := &contractQueryer{}
+			snapshot, err := provider.Collect(context.Background(), q, dbconn.Profile{ID: "p", Type: engineName})
+			if err != nil || snapshot.Engine != engineName || len(snapshot.Counters) == 0 || len(snapshot.Waits) == 0 || len(snapshot.TopSQL) == 0 || len(snapshot.Capacity) == 0 {
+				t.Fatalf("contract failed: snapshot=%+v err=%v", snapshot, err)
+			}
+			for _, query := range q.queries {
+				assertReadOnlyBaseLicense(t, query)
+			}
+		})
+	}
+}
+
+func TestAllEngineProvidersSatisfySessionAndLockContract(t *testing.T) {
+	tests := []struct {
+		engine, sessionKey, sessionView, lockView string
+		sessionRow                                map[string]any
+	}{
+		{"postgres", "42", "PG_STAT_ACTIVITY", "PG_BLOCKING_PIDS", map[string]any{"session_id": "42", "username": "app", "state": "active"}},
+		{"mysql", "42", "INFORMATION_SCHEMA.PROCESSLIST", "DATA_LOCK_WAITS", map[string]any{"session_id": "42", "username": "app", "state": "Query"}},
+		{"mariadb", "42", "INFORMATION_SCHEMA.PROCESSLIST", "INNODB_LOCK_WAITS", map[string]any{"session_id": "42", "username": "app", "state": "Query"}},
+		{"oracle", "1:42:9", "GV$SESSION", "GV$SESSION", map[string]any{"instance_id": "1", "session_id": "42", "serial_no": "9", "username": "APP", "state": "ACTIVE"}},
+	}
+	providers := adapters.ObservabilityProviders()
+	for _, tc := range tests {
+		t.Run(tc.engine, func(t *testing.T) {
+			provider, ok := providers[tc.engine]
+			if !ok {
+				t.Fatalf("provider not registered")
+			}
+			q := &contractQueryer{rows: []map[string]any{tc.sessionRow}}
+			sessions, err := provider.Sessions(context.Background(), q, dbconn.Profile{ID: "p", Type: tc.engine})
+			if err != nil || len(sessions) != 1 || sessions[0].Engine != tc.engine || sessions[0].SessionKey != tc.sessionKey {
+				t.Fatalf("session contract: sessions=%+v err=%v", sessions, err)
+			}
+			assertFixedSystemQuery(t, q.queries, tc.sessionView)
+
+			q = &contractQueryer{rows: []map[string]any{{"blocker_key": "1", "blocked_key": "2", "lock_type": "TX"}}}
+			edges, err := provider.Locks(context.Background(), q, dbconn.Profile{ID: "p", Type: tc.engine})
+			if err != nil || len(edges) != 1 || edges[0].Engine != tc.engine || edges[0].BlockerKey != "1" || edges[0].BlockedKey != "2" {
+				t.Fatalf("lock contract: edges=%+v err=%v", edges, err)
+			}
+			assertFixedSystemQuery(t, q.queries, tc.lockView)
+		})
+	}
+}
+
+func assertFixedSystemQuery(t *testing.T, queries []string, expectedView string) {
+	t.Helper()
+	if len(queries) != 1 {
+		t.Fatalf("expected exactly one fixed system query, got %d", len(queries))
+	}
+	if !strings.Contains(strings.ToUpper(queries[0]), expectedView) {
+		t.Fatalf("unexpected system view, want %s in: %s", expectedView, queries[0])
+	}
+	assertReadOnlyBaseLicense(t, queries[0])
+}

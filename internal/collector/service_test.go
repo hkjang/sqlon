@@ -23,9 +23,7 @@ func (p *sequenceProvider) Collect(_ context.Context, _ SystemQueryer, profile d
 func TestCollectProfilePersistsAndDerivesRatesFromPriorSnapshot(t *testing.T) {
 	store := storage.NewFileStore(t.TempDir())
 	provider := &sequenceProvider{}
-	svc := New(nil, store)
-	svc.Queryer = &contractQueryer{}
-	svc.Providers = &Registry{providers: map[string]Provider{"postgres": provider}}
+	svc := New(nil, store, map[string]Provider{"postgres": provider})
 	clock := time.Date(2026, 7, 17, 0, 0, 0, 0, time.UTC)
 	svc.Now = func() time.Time { return clock }
 	profile := dbconn.Profile{ID: "p", Type: "postgres"}
@@ -58,9 +56,7 @@ func TestCollectProfilePersistsAndDerivesRatesFromPriorSnapshot(t *testing.T) {
 
 func TestBatchIsolationKeepsOtherProfiles(t *testing.T) {
 	provider := &sequenceProvider{}
-	svc := New(nil, storage.NewFileStore(t.TempDir()))
-	svc.Queryer = &contractQueryer{}
-	svc.Providers = &Registry{providers: map[string]Provider{"postgres": provider}}
+	svc := New(nil, storage.NewFileStore(t.TempDir()), map[string]Provider{"postgres": provider})
 	batch := svc.CollectAll(context.Background(), []dbconn.Profile{{ID: "good", Type: "postgres"}, {ID: "unknown", Type: "nope"}}, false)
 	if batch.Status != "degraded" || batch.Succeeded != 1 || batch.Failed != 1 || len(batch.Results) != 2 {
 		t.Fatalf("batch isolation failed: %+v", batch)
@@ -68,7 +64,7 @@ func TestBatchIsolationKeepsOtherProfiles(t *testing.T) {
 }
 
 func TestFreshnessThresholdTracksCollectionInterval(t *testing.T) {
-	svc := New(nil, storage.NewFileStore(t.TempDir()))
+	svc := New(nil, storage.NewFileStore(t.TempDir()), nil)
 	if got := svc.FreshnessThreshold(); got != 2*time.Minute {
 		t.Fatalf("default freshness threshold = %s", got)
 	}

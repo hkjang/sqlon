@@ -1,4 +1,4 @@
-package observability
+package observability_test
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"sqlon/internal/dbconn"
+	"sqlon/internal/engine/adapters"
+	"sqlon/internal/observability"
 )
 
 type fakeQueryer struct {
@@ -21,12 +23,16 @@ func (f *fakeQueryer) SystemQuery(_ context.Context, _ string, query string, _ .
 	return f.rows, f.err
 }
 
+func newTestService(q observability.SystemQueryer) *observability.Service {
+	return observability.New(q, adapters.ObservabilityProviders())
+}
+
 func TestOracleSessionsUseRACSafeKeyAndProtectSystemSession(t *testing.T) {
 	q := &fakeQueryer{rows: []map[string]any{{
 		"INSTANCE_ID": "2", "SESSION_ID": "41", "SERIAL_NO": "99", "USERNAME": "SYS",
 		"STATE": "ACTIVE", "SQL_ID": "abc", "DURATION_SECONDS": int64(601), "WAIT_EVENT": "enq: TX",
 	}}}
-	svc := New(q)
+	svc := newTestService(q)
 	res := svc.Sessions(context.Background(), dbconn.Profile{ID: "ora", Type: "oracle"})
 	if res.Status != "warning" || res.Data.LongRunning != 1 || res.Data.Waiting != 1 {
 		t.Fatalf("unexpected summary: %+v", res)
@@ -45,7 +51,7 @@ func TestLockTreeFindsTransitiveRootAndAffectedSessions(t *testing.T) {
 		{"blocker_key": "10", "blocked_key": "20", "blocker_user": "root", "wait_seconds": 8},
 		{"blocker_key": "20", "blocked_key": "30", "blocker_user": "mid", "wait_seconds": 4},
 	}}
-	svc := New(q)
+	svc := newTestService(q)
 	res := svc.Locks(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
 	if res.Status != "critical" || res.Data.BlockedSessions != 2 || len(res.Data.Roots) != 1 {
 		t.Fatalf("unexpected lock response: %+v", res)
@@ -57,7 +63,7 @@ func TestLockTreeFindsTransitiveRootAndAffectedSessions(t *testing.T) {
 
 func TestCollectionDistinguishesPermissionFailure(t *testing.T) {
 	q := &fakeQueryer{err: errors.New("system query failed: ORA-00942: table or view does not exist")}
-	res := New(q).Sessions(context.Background(), dbconn.Profile{ID: "ora", Type: "oracle"})
+	res := newTestService(q).Sessions(context.Background(), dbconn.Profile{ID: "ora", Type: "oracle"})
 	if res.Status != "permission_denied" || len(res.Data.Sessions) != 0 || res.Evidence[0].Code != "COLLECTION_PERMISSION_DENIED" {
 		t.Fatalf("permission failure hidden or misclassified: %+v", res)
 	}
@@ -65,7 +71,7 @@ func TestCollectionDistinguishesPermissionFailure(t *testing.T) {
 
 func TestSessionAndTransactionDurationAreSeparated(t *testing.T) {
 	q := &fakeQueryer{rows: []map[string]any{{"session_id": "7", "state": "active", "duration_seconds": int64(12), "transaction_seconds": int64(900)}}}
-	res := New(q).Sessions(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
+	res := newTestService(q).Sessions(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
 	got := res.Data.Sessions[0]
 	if got.DurationSeconds != 12 || got.TransactionSeconds != 900 {
 		t.Fatalf("durations conflated: %+v", got)
@@ -76,10 +82,23 @@ func TestSessionAndTransactionDurationAreSeparated(t *testing.T) {
 }
 
 func TestNoContentionIsEvidenceNotMissingData(t *testing.T) {
-	svc := New(&fakeQueryer{rows: []map[string]any{}})
+	svc := newTestService(&fakeQueryer{rows: []map[string]any{}})
 	svc.Now = func() time.Time { return time.Unix(100, 0) }
 	res := svc.Locks(context.Background(), dbconn.Profile{ID: "my", Type: "mysql"})
 	if res.Status != "ok" || res.Evidence[0].Code != "NO_LOCK_CONTENTION" || res.Data.Edges == nil {
 		t.Fatalf("empty successful snapshot ambiguous: %+v", res)
+	}
+}
+
+func TestProtectedSessionPolicyCoversReplicationAndBackgroundWorkers(t *testing.T) {
+	for _, tc := range []struct{ engine, user, state, app string }{
+		{"postgres", "postgres", "", "walreceiver"},
+		{"postgres", "", "background", "checkpointer"},
+		{"mysql", "system user", "Binlog Dump", ""},
+		{"oracle", "SYSTEM", "ACTIVE", "sqlplus"},
+	} {
+		if protected, reason := observability.ProtectSession(tc.engine, tc.user, tc.state, tc.app); !protected || reason == "" {
+			t.Fatalf("system session not protected: %+v", tc)
+		}
 	}
 }

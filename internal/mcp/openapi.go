@@ -20,6 +20,7 @@ var openAPISpec = `{
     { "name": "datasets", "description": "데이터셋 조회/교체/제거/복원" },
     { "name": "catalog", "description": "카탈로그 상태와 리로드" },
     { "name": "fleet", "description": "권한 범위의 DB 플릿 인벤토리와 근거 기반 연결·구성 위험 상태" },
+    { "name": "changes", "description": "승인 기반 변경 통제: 변경계획 생성·제출·승인·실행·롤백·취소 (DBA 권한 필요)" },
     { "name": "db-profiles", "description": "DB 접속 프로파일(PostgreSQL/MySQL/MariaDB/Oracle) CRUD와 접속 테스트 (/admin/db 화면과 동일 기능)" },
     { "name": "query", "description": "Read-Only 쿼리 실행: 검증/실행/미리보기/실행계획/메타데이터/이력/취소" },
     { "name": "activity", "description": "MCP 호출 이력·통계 (개인화): 본인 기본, admin은 all/user 필터" }
@@ -273,6 +274,73 @@ var openAPISpec = `{
         "description": "각 프로파일을 격리해 고정 읽기 전용 Provider 쿼리를 실행하고 스냅숏을 저장합니다.",
         "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
         "responses": {"200":{"description":"partial-failure-safe batch result"},"401":{"description":"인증 필요"}}
+      }
+    },
+    "/api/changes": {
+      "get": {
+        "tags": ["changes"], "summary": "변경계획 목록 (최신순)",
+        "description": "저장된 모든 변경계획을 상태·위험도·승인 이력과 함께 반환합니다. 계획은 재시작 후에도 유지됩니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": {"200":{"description":"{status,data:[Plan],collected_at}"},"401":{"description":"인증 필요"},"403":{"description":"DBA 권한 필요"}}
+      },
+      "post": {
+        "tags": ["changes"], "summary": "변경계획 생성 (draft)",
+        "description": "대상·사유·위험도와 단계(command/verification/compensation)를 검증해 초안을 생성합니다. 필요 승인 수는 서버 정책이 결정하며 이 호출은 DB를 변경하지 않습니다. Idempotency-Key 헤더를 지원합니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": {"201":{"description":"created plan"},"400":{"description":"검증 실패"},"401":{"description":"인증 필요"},"403":{"description":"DBA 권한 필요"}}
+      }
+    },
+    "/api/changes/{id}": {
+      "get": {
+        "tags": ["changes"], "summary": "변경계획 상세",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"id","in":"path","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"plan"},"404":{"description":"없음"},"401":{"description":"인증 필요"},"403":{"description":"DBA 권한 필요"}}
+      }
+    },
+    "/api/changes/{id}/submit": {
+      "post": {
+        "tags": ["changes"], "summary": "변경계획 제출 (검토/승인 대기)",
+        "description": "초안을 동결합니다. low 위험만 승인 없이 실행 가능 상태가 되며 그 외에는 review_required로 전이합니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"id","in":"path","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"plan"},"400":{"description":"상태 오류"},"401":{"description":"인증 필요"},"403":{"description":"DBA 권한 필요"}}
+      }
+    },
+    "/api/changes/{id}/approve": {
+      "post": {
+        "tags": ["changes"], "summary": "변경계획 승인",
+        "description": "현재 사용자의 자격으로 승인을 기록합니다. critical은 서로 다른 2인의 승인이 필요하며 동일 승인자의 중복 승인은 거부됩니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"id","in":"path","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"plan(+approval id)"},"400":{"description":"상태/중복 오류"},"401":{"description":"인증 필요"},"403":{"description":"DBA 권한 필요"}}
+      }
+    },
+    "/api/changes/{id}/execute": {
+      "post": {
+        "tags": ["changes"], "summary": "승인된 변경 실행",
+        "description": "실행 직전 재검증 후 승인된 불변 단계만 실행하고 각 단계를 검증합니다. 승인 필요 위험도에는 X-Approval-ID 헤더가 필수입니다. 실패 시 rollback_required로 전이합니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"id","in":"path","required":true,"schema":{"type":"string"}},{"name":"X-Approval-ID","in":"header","schema":{"type":"string"}}],
+        "responses": {"200":{"description":"completed plan"},"400":{"description":"실행/검증 실패"},"401":{"description":"인증 필요"},"403":{"description":"승인 ID 누락/무효"},"404":{"description":"없음"}}
+      }
+    },
+    "/api/changes/{id}/rollback": {
+      "post": {
+        "tags": ["changes"], "summary": "보상 작업 실행 (롤백)",
+        "description": "rollback_required 상태의 변경에 대해 승인된 계획의 보상 작업을 역순 실행합니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"id","in":"path","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"rolled_back plan"},"400":{"description":"상태 오류/보상 실패"},"401":{"description":"인증 필요"},"403":{"description":"DBA 권한 필요"}}
+      }
+    },
+    "/api/changes/{id}/cancel": {
+      "post": {
+        "tags": ["changes"], "summary": "변경계획 취소",
+        "description": "실행 전 단계(초안·검토·승인·예약)의 변경을 취소합니다. 취소된 계획도 이력으로 보존됩니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"id","in":"path","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"cancelled plan"},"400":{"description":"상태 오류"},"401":{"description":"인증 필요"},"403":{"description":"DBA 권한 필요"}}
       }
     },
     "/api/datasets": {
