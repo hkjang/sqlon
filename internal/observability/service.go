@@ -17,19 +17,25 @@ type Service struct {
 	Queryer              SystemQueryer
 	Providers            *Registry
 	ReplicationProviders map[string]ReplicationProvider
+	BackupProviders      map[string]BackupProvider
 	Engines              *engine.Registry
 	Now                  func() time.Time
 }
 
 // New builds the observation service. The provider maps come from
-// adapters.ObservabilityProviders()/adapters.ReplicationProviders() —
-// injected so this package never depends on concrete engine implementations.
-func New(queryer SystemQueryer, providers map[string]Provider, replication map[string]ReplicationProvider) *Service {
-	normalized := make(map[string]ReplicationProvider, len(replication))
+// adapters.ObservabilityProviders()/ReplicationProviders()/BackupProviders()
+// — injected so this package never depends on concrete engine
+// implementations.
+func New(queryer SystemQueryer, providers map[string]Provider, replication map[string]ReplicationProvider, backup map[string]BackupProvider) *Service {
+	replicationNormalized := make(map[string]ReplicationProvider, len(replication))
 	for name, provider := range replication {
-		normalized[strings.ToLower(strings.TrimSpace(name))] = provider
+		replicationNormalized[strings.ToLower(strings.TrimSpace(name))] = provider
 	}
-	return &Service{Queryer: queryer, Providers: NewRegistry(providers), ReplicationProviders: normalized, Engines: engine.NewDefaultRegistry(), Now: time.Now}
+	backupNormalized := make(map[string]BackupProvider, len(backup))
+	for name, provider := range backup {
+		backupNormalized[strings.ToLower(strings.TrimSpace(name))] = provider
+	}
+	return &Service{Queryer: queryer, Providers: NewRegistry(providers), ReplicationProviders: replicationNormalized, BackupProviders: backupNormalized, Engines: engine.NewDefaultRegistry(), Now: time.Now}
 }
 
 func (s *Service) Sessions(ctx context.Context, raw dbconn.Profile) Response[SessionData] {
@@ -181,6 +187,77 @@ func (s *Service) Replication(ctx context.Context, raw dbconn.Profile) Response[
 	if len(response.Warnings) > 0 && response.Status == "ok" {
 		response.Status = "partial"
 	}
+	return response
+}
+
+func (s *Service) Backup(ctx context.Context, raw dbconn.Profile) Response[BackupData] {
+	p := dbconn.ApplyDefaults(raw)
+	now := s.now()
+	data := BackupData{ProfileID: p.ID, Engine: p.Type, Archiving: "unknown", Items: []BackupItem{}}
+	response := Response[BackupData]{Status: "ok", Data: data, Evidence: []Evidence{}, Warnings: []string{}, Limitations: []string{}, CollectedAt: now, TraceID: observationTraceID()}
+	provider, reason := s.backupProvider(p.Type)
+	if provider == nil {
+		response.Status = "unsupported"
+		response.Limitations = append(response.Limitations, reason)
+		response.Evidence = append(response.Evidence, Evidence{Code: "BACKUP_UNSUPPORTED", Severity: "warning", Summary: reason, CollectedAt: now})
+		return response
+	}
+	result, err := provider.Backup(ctx, s.Queryer, p)
+	response.CollectedAt = s.now()
+	if err != nil {
+		return backupError(response, err)
+	}
+	if result.Items == nil {
+		result.Items = []BackupItem{}
+	}
+	response.Warnings = append(response.Warnings, result.Warnings...)
+	response.Limitations = append(response.Limitations, result.Limitations...)
+	result.Warnings, result.Limitations = nil, nil
+	response.Data = result
+
+	unhealthy := 0
+	for _, item := range result.Items {
+		if !item.Healthy {
+			unhealthy++
+		}
+	}
+	attrs := map[string]any{"archiving": result.Archiving, "items": len(result.Items), "unhealthy": unhealthy, "last_success_at": result.LastSuccessAt, "last_failure_at": result.LastFailureAt}
+	switch {
+	case unhealthy > 0:
+		response.Status = "critical"
+		response.Evidence = append(response.Evidence, Evidence{Code: "BACKUP_FAILURE_DETECTED", Severity: "critical", Summary: "백업·아카이브 구성 요소가 비정상 상태입니다", Attributes: attrs, CollectedAt: response.CollectedAt})
+	case result.Archiving == "disabled":
+		response.Status = "warning"
+		response.Evidence = append(response.Evidence, Evidence{Code: "BACKUP_PITR_DISABLED", Severity: "warning", Summary: "지속 아카이빙이 비활성화되어 시점 복구(PITR)가 불가능합니다", Attributes: attrs, CollectedAt: response.CollectedAt})
+	default:
+		response.Evidence = append(response.Evidence, Evidence{Code: "BACKUP_STATUS_COLLECTED", Severity: "info", Summary: "백업 상태 수집 완료", Attributes: attrs, CollectedAt: response.CollectedAt})
+	}
+	if len(response.Warnings) > 0 && response.Status == "ok" {
+		response.Status = "partial"
+	}
+	return response
+}
+
+func (s *Service) backupProvider(engineName string) (BackupProvider, string) {
+	adapter, ok := s.Engines.Get(engineName)
+	if !ok {
+		return nil, "등록되지 않은 데이터베이스 엔진입니다."
+	}
+	if !adapter.Capabilities.BackupStatus {
+		return nil, "backup_status 기능을 엔진 Capability가 지원하지 않습니다."
+	}
+	provider, ok := s.BackupProviders[strings.ToLower(strings.TrimSpace(engineName))]
+	if !ok {
+		return nil, "backup Provider가 이 배포판에 등록되지 않았습니다."
+	}
+	return provider, ""
+}
+
+func backupError(response Response[BackupData], err error) Response[BackupData] {
+	status, code, hint := classifyCollectionError(err)
+	response.Status = status
+	response.Warnings = append(response.Warnings, hint)
+	response.Evidence = append(response.Evidence, Evidence{Code: code, Severity: "warning", Summary: hint, CollectedAt: response.CollectedAt})
 	return response
 }
 

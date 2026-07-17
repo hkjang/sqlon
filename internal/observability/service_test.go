@@ -24,7 +24,7 @@ func (f *fakeQueryer) SystemQuery(_ context.Context, _ string, query string, _ .
 }
 
 func newTestService(q observability.SystemQueryer) *observability.Service {
-	return observability.New(q, adapters.ObservabilityProviders(), adapters.ReplicationProviders())
+	return observability.New(q, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders())
 }
 
 func TestOracleSessionsUseRACSafeKeyAndProtectSystemSession(t *testing.T) {
@@ -113,10 +113,36 @@ func TestReplicationBrokenNodeEscalatesToCritical(t *testing.T) {
 }
 
 func TestReplicationUnsupportedEngineIsExplicit(t *testing.T) {
-	svc := observability.New(&fakeQueryer{}, adapters.ObservabilityProviders(), nil)
+	svc := observability.New(&fakeQueryer{}, adapters.ObservabilityProviders(), nil, nil)
 	res := svc.Replication(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
 	if res.Status != "unsupported" || len(res.Limitations) == 0 {
 		t.Fatalf("missing provider must be explicit, got %+v", res)
+	}
+	backup := svc.Backup(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
+	if backup.Status != "unsupported" || len(backup.Limitations) == 0 {
+		t.Fatalf("missing backup provider must be explicit, got %+v", backup)
+	}
+}
+
+func TestBackupPITRDisabledIsWarningWithEvidence(t *testing.T) {
+	// PostgreSQL with archive_mode=off: every query returns the same row, so
+	// archive_mode resolves to "off" → PITR disabled warning.
+	q := &fakeQueryer{rows: []map[string]any{{"setting": "off"}}}
+	res := newTestService(q).Backup(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
+	if res.Status != "warning" || res.Data.Archiving != "disabled" {
+		t.Fatalf("disabled archiving not surfaced: %+v", res)
+	}
+	found := false
+	for _, evidence := range res.Evidence {
+		if evidence.Code == "BACKUP_PITR_DISABLED" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("BACKUP_PITR_DISABLED evidence missing: %+v", res.Evidence)
+	}
+	if len(res.Limitations) == 0 {
+		t.Fatalf("external-tool limitation must always be reported: %+v", res)
 	}
 }
 

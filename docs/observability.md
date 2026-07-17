@@ -67,6 +67,24 @@ Oracle 기본 Provider는 AWR, ASH, ADDM, `DBA_HIST_*`,
 - `SHOW REPLICA/SLAVE STATUS`는 읽기 전용 명령이며, 연결 세션 자체가 읽기
   전용 DSN으로 열립니다. Oracle은 base 라이선스 뷰만 사용합니다.
 
+## 백업 상태
+
+`get_backup_status`(MCP) / `GET /api/observability/backup`(REST)은 DB 서버가
+**스스로 보고할 수 있는** 백업·아카이브 상태를 반환합니다. SQLON은 백업
+엔진이 아니며, 외부 백업 도구(pgBackRest·Barman·XtraBackup 등)의 잡 상태는
+추측하지 않고 limitation으로 명시합니다.
+
+| 엔진 | 원천 | 항목 종류 |
+| --- | --- | --- |
+| PostgreSQL | `archive_mode`, `pg_stat_archiver`(성공/실패 시각) | wal_archiver |
+| MySQL / MariaDB | `@@log_bin`, `SHOW BINARY LOG STATUS`(구버전 `SHOW MASTER STATUS`) | binlog |
+| Oracle | `V$DATABASE`(log_mode), `V$RMAN_BACKUP_JOB_DETAILS`(최근 5건), `V$RECOVERY_FILE_DEST`(FRA 사용률) | rman_job, fra |
+
+- `archiving`은 시점 복구(PITR)의 기반인 지속 아카이빙 상태입니다:
+  비활성이면 `warning` / `BACKUP_PITR_DISABLED`.
+- 아카이버 실패, FAILED RMAN 작업, FRA 사용률 90% 초과는 `critical` /
+  `BACKUP_FAILURE_DETECTED`.
+
 ## 운영 저장소와 보존
 
 단독 모드는 `<data>/operations/snapshots/YYYYMMDD.jsonl`에 append-only JSONL로
@@ -94,11 +112,13 @@ sqlon \
 | `GET /api/observability/capacity?profile=...` | 용량·사용률·일간 증가량 |
 | `GET /api/observability/history?profile=...&hours=24` | 저장 시계열 |
 | `GET /api/observability/replication?profile=...` | 복제 역할·토폴로지·지연 |
+| `GET /api/observability/backup?profile=...` | 백업·아카이브 상태 |
 | `POST /api/collector/run` | 권한 범위 프로파일 즉시 일괄 수집 |
 | MCP `get_workload_summary` | 워크로드 요약 |
 | MCP `get_top_sql` | Top SQL |
 | MCP `get_storage_status` | 저장공간 상태 |
 | MCP `get_replication_status` | 복제 상태 |
+| MCP `get_backup_status` | 백업·아카이브 상태 |
 
 조회 기본값은 저장소 데이터이며 대상 DB를 암묵적으로 재조회하지 않습니다.
 `fresh=true`일 때만 새 시스템 조회를 수행하고 저장합니다. REST와 MCP 모두 같은

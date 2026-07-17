@@ -46,3 +46,14 @@ func ReplicationProviders() map[string]observability.ReplicationProvider {
 		"oracle":   oracle.Replication{},
 	}
 }
+
+// BackupProviders returns the backup-status implementation for every
+// supported engine.
+func BackupProviders() map[string]observability.BackupProvider {
+	return map[string]observability.BackupProvider{
+		"postgres": postgres.Backup{},
+		"mysql":    mysql.Backup{},
+		"mariadb":  mariadb.Backup{},
+		"oracle":   oracle.Backup{},
+	}
+}

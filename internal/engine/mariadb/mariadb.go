@@ -58,3 +58,13 @@ var replicaStatusQueries = []string{"SHOW ALL SLAVES STATUS", "SHOW SLAVE STATUS
 func (Replication) Replication(ctx context.Context, q observability.SystemQueryer, p dbconn.Profile) (observability.ReplicationData, error) {
 	return mysql.CollectReplication(ctx, q, p, "mariadb", replicaStatusQueries)
 }
+
+// Backup implements observability.BackupProvider. MariaDB keeps the legacy
+// SHOW MASTER STATUS as the primary binlog-status form.
+type Backup struct{}
+
+var binlogStatusQueries = []string{"SHOW MASTER STATUS", "SHOW BINARY LOG STATUS"}
+
+func (Backup) Backup(ctx context.Context, q observability.SystemQueryer, p dbconn.Profile) (observability.BackupData, error) {
+	return mysql.CollectBackup(ctx, q, p, "mariadb", binlogStatusQueries)
+}

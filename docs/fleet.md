@@ -63,14 +63,17 @@ DBA 계정 모두 `env:` 또는 `file:` Secret 참조를 사용해야 합니다.
 2배보다 오래되면 정상으로 간주하지 않고 `operational_status`와 evidence로
 표시합니다. 용량 80/90% 초과와 30일 이내 고갈 예측도 위험도에 반영합니다.
 
-복제 상태는 헬스 점검 시 라이브로 관찰합니다: 복제 구성 요소가 비정상이면
-`REPLICATION_BROKEN`(critical, 점수 88), 측정된 지연이 임계값을 넘으면
-`REPLICATION_LAG_HIGH`(high, 점수 55)로 승격되고, 프로파일에 역할이 선언되지
-않았으면 관찰된 역할(primary/replica/standby/standalone)로 보강됩니다. 복제
-상태를 확인할 수 없는 경우(권한 부족 등)는 `REPLICATION_STATUS_UNAVAILABLE`
-evidence로 가시화합니다. 세션·잠금은 전용 화면에서 실시간 조회하며, 백업
-위험은 아직 플릿 점수에 포함되지 않으므로 연결 성공만으로 데이터베이스 전체가
-정상이라고 해석해서는 안 됩니다.
+복제·백업 상태는 헬스 점검 시 라이브로 관찰합니다: 복제 구성 요소가
+비정상이면 `REPLICATION_BROKEN`(critical, 점수 88), 측정된 지연이 임계값을
+넘으면 `REPLICATION_LAG_HIGH`(high, 점수 55)로 승격되고, 프로파일에 역할이
+선언되지 않았으면 관찰된 역할(primary/replica/standby/standalone)로
+보강됩니다. 백업은 아카이버/RMAN/FRA 실패 시 `BACKUP_FAILURE_DETECTED`
+(critical, 점수 80), 지속 아카이빙(PITR 기반) 비활성 시
+`BACKUP_PITR_DISABLED`(high, 점수 50)로 승격됩니다. 상태를 확인할 수 없는
+경우(권한 부족 등)는 `*_STATUS_UNAVAILABLE` evidence로 가시화합니다.
+외부 백업 도구(pgBackRest·XtraBackup 등)의 잡 상태는 DB 서버가 보고하지
+못하므로 플릿 점수에 포함되지 않습니다 — 연결 성공만으로 데이터베이스
+전체가 정상이라고 해석해서는 안 됩니다.
 
 ## 세션·잠금 스냅숏
 

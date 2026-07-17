@@ -31,10 +31,10 @@ func NewRegistry() *Registry { return &Registry{adapters: make(map[string]Adapte
 func NewDefaultRegistry() *Registry {
 	r := NewRegistry()
 	declarations := []Adapter{
-		{Name: "postgres", Capabilities: CapabilitySet{Sessions: true, LockTree: true, Workload: true, QueryPlans: true, Storage: true, UserManagement: true, Maintenance: true, Replication: true}},
-		{Name: "mysql", Capabilities: CapabilitySet{Sessions: true, LockTree: true, Workload: true, QueryPlans: true, Storage: true, UserManagement: true, Maintenance: true, Replication: true}},
-		{Name: "mariadb", Capabilities: CapabilitySet{Sessions: true, LockTree: true, Workload: true, QueryPlans: true, Storage: true, UserManagement: true, Maintenance: true, Replication: true}},
-		{Name: "oracle", Capabilities: CapabilitySet{Sessions: true, LockTree: true, Workload: true, QueryPlans: true, Storage: true, UserManagement: true, Maintenance: true, Replication: true, Multitenant: true, RAC: true}},
+		{Name: "postgres", Capabilities: CapabilitySet{Sessions: true, LockTree: true, Workload: true, QueryPlans: true, Storage: true, UserManagement: true, Maintenance: true, Replication: true, BackupStatus: true}},
+		{Name: "mysql", Capabilities: CapabilitySet{Sessions: true, LockTree: true, Workload: true, QueryPlans: true, Storage: true, UserManagement: true, Maintenance: true, Replication: true, BackupStatus: true}},
+		{Name: "mariadb", Capabilities: CapabilitySet{Sessions: true, LockTree: true, Workload: true, QueryPlans: true, Storage: true, UserManagement: true, Maintenance: true, Replication: true, BackupStatus: true}},
+		{Name: "oracle", Capabilities: CapabilitySet{Sessions: true, LockTree: true, Workload: true, QueryPlans: true, Storage: true, UserManagement: true, Maintenance: true, Replication: true, BackupStatus: true, Multitenant: true, RAC: true}},
 	}
 	for _, declaration := range declarations {
 		if err := r.Register(declaration); err != nil {

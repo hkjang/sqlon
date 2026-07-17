@@ -105,6 +105,35 @@ type ReplicationData struct {
 	Limitations []string `json:"-"`
 }
 
+// BackupItem is one observed backup-related component: the WAL archiver, a
+// binary log, an RMAN job, or the fast recovery area.
+type BackupItem struct {
+	Name        string    `json:"name"`
+	Kind        string    `json:"kind"`
+	Status      string    `json:"status,omitempty"`
+	Detail      string    `json:"detail,omitempty"`
+	OccurredAt  string    `json:"occurred_at,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	Healthy     bool      `json:"healthy"`
+	CollectedAt time.Time `json:"collected_at"`
+}
+
+type BackupData struct {
+	ProfileID string `json:"profile_id"`
+	Engine    string `json:"engine"`
+	// Archiving reports whether continuous log archiving (the PITR basis) is
+	// enabled: enabled | disabled | unknown.
+	Archiving     string       `json:"archiving"`
+	ArchivingKind string       `json:"archiving_kind,omitempty"` // wal_archive | binlog | archivelog
+	Items         []BackupItem `json:"items"`
+	LastSuccessAt string       `json:"last_success_at,omitempty"`
+	LastFailureAt string       `json:"last_failure_at,omitempty"`
+	// Provider-reported partial-collection notes; the service merges them
+	// into the response envelope.
+	Warnings    []string `json:"-"`
+	Limitations []string `json:"-"`
+}
+
 type Response[T any] struct {
 	Status      string     `json:"status"`
 	Data        T          `json:"data"`

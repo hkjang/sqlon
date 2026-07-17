@@ -67,6 +67,7 @@ func TestEveryDeclaredEngineHasProvidersForItsCapabilities(t *testing.T) {
 	workload := adapters.CollectorProviders()
 	observation := adapters.ObservabilityProviders()
 	replication := adapters.ReplicationProviders()
+	backup := adapters.BackupProviders()
 	for _, name := range engines.Names() {
 		adapter, _ := engines.Get(name)
 		if adapter.Capabilities.Workload {
@@ -83,6 +84,16 @@ func TestEveryDeclaredEngineHasProvidersForItsCapabilities(t *testing.T) {
 			if _, ok := replication[name]; !ok {
 				t.Errorf("engine %s declares Replication but has no replication provider", name)
 			}
+		}
+		if adapter.Capabilities.BackupStatus {
+			if _, ok := backup[name]; !ok {
+				t.Errorf("engine %s declares BackupStatus but has no backup provider", name)
+			}
+		}
+	}
+	for name := range backup {
+		if _, ok := engines.Get(name); !ok {
+			t.Errorf("backup provider %s has no capability declaration", name)
 		}
 	}
 	for name := range workload {
@@ -246,6 +257,88 @@ func TestAllEngineProvidersSatisfySessionAndLockContract(t *testing.T) {
 				t.Fatalf("lock contract: edges=%+v err=%v", edges, err)
 			}
 			assertFixedSystemQuery(t, q.queries, tc.lockView)
+		})
+	}
+}
+
+func TestAllBackupProvidersSatisfyStatusContract(t *testing.T) {
+	answers := map[string]func(string) ([]map[string]any, error){
+		"postgres": func(query string) ([]map[string]any, error) {
+			upper := strings.ToUpper(query)
+			switch {
+			case strings.Contains(upper, "ARCHIVE_MODE"):
+				return []map[string]any{{"setting": "on"}}, nil
+			case strings.Contains(upper, "PG_STAT_ARCHIVER"):
+				return []map[string]any{{"archived_count": 120, "failed_count": 1, "last_archived_wal": "0001A", "last_archived_at": "2026-07-17T04:00:00Z", "last_failed_wal": "00019", "last_failed_at": "2026-07-16T04:00:00Z"}}, nil
+			}
+			return []map[string]any{}, nil
+		},
+		"mysql": func(query string) ([]map[string]any, error) {
+			upper := strings.ToUpper(query)
+			switch {
+			case strings.Contains(upper, "@@LOG_BIN"):
+				return []map[string]any{{"log_bin": 1}}, nil
+			case strings.HasPrefix(upper, "SHOW BINARY LOG STATUS"):
+				return []map[string]any{{"File": "binlog.000042", "Position": 15533}}, nil
+			}
+			return []map[string]any{}, nil
+		},
+		"mariadb": func(query string) ([]map[string]any, error) {
+			upper := strings.ToUpper(query)
+			switch {
+			case strings.Contains(upper, "@@LOG_BIN"):
+				return []map[string]any{{"log_bin": 1}}, nil
+			case strings.HasPrefix(upper, "SHOW MASTER STATUS"):
+				return []map[string]any{{"File": "mariadb-bin.000007", "Position": 9812}}, nil
+			}
+			return []map[string]any{}, nil
+		},
+		"oracle": func(query string) ([]map[string]any, error) {
+			upper := strings.ToUpper(query)
+			switch {
+			case strings.Contains(upper, "V$DATABASE"):
+				return []map[string]any{{"log_mode": "ARCHIVELOG"}}, nil
+			case strings.Contains(upper, "V$RMAN_BACKUP_JOB_DETAILS"):
+				return []map[string]any{{"status": "FAILED", "input_type": "DB FULL", "started_at": "2026-07-17T01:00:00", "ended_at": "2026-07-17T01:05:00"}}, nil
+			case strings.Contains(upper, "V$RECOVERY_FILE_DEST"):
+				return []map[string]any{{"name": "+FRA", "space_limit": 1000, "space_used": 950, "space_reclaimable": 10}}, nil
+			}
+			return []map[string]any{}, nil
+		},
+	}
+	expect := map[string]struct {
+		archiving string
+		unhealthy bool
+	}{
+		"postgres": {archiving: "enabled"},
+		"mysql":    {archiving: "enabled"},
+		"mariadb":  {archiving: "enabled"},
+		"oracle":   {archiving: "enabled", unhealthy: true}, // FAILED RMAN job + FRA 94%
+	}
+	providers := adapters.BackupProviders()
+	for engineName, provider := range providers {
+		t.Run(engineName, func(t *testing.T) {
+			q := &funcQueryer{fn: answers[engineName]}
+			data, err := provider.Backup(context.Background(), q, dbconn.Profile{ID: "p", Type: engineName})
+			if err != nil {
+				t.Fatalf("backup contract: %v", err)
+			}
+			want := expect[engineName]
+			if data.Engine != engineName || data.Archiving != want.archiving || len(data.Items) == 0 {
+				t.Fatalf("backup contract: archiving=%s items=%d data=%+v", data.Archiving, len(data.Items), data)
+			}
+			sawUnhealthy := false
+			for _, item := range data.Items {
+				if !item.Healthy {
+					sawUnhealthy = true
+				}
+			}
+			if sawUnhealthy != want.unhealthy {
+				t.Fatalf("health classification: got unhealthy=%v want %v (%+v)", sawUnhealthy, want.unhealthy, data.Items)
+			}
+			for _, query := range q.queries {
+				assertReadOnlyBaseLicense(t, query)
+			}
 		})
 	}
 }

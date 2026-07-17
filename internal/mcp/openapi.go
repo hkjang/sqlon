@@ -242,6 +242,15 @@ var openAPISpec = `{
         "responses": {"200":{"description":"evidence-bearing replication status"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
       }
     },
+    "/api/observability/backup": {
+      "get": {
+        "tags": ["fleet"], "summary": "DB 백업·아카이브 상태",
+        "description": "DB 서버가 스스로 보고할 수 있는 백업 상태를 반환합니다: PostgreSQL WAL 아카이버, MySQL/MariaDB binlog(PITR 기반), Oracle ARCHIVELOG·RMAN 이력·FRA 사용률(base 뷰만). 외부 백업 도구의 잡 상태는 limitation으로 명시합니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"evidence-bearing backup status"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
+      }
+    },
     "/api/observability/workload": {
       "get": {
         "tags": ["fleet"], "summary": "저장된 DB 워크로드 요약",

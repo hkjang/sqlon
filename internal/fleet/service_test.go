@@ -190,6 +190,45 @@ func TestHealthProfilesEscalatesBrokenReplicationAndEnrichesRole(t *testing.T) {
 	}
 }
 
+type fakeBackupObserver struct {
+	responses map[string]observability.Response[observability.BackupData]
+}
+
+func (f fakeBackupObserver) Backup(_ context.Context, p dbconn.Profile) observability.Response[observability.BackupData] {
+	return f.responses[p.ID]
+}
+
+func TestHealthProfilesEscalatesBackupFailure(t *testing.T) {
+	now := time.Date(2026, 7, 17, 4, 0, 0, 0, time.UTC)
+	p := &fakeProber{
+		drivers: map[string]bool{"oracle": true},
+		results: map[string]dbconn.PingResult{"ora": {ProfileID: "ora", OK: true, ElapsedMs: 5}},
+	}
+	s := fixedService(p)
+	s.Backup = fakeBackupObserver{responses: map[string]observability.Response[observability.BackupData]{
+		"ora": {
+			Status:      "critical",
+			Data:        observability.BackupData{ProfileID: "ora", Engine: "oracle", Archiving: "enabled", Items: []observability.BackupItem{{Name: "rman:DB FULL", Kind: "rman_job", Status: "FAILED", Healthy: false}}},
+			Evidence:    []observability.Evidence{{Code: "BACKUP_FAILURE_DETECTED", Severity: "critical", Summary: "백업·아카이브 구성 요소가 비정상 상태입니다", CollectedAt: now}},
+			CollectedAt: now,
+		},
+	}}
+	h := s.HealthProfiles(context.Background(), []dbconn.Profile{{ID: "ora", Type: "oracle", Criticality: "critical"}})
+	got := h.Data[0]
+	if got.Status != StatusCritical || got.RiskScore != 80 {
+		t.Fatalf("backup failure did not escalate fleet risk: %+v", got)
+	}
+	found := false
+	for _, evidence := range got.Evidence {
+		if evidence.Code == "BACKUP_FAILURE_DETECTED" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("BACKUP_FAILURE_DETECTED evidence missing: %+v", got.Evidence)
+	}
+}
+
 func TestHealthProfilesReplicationCollectionFailureIsVisibleNotFatal(t *testing.T) {
 	p := &fakeProber{
 		drivers: map[string]bool{"postgres": true},

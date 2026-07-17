@@ -32,6 +32,13 @@ type ReplicationProvider interface {
 	Replication(context.Context, SystemQueryer, dbconn.Profile) (ReplicationData, error)
 }
 
+// BackupProvider is the backup-status observation role. SQLON does not run
+// backups; it observes what the server itself can report (archiver/binlog/
+// RMAN catalog) and marks external-tool integration as a limitation.
+type BackupProvider interface {
+	Backup(context.Context, SystemQueryer, dbconn.Profile) (BackupData, error)
+}
+
 // SnapshotRowLimit is a hard protection against unbounded operational views.
 // Reaching it is reported as a limitation instead of silently looking whole.
 const SnapshotRowLimit = 10_000

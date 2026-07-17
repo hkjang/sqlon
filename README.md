@@ -70,7 +70,7 @@ AI-generated changes were not accepted automatically. The project owner remained
 This combination allowed Codex to accelerate implementation while GPT-5.6 supported architectural reasoning and systematic review, with human judgment controlling the final result.
 
 **📚 상세 문서**: [docs/README.md](docs/README.md) — 아키텍처, MCP 도구
-레퍼런스(91종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
+레퍼런스(92종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
 가이드(18종), REST API, DB 커넥터, 운영/평가/보안/개발자 가이드.
 
 ## Quick Start
@@ -421,6 +421,7 @@ Invoke-RestMethod `
 - `list_sessions` — 선택한 DB의 활성·비활성 세션을 조회하고 SQL 실행시간과 트랜잭션 지속시간, 대기 이벤트, 보호 세션을 분리해 근거·수집 시각과 함께 반환. Oracle은 `INST_ID:SID:SERIAL#` 세션 키 사용
 - `get_lock_tree` — 엔진 시스템 뷰의 blocker→blocked 관계를 정규화해 루트 블로커, 영향받는 세션 수, 잠금 유형과 대기시간을 반환하며 어떠한 세션 변경도 수행하지 않음
 - `get_replication_status` — 복제 역할(primary/replica/standby/standalone)과 구성 요소별 상태·지연을 반환. PostgreSQL은 standby·slot·WAL receiver, MySQL/MariaDB는 채널별 IO/SQL 스레드, Oracle은 Data Guard lag·archive destination(base 라이선스 뷰만). 측정 불가 지연은 lag_seconds=-1로 구분
+- `get_backup_status` — DB 서버가 스스로 보고하는 백업·아카이브 상태를 반환. PostgreSQL WAL 아카이버 성공/실패, MySQL/MariaDB binlog(PITR 기반), Oracle ARCHIVELOG·RMAN 이력·FRA 사용률(base 뷰만). 외부 백업 도구 잡 상태는 limitation으로 명시
 - `get_workload_summary` — 대상 DB의 저장된 누적 시스템 카운터와 이전 스냅숏 차이에서 계산한 QPS/TPS, 연결, I/O, 대기 이벤트를 근거·수집 시각과 함께 반환
 - `get_top_sql` — SQL 원문·bind 없이 fingerprint/SQL ID별 호출·elapsed·CPU·reads·rows와 Oracle plan hash를 반환하고 확장·권한 제한을 명시
 - `get_storage_status` — DB·테이블·tablespace 사용량, 사용률과 이전 스냅숏 대비 일간 증가량을 반환하고 80/90퍼센트 위험 evidence를 제공
