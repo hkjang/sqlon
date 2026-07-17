@@ -233,6 +233,15 @@ var openAPISpec = `{
         "responses": {"200":{"description":"evidence-bearing lock tree"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
       }
     },
+    "/api/observability/replication": {
+      "get": {
+        "tags": ["fleet"], "summary": "DB 복제 상태와 토폴로지",
+        "description": "복제 역할(primary/replica/standby/standalone)과 구성 요소별 상태·지연을 반환합니다. PostgreSQL은 standby·slot·WAL receiver, MySQL/MariaDB는 채널별 IO/SQL 스레드, Oracle은 Data Guard lag과 archive destination(base 라이선스 뷰만)입니다. 측정 불가한 지연은 lag_seconds=-1로 구분합니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"evidence-bearing replication status"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
+      }
+    },
     "/api/observability/workload": {
       "get": {
         "tags": ["fleet"], "summary": "저장된 DB 워크로드 요약",

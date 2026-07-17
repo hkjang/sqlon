@@ -25,6 +25,13 @@ type Provider interface {
 	Locks(context.Context, SystemQueryer, dbconn.Profile) ([]LockEdge, error)
 }
 
+// ReplicationProvider is the replication-topology observation role. It is a
+// separate interface (not a Provider method) so an engine can ship
+// session/lock support before replication support, and vice versa.
+type ReplicationProvider interface {
+	Replication(context.Context, SystemQueryer, dbconn.Profile) (ReplicationData, error)
+}
+
 // SnapshotRowLimit is a hard protection against unbounded operational views.
 // Reaching it is reported as a limitation instead of silently looking whole.
 const SnapshotRowLimit = 10_000
@@ -66,6 +73,24 @@ func Text(row map[string]any, names ...string) string {
 		return ""
 	}
 	return strings.TrimSpace(fmt.Sprint(v))
+}
+
+func Number(row map[string]any, names ...string) float64 {
+	v := rowValue(row, names...)
+	switch n := v.(type) {
+	case int:
+		return float64(n)
+	case int32:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case float32:
+		return float64(n)
+	case float64:
+		return n
+	}
+	n, _ := strconv.ParseFloat(strings.TrimSpace(fmt.Sprint(v)), 64)
+	return n
 }
 
 func Int(row map[string]any, names ...string) int64 {

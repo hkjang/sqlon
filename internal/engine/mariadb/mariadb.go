@@ -47,3 +47,14 @@ func (Observability) Sessions(ctx context.Context, q observability.SystemQueryer
 func (Observability) Locks(ctx context.Context, q observability.SystemQueryer, p dbconn.Profile) ([]observability.LockEdge, error) {
 	return mysql.CollectLocks(ctx, q, p, "mariadb", locksSQL)
 }
+
+// Replication implements observability.ReplicationProvider. MariaDB reports
+// every replication connection through SHOW ALL SLAVES STATUS (multi-source);
+// SHOW SLAVE STATUS is the single-source fallback.
+type Replication struct{}
+
+var replicaStatusQueries = []string{"SHOW ALL SLAVES STATUS", "SHOW SLAVE STATUS"}
+
+func (Replication) Replication(ctx context.Context, q observability.SystemQueryer, p dbconn.Profile) (observability.ReplicationData, error) {
+	return mysql.CollectReplication(ctx, q, p, "mariadb", replicaStatusQueries)
+}

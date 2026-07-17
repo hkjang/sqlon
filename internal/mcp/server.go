@@ -153,7 +153,7 @@ func NewServer(c *catalog.Catalog, opts Options) *Server {
 		dataDir:         c.DataDir,
 		DB:              dbManager,
 		Collector:       collector.New(dbManager, storage.NewFileStore(c.DataDir), adapters.CollectorProviders()),
-		Observability:   observability.New(dbManager, adapters.ObservabilityProviders()),
+		Observability:   observability.New(dbManager, adapters.ObservabilityProviders(), adapters.ReplicationProviders()),
 		Changes:         changes,
 		sessions:        map[string]time.Time{},
 		events:          map[string]uint64{},
@@ -468,6 +468,9 @@ func (s *Server) tools() []map[string]any {
 		}, []string{"profile"})),
 		tool("get_storage_status", "DB·테이블·tablespace 용량과 사용률, 이전 스냅숏 대비 일간 증가량을 반환합니다. 80/90퍼센트 임계치 근거를 포함합니다.", objectSchema(map[string]any{
 			"profile": str("조회할 DB 프로파일 ID"), "fresh": boolSchema("새 스냅숏을 즉시 수집하고 저장"),
+		}, []string{"profile"})),
+		tool("get_replication_status", "대상 DB의 복제 역할(primary/replica/standby/standalone)과 구성 요소별 상태를 반환합니다. PostgreSQL은 standby·slot·WAL receiver, MySQL/MariaDB는 채널별 IO/SQL 스레드와 지연, Oracle은 Data Guard transport/apply lag과 archive destination을 base 라이선스 뷰로만 수집합니다. 측정 불가한 지연은 lag_seconds=-1로 구분합니다. 읽기 전용.", objectSchema(map[string]any{
+			"profile": str("조회할 DB 프로파일 ID"),
 		}, []string{"profile"})),
 		tool("route_db_profile", "Given a SQL statement, pick the DB profile that can actually serve it when many profiles are registered. Extracts the referenced tables via the dialect parser and scores each usable profile on live table inventory (does the DB really contain those tables), operator-declared routing.schemas, engine dialect, circuit-breaker health, and routing priority/default. Returns selected_profile with decisive=true when there is one clear winner, otherwise decisive=false with ranked candidates to choose from. run_sql_safely(profile=\"auto\") calls this internally.", objectSchema(map[string]any{
 			"sql": str("SQL whose target profile should be resolved"),
@@ -957,6 +960,7 @@ var dbProfileTools = map[string]bool{
 	"get_fleet_health":        true,
 	"list_sessions":           true,
 	"get_lock_tree":           true,
+	"get_replication_status":  true,
 	"get_workload_summary":    true,
 	"get_top_sql":             true,
 	"get_storage_status":      true,
@@ -1230,6 +1234,22 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
 		}
 		return s.Observability.Locks(ctx, profile), nil
+	case "get_replication_status":
+		var a struct {
+			Profile string `json:"profile"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		profiles, err := s.usableProfiles(ctx)
+		if err != nil {
+			return nil, err
+		}
+		profile, ok := allowedProfile(profiles, a.Profile)
+		if !ok {
+			return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
+		}
+		return s.Observability.Replication(ctx, profile), nil
 	case "get_workload_summary", "get_top_sql", "get_storage_status":
 		var a struct {
 			Profile string `json:"profile"`

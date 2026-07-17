@@ -46,7 +46,9 @@ func (q *contractQueryer) SystemQuery(_ context.Context, _ string, query string,
 func assertReadOnlyBaseLicense(t *testing.T, query string) {
 	t.Helper()
 	upper := strings.ToUpper(strings.TrimSpace(query))
-	if !strings.HasPrefix(upper, "SELECT") {
+	// SHOW is the only complete replica-status interface on MySQL/MariaDB and
+	// is read-only; everything else must be a SELECT.
+	if !strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "SHOW ") {
 		t.Fatalf("non-read-only provider query: %s", query)
 	}
 	for _, forbidden := range []string{"INSERT ", "UPDATE ", "DELETE ", "ALTER ", "DROP ", "ACTIVE_SESSION_HISTORY", "DBA_HIST", "DBMS_WORKLOAD_REPOSITORY", "DBMS_SQLTUNE"} {
@@ -64,6 +66,7 @@ func TestEveryDeclaredEngineHasProvidersForItsCapabilities(t *testing.T) {
 	engines := engine.NewDefaultRegistry()
 	workload := adapters.CollectorProviders()
 	observation := adapters.ObservabilityProviders()
+	replication := adapters.ReplicationProviders()
 	for _, name := range engines.Names() {
 		adapter, _ := engines.Get(name)
 		if adapter.Capabilities.Workload {
@@ -76,6 +79,11 @@ func TestEveryDeclaredEngineHasProvidersForItsCapabilities(t *testing.T) {
 				t.Errorf("engine %s declares Sessions/LockTree but has no observability provider", name)
 			}
 		}
+		if adapter.Capabilities.Replication {
+			if _, ok := replication[name]; !ok {
+				t.Errorf("engine %s declares Replication but has no replication provider", name)
+			}
+		}
 	}
 	for name := range workload {
 		if _, ok := engines.Get(name); !ok {
@@ -86,6 +94,105 @@ func TestEveryDeclaredEngineHasProvidersForItsCapabilities(t *testing.T) {
 		if _, ok := engines.Get(name); !ok {
 			t.Errorf("observability provider %s has no capability declaration", name)
 		}
+	}
+	for name := range replication {
+		if _, ok := engines.Get(name); !ok {
+			t.Errorf("replication provider %s has no capability declaration", name)
+		}
+	}
+}
+
+// funcQueryer routes fixed system queries to scripted answers and records
+// every query for read-only assertions.
+type funcQueryer struct {
+	fn      func(query string) ([]map[string]any, error)
+	queries []string
+}
+
+func (f *funcQueryer) SystemQuery(_ context.Context, _ string, query string, _ ...any) ([]map[string]any, error) {
+	f.queries = append(f.queries, query)
+	return f.fn(query)
+}
+
+func TestAllReplicationProvidersSatisfyTopologyContract(t *testing.T) {
+	answers := map[string]func(string) ([]map[string]any, error){
+		"postgres": func(query string) ([]map[string]any, error) {
+			upper := strings.ToUpper(query)
+			switch {
+			case strings.Contains(upper, "PG_IS_IN_RECOVERY"):
+				return []map[string]any{{"role": "primary"}}, nil
+			case strings.Contains(upper, "PG_STAT_REPLICATION"):
+				return []map[string]any{{"name": "standby1", "target": "10.0.0.2", "state": "streaming", "sync_state": "async", "lag_bytes": 1024, "lag_seconds": 1.5}}, nil
+			case strings.Contains(upper, "PG_REPLICATION_SLOTS"):
+				return []map[string]any{{"name": "slot1", "active": "true", "retained_bytes": 2048}}, nil
+			}
+			return []map[string]any{}, nil
+		},
+		"mysql": func(query string) ([]map[string]any, error) {
+			upper := strings.ToUpper(query)
+			switch {
+			case strings.HasPrefix(upper, "SHOW REPLICA STATUS"):
+				return []map[string]any{{"Replica_IO_Running": "Yes", "Replica_SQL_Running": "Yes", "Seconds_Behind_Source": 5, "Source_Host": "src", "Source_Port": 3306}}, nil
+			case strings.Contains(upper, "PROCESSLIST"):
+				return []map[string]any{{"replica_connections": 0}}, nil
+			}
+			return []map[string]any{}, nil
+		},
+		"mariadb": func(query string) ([]map[string]any, error) {
+			upper := strings.ToUpper(query)
+			switch {
+			case strings.HasPrefix(upper, "SHOW ALL SLAVES STATUS"):
+				return []map[string]any{{"Connection_name": "dc2", "Slave_IO_Running": "Yes", "Slave_SQL_Running": "No", "Seconds_Behind_Master": 42, "Master_Host": "src", "Master_Port": 3306, "Last_SQL_Error": "duplicate key"}}, nil
+			case strings.Contains(upper, "PROCESSLIST"):
+				return []map[string]any{{"replica_connections": 0}}, nil
+			}
+			return []map[string]any{}, nil
+		},
+		"oracle": func(query string) ([]map[string]any, error) {
+			upper := strings.ToUpper(query)
+			switch {
+			case strings.Contains(upper, "V$DATABASE"):
+				return []map[string]any{{"database_role": "PHYSICAL STANDBY", "open_mode": "READ ONLY WITH APPLY", "protection_mode": "MAXIMUM PERFORMANCE", "switchover_status": "NOT ALLOWED"}}, nil
+			case strings.Contains(upper, "V$DATAGUARD_STATS"):
+				return []map[string]any{{"name": "apply lag", "value": "+00 00:05:00", "unit": "day(2) to second(0) interval"}}, nil
+			}
+			return []map[string]any{}, nil
+		},
+	}
+	expect := map[string]struct {
+		role      string
+		unhealthy bool
+	}{
+		"postgres": {role: "primary"},
+		"mysql":    {role: "replica"},
+		"mariadb":  {role: "replica", unhealthy: true},
+		"oracle":   {role: "standby"},
+	}
+	providers := adapters.ReplicationProviders()
+	for engineName, provider := range providers {
+		t.Run(engineName, func(t *testing.T) {
+			q := &funcQueryer{fn: answers[engineName]}
+			data, err := provider.Replication(context.Background(), q, dbconn.Profile{ID: "p", Type: engineName})
+			if err != nil {
+				t.Fatalf("replication contract: %v", err)
+			}
+			want := expect[engineName]
+			if data.Engine != engineName || data.Role != want.role || len(data.Nodes) == 0 {
+				t.Fatalf("replication contract: role=%s nodes=%d data=%+v", data.Role, len(data.Nodes), data)
+			}
+			sawUnhealthy := false
+			for _, node := range data.Nodes {
+				if !node.Healthy {
+					sawUnhealthy = true
+				}
+			}
+			if sawUnhealthy != want.unhealthy {
+				t.Fatalf("health classification: got unhealthy=%v want %v (%+v)", sawUnhealthy, want.unhealthy, data.Nodes)
+			}
+			for _, query := range q.queries {
+				assertReadOnlyBaseLicense(t, query)
+			}
+		})
 	}
 }
 

@@ -35,3 +35,14 @@ func ObservabilityProviders() map[string]observability.Provider {
 		"oracle":   oracle.Observability{},
 	}
 }
+
+// ReplicationProviders returns the replication-topology implementation for
+// every supported engine.
+func ReplicationProviders() map[string]observability.ReplicationProvider {
+	return map[string]observability.ReplicationProvider{
+		"postgres": postgres.Replication{},
+		"mysql":    mysql.Replication{},
+		"mariadb":  mariadb.Replication{},
+		"oracle":   oracle.Replication{},
+	}
+}

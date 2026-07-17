@@ -24,7 +24,7 @@ func (f *fakeQueryer) SystemQuery(_ context.Context, _ string, query string, _ .
 }
 
 func newTestService(q observability.SystemQueryer) *observability.Service {
-	return observability.New(q, adapters.ObservabilityProviders())
+	return observability.New(q, adapters.ObservabilityProviders(), adapters.ReplicationProviders())
 }
 
 func TestOracleSessionsUseRACSafeKeyAndProtectSystemSession(t *testing.T) {
@@ -87,6 +87,36 @@ func TestNoContentionIsEvidenceNotMissingData(t *testing.T) {
 	res := svc.Locks(context.Background(), dbconn.Profile{ID: "my", Type: "mysql"})
 	if res.Status != "ok" || res.Evidence[0].Code != "NO_LOCK_CONTENTION" || res.Data.Edges == nil {
 		t.Fatalf("empty successful snapshot ambiguous: %+v", res)
+	}
+}
+
+func TestReplicationBrokenNodeEscalatesToCritical(t *testing.T) {
+	// A mariadb replica whose SQL thread stopped: the service must classify
+	// the response as critical with REPLICATION_BROKEN evidence.
+	q := &fakeQueryer{rows: []map[string]any{{"Slave_IO_Running": "Yes", "Slave_SQL_Running": "No", "Seconds_Behind_Master": nil, "Last_SQL_Error": "duplicate key"}}}
+	res := newTestService(q).Replication(context.Background(), dbconn.Profile{ID: "maria", Type: "mariadb"})
+	if res.Status != "critical" || res.Data.Role != "replica" {
+		t.Fatalf("broken replication not critical: %+v", res)
+	}
+	found := false
+	for _, evidence := range res.Evidence {
+		if evidence.Code == "REPLICATION_BROKEN" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("REPLICATION_BROKEN evidence missing: %+v", res.Evidence)
+	}
+	if len(res.Limitations) == 0 {
+		t.Fatalf("unmeasurable lag must be reported as a limitation: %+v", res)
+	}
+}
+
+func TestReplicationUnsupportedEngineIsExplicit(t *testing.T) {
+	svc := observability.New(&fakeQueryer{}, adapters.ObservabilityProviders(), nil)
+	res := svc.Replication(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
+	if res.Status != "unsupported" || len(res.Limitations) == 0 {
+		t.Fatalf("missing provider must be explicit, got %+v", res)
 	}
 }
 

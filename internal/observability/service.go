@@ -14,17 +14,22 @@ import (
 )
 
 type Service struct {
-	Queryer   SystemQueryer
-	Providers *Registry
-	Engines   *engine.Registry
-	Now       func() time.Time
+	Queryer              SystemQueryer
+	Providers            *Registry
+	ReplicationProviders map[string]ReplicationProvider
+	Engines              *engine.Registry
+	Now                  func() time.Time
 }
 
-// New builds the observation service. providers is the engine-name→provider
-// map, normally adapters.ObservabilityProviders() — injected so this package
-// never depends on concrete engine implementations.
-func New(queryer SystemQueryer, providers map[string]Provider) *Service {
-	return &Service{Queryer: queryer, Providers: NewRegistry(providers), Engines: engine.NewDefaultRegistry(), Now: time.Now}
+// New builds the observation service. The provider maps come from
+// adapters.ObservabilityProviders()/adapters.ReplicationProviders() —
+// injected so this package never depends on concrete engine implementations.
+func New(queryer SystemQueryer, providers map[string]Provider, replication map[string]ReplicationProvider) *Service {
+	normalized := make(map[string]ReplicationProvider, len(replication))
+	for name, provider := range replication {
+		normalized[strings.ToLower(strings.TrimSpace(name))] = provider
+	}
+	return &Service{Queryer: queryer, Providers: NewRegistry(providers), ReplicationProviders: normalized, Engines: engine.NewDefaultRegistry(), Now: time.Now}
 }
 
 func (s *Service) Sessions(ctx context.Context, raw dbconn.Profile) Response[SessionData] {
@@ -112,6 +117,96 @@ func (s *Service) Locks(ctx context.Context, raw dbconn.Profile) Response[LockDa
 	return response
 }
 
+// ReplicationLagWarnSeconds is the default threshold above which measured
+// replication lag is reported as a warning.
+const ReplicationLagWarnSeconds = 300
+
+func (s *Service) Replication(ctx context.Context, raw dbconn.Profile) Response[ReplicationData] {
+	p := dbconn.ApplyDefaults(raw)
+	now := s.now()
+	data := ReplicationData{ProfileID: p.ID, Engine: p.Type, Role: "unknown", Nodes: []ReplicationNode{}}
+	response := Response[ReplicationData]{Status: "ok", Data: data, Evidence: []Evidence{}, Warnings: []string{}, Limitations: []string{}, CollectedAt: now, TraceID: observationTraceID()}
+	provider, reason := s.replicationProvider(p.Type)
+	if provider == nil {
+		response.Status = "unsupported"
+		response.Limitations = append(response.Limitations, reason)
+		response.Evidence = append(response.Evidence, Evidence{Code: "REPLICATION_UNSUPPORTED", Severity: "warning", Summary: reason, CollectedAt: now})
+		return response
+	}
+	result, err := provider.Replication(ctx, s.Queryer, p)
+	response.CollectedAt = s.now()
+	if err != nil {
+		return replicationError(response, err)
+	}
+	if result.Nodes == nil {
+		result.Nodes = []ReplicationNode{}
+	}
+	response.Warnings = append(response.Warnings, result.Warnings...)
+	response.Limitations = append(response.Limitations, result.Limitations...)
+	result.Warnings, result.Limitations = nil, nil
+	response.Data = result
+
+	unhealthy, lagging, lagUnknown := 0, 0, 0
+	worstLag := 0.0
+	for _, node := range result.Nodes {
+		if !node.Healthy {
+			unhealthy++
+		}
+		switch {
+		case node.LagSeconds == LagUnknown:
+			lagUnknown++
+		case node.LagSeconds >= ReplicationLagWarnSeconds:
+			lagging++
+		}
+		if node.LagSeconds > worstLag {
+			worstLag = node.LagSeconds
+		}
+	}
+	summaryAttrs := map[string]any{"role": result.Role, "nodes": len(result.Nodes), "unhealthy": unhealthy, "lagging": lagging, "worst_lag_seconds": worstLag}
+	switch {
+	case unhealthy > 0:
+		response.Status = "critical"
+		response.Evidence = append(response.Evidence, Evidence{Code: "REPLICATION_BROKEN", Severity: "critical", Summary: "복제 구성 요소가 비정상 상태입니다", Attributes: summaryAttrs, CollectedAt: response.CollectedAt})
+	case lagging > 0:
+		response.Status = "warning"
+		response.Evidence = append(response.Evidence, Evidence{Code: "REPLICATION_LAG_HIGH", Severity: "warning", Summary: "복제 지연이 경고 임계값을 초과했습니다", Attributes: summaryAttrs, CollectedAt: response.CollectedAt})
+	case result.Role == "standalone":
+		response.Evidence = append(response.Evidence, Evidence{Code: "REPLICATION_NOT_CONFIGURED", Severity: "info", Summary: "복제 구성이 감지되지 않았습니다", Attributes: summaryAttrs, CollectedAt: response.CollectedAt})
+	default:
+		response.Evidence = append(response.Evidence, Evidence{Code: "REPLICATION_STATUS_COLLECTED", Severity: "info", Summary: "복제 상태 수집 완료", Attributes: summaryAttrs, CollectedAt: response.CollectedAt})
+	}
+	if lagUnknown > 0 {
+		response.Limitations = append(response.Limitations, "일부 노드의 복제 지연을 측정할 수 없습니다 (lag_seconds = -1).")
+	}
+	if len(response.Warnings) > 0 && response.Status == "ok" {
+		response.Status = "partial"
+	}
+	return response
+}
+
+func (s *Service) replicationProvider(engineName string) (ReplicationProvider, string) {
+	adapter, ok := s.Engines.Get(engineName)
+	if !ok {
+		return nil, "등록되지 않은 데이터베이스 엔진입니다."
+	}
+	if !adapter.Capabilities.Replication {
+		return nil, "replication 기능을 엔진 Capability가 지원하지 않습니다."
+	}
+	provider, ok := s.ReplicationProviders[strings.ToLower(strings.TrimSpace(engineName))]
+	if !ok {
+		return nil, "replication Provider가 이 배포판에 등록되지 않았습니다."
+	}
+	return provider, ""
+}
+
+func replicationError(response Response[ReplicationData], err error) Response[ReplicationData] {
+	status, code, hint := classifyCollectionError(err)
+	response.Status = status
+	response.Warnings = append(response.Warnings, hint)
+	response.Evidence = append(response.Evidence, Evidence{Code: code, Severity: "warning", Summary: hint, CollectedAt: response.CollectedAt})
+	return response
+}
+
 func (s *Service) provider(engineName, capability string) (Provider, string) {
 	adapter, ok := s.Engines.Get(engineName)
 	if !ok {
@@ -161,7 +256,7 @@ func classifyCollectionError(err error) (string, string, string) {
 	if strings.Contains(message, "driver") && (strings.Contains(message, "not included") || strings.Contains(message, "not compiled")) {
 		return "unsupported_edition", "DRIVER_UNAVAILABLE", "현재 SQLON 배포판에 대상 엔진 드라이버가 없습니다."
 	}
-	return "error", "COLLECTION_FAILED", "세션·잠금 시스템 뷰 수집에 실패했습니다: " + err.Error()
+	return "error", "COLLECTION_FAILED", "운영 시스템 뷰 수집에 실패했습니다: " + err.Error()
 }
 
 func distinctBlocked(edges []LockEdge) int {

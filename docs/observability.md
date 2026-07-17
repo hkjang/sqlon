@@ -43,6 +43,30 @@ Oracle 기본 Provider는 AWR, ASH, ADDM, `DBA_HIST_*`,
 `DBMS_WORKLOAD_REPOSITORY`, SQL Tuning Advisor를 사용하지 않습니다. 모든 쿼리는
 추가로 프로파일 `license_policy` 검사를 통과해야 합니다.
 
+## 복제 상태
+
+`get_replication_status`(MCP) / `GET /api/observability/replication`(REST)은
+복제 역할(primary/replica/standby/standalone)과 구성 요소별 상태를
+반환합니다.
+
+| 엔진 | 원천 | 노드 종류 |
+| --- | --- | --- |
+| PostgreSQL | `pg_is_in_recovery`, `pg_stat_replication`, `pg_replication_slots`, `pg_stat_wal_receiver`, `pg_last_xact_replay_timestamp` | standby, slot, receiver |
+| MySQL | `SHOW REPLICA STATUS`(구버전 `SHOW SLAVE STATUS` 폴백), PROCESSLIST의 Binlog Dump 스레드 | channel, primary_feed |
+| MariaDB | `SHOW ALL SLAVES STATUS`(멀티 소스) 폴백 포함 | channel, primary_feed |
+| Oracle | `V$DATABASE`, `V$DATAGUARD_STATS`(transport/apply lag), `V$ARCHIVE_DEST_STATUS` | dataguard_lag, archive_dest |
+
+동작 원칙:
+
+- 측정할 수 없는 지연은 `lag_seconds = -1`로 반환하고 limitation을 남깁니다 —
+  0으로 위장하지 않습니다 (No Silent Failure).
+- 비정상 구성 요소(IO/SQL 스레드 중단, WAL 재생 일시정지, 비활성 복제 슬롯,
+  archive destination 오류)가 하나라도 있으면 응답 상태가 `critical`이 되고
+  `REPLICATION_BROKEN` evidence가 생성됩니다.
+- 측정된 지연이 300초 이상이면 `warning` / `REPLICATION_LAG_HIGH`.
+- `SHOW REPLICA/SLAVE STATUS`는 읽기 전용 명령이며, 연결 세션 자체가 읽기
+  전용 DSN으로 열립니다. Oracle은 base 라이선스 뷰만 사용합니다.
+
 ## 운영 저장소와 보존
 
 단독 모드는 `<data>/operations/snapshots/YYYYMMDD.jsonl`에 append-only JSONL로
@@ -69,10 +93,12 @@ sqlon \
 | `GET /api/observability/top-sql?profile=...` | 원문 없는 Top SQL 통계 |
 | `GET /api/observability/capacity?profile=...` | 용량·사용률·일간 증가량 |
 | `GET /api/observability/history?profile=...&hours=24` | 저장 시계열 |
+| `GET /api/observability/replication?profile=...` | 복제 역할·토폴로지·지연 |
 | `POST /api/collector/run` | 권한 범위 프로파일 즉시 일괄 수집 |
 | MCP `get_workload_summary` | 워크로드 요약 |
 | MCP `get_top_sql` | Top SQL |
 | MCP `get_storage_status` | 저장공간 상태 |
+| MCP `get_replication_status` | 복제 상태 |
 
 조회 기본값은 저장소 데이터이며 대상 DB를 암묵적으로 재조회하지 않습니다.
 `fresh=true`일 때만 새 시스템 조회를 수행하고 저장합니다. REST와 MCP 모두 같은
