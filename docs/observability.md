@@ -85,6 +85,9 @@ Oracle 기본 Provider는 AWR, ASH, ADDM, `DBA_HIST_*`,
 - 아카이버 실패, FAILED RMAN 작업, FRA 사용률 90% 초과는 `critical` /
   `BACKUP_FAILURE_DETECTED`.
 
+복제·백업 상태는 웹 콘솔 **복제 · 백업**(`/admin/availability`) 화면에서
+프로파일별로 조회할 수 있습니다.
+
 ## 운영 저장소와 보존
 
 단독 모드는 `<data>/operations/snapshots/YYYYMMDD.jsonl`에 append-only JSONL로

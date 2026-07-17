@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<title>SQLON 복제·백업</title>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--line:#dce4ee;--ink:#172033;--sub:#607086;--blue:#2563eb;--ok:#15803d;--warn:#a16207;--bad:#b91c1c;--mono:ui-monospace,'Cascadia Code',Consolas,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif}
+header{padding:13px 26px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}
+select,input,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff}button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}
+main{max-width:1500px;margin:auto;padding:20px 26px 60px}
+.context{padding:11px 14px;background:#17243b;color:#e9f0ff;border-radius:10px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap}.context span{padding-right:9px;border-right:1px solid #42516b}.context span:last-child{border:0}
+.cards{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:14px}.card,.panel{background:var(--card);border:1px solid var(--line);border-radius:11px}.card{padding:14px}.card small{display:block;color:var(--sub)}.card b{font-size:22px}.bad b{color:var(--bad)}.warn b{color:var(--warn)}.ok b{color:var(--ok)}
+.panel{margin-bottom:14px;overflow:hidden}.panel h2{font-size:15px;margin:0;padding:13px 15px;border-bottom:1px solid var(--line)}
+.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap}th{font-size:12px;color:#536176;background:#f8fafc}
+.muted{color:var(--sub);font-size:12px}.empty{padding:32px;text-align:center;color:var(--sub)}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;background:#eef2f7;font-size:11.5px;font-weight:700}
+.badge.ok{background:#dcfce7;color:#166534}.badge.bad{background:#fee2e2;color:#991b1b}.badge.warn{background:#fef3c7;color:#854d0e}.badge.role{background:#e0e7ff;color:#3730a3}
+.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}
+.detailrow{display:flex;flex-wrap:wrap;gap:8px;padding:12px 15px;border-bottom:1px solid #edf1f5}.detailrow span{font-size:12.5px;background:#f4f6fa;border-radius:8px;padding:4px 9px}
+@media(max-width:950px){.cards{grid-template-columns:repeat(3,1fr)}main{padding:15px}}
+</style>
+</head>
+<body>
+<header><h1>복제 · 백업</h1><select id="profile" aria-label="DB 프로파일"></select><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><button class="primary" id="refresh">새로고침</button><span class="grow"></span><span class="muted" id="fresh">수집 전</span></header>
+<main>
+  <div class="context" id="context"><span>환경 -</span><span>업무서비스 -</span><span>엔진 -</span><span>인스턴스 -</span><span>역할 -</span><span>수집 시각 -</span></div>
+  <div id="messages"></div>
+  <section class="cards">
+    <div class="card"><small>복제 역할</small><b id="kRole">-</b></div>
+    <div class="card"><small>복제 구성 요소</small><b id="kNodes">-</b></div>
+    <div class="card bad"><small>비정상 구성 요소</small><b id="kBroken">-</b></div>
+    <div class="card warn"><small>최대 복제 지연</small><b id="kLag">-</b></div>
+    <div class="card"><small>지속 아카이빙 (PITR)</small><b id="kArchiving">-</b></div>
+    <div class="card bad"><small>백업 이상</small><b id="kBackupBad">-</b></div>
+  </section>
+
+  <section class="panel">
+    <h2>복제 토폴로지 <span class="muted">— lag=-1은 측정 불가(0이 아님)를 뜻합니다</span></h2>
+    <div class="detailrow" id="replDetails" style="display:none"></div>
+    <div class="scroll"><table><thead><tr><th>구성 요소</th><th>종류</th><th>대상</th><th>상태</th><th>동기화</th><th>지연</th><th>건강</th><th>오류</th></tr></thead><tbody id="replRows"><tr><td colspan="8" class="empty">수집 전</td></tr></tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>백업 · 아카이브 상태 <span class="muted">— 외부 백업 도구(pgBackRest·XtraBackup 등)의 잡 상태는 포함되지 않습니다</span></h2>
+    <div class="detailrow" id="backupDetails" style="display:none"></div>
+    <div class="scroll"><table><thead><tr><th>항목</th><th>종류</th><th>상태</th><th>세부</th><th>시각</th><th>건강</th><th>오류</th></tr></thead><tbody id="backupRows"><tr><td colspan="7" class="empty">수집 전</td></tr></tbody></table></div>
+  </section>
+</main>
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let profiles=[];
+const token=$('#adminToken');token.value=localStorage.getItem('sqlonAdminToken')||localStorage.getItem('jasqlAdminToken')||'';token.onchange=()=>localStorage.setItem('sqlonAdminToken',token.value);
+function headers(){const h={Accept:'application/json'};if(token.value)h['X-Admin-Token']=token.value;return h}
+function when(v){if(!v)return '-';const d=new Date(v);return isNaN(d)?esc(v):d.toLocaleString('ko-KR')}
+function lag(v){v=Number(v);if(v<0)return '<span class="badge warn">측정 불가</span>';if(v<60)return v.toFixed(v<10?1:0)+'초';if(v<3600)return Math.floor(v/60)+'분 '+Math.floor(v%60)+'초';return Math.floor(v/3600)+'시간 '+Math.floor(v%3600/60)+'분'}
+function health(h){return h?'<span class="badge ok">정상</span>':'<span class="badge bad">비정상</span>'}
+async function get(path){const r=await fetch(path,{headers:headers()});const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.error||r.statusText);return b}
+async function loadProfiles(){const b=await get('/api/db-profiles');profiles=b.profiles||[];const last=localStorage.getItem('sqlonObserveProfile');$('#profile').innerHTML=profiles.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===last?' selected':'')+'>'+esc(p.service_name||p.name||p.id)+' · '+esc(p.type)+'</option>').join('')||'<option value="">프로파일 없음</option>';$('#profile').onchange=()=>{localStorage.setItem('sqlonObserveProfile',$('#profile').value);load()}}
+function showMessages(items,error){$('#messages').innerHTML=(items||[]).map(x=>'<div class="message '+(error?'error':'')+'">'+esc(x)+'</div>').join('')}
+function context(profile,role,collected){$('#context').innerHTML=['환경 '+(profile.environment||'-'),'업무서비스 '+(profile.service_name||'-'),'엔진 '+(profile.type||'-'),'인스턴스 '+(profile.name||profile.id||'-'),'역할 '+(role||profile.role||'-'),'수집 시각 '+when(collected)].map(x=>'<span>'+esc(x)+'</span>').join('')}
+const ROLE_KO={primary:'Primary',replica:'Replica',standby:'Standby',standalone:'단독 (복제 없음)',unknown:'미확인'};
+function renderReplication(body){
+  const d=body.data||{},nodes=d.nodes||[];
+  $('#kRole').textContent=ROLE_KO[d.role]||d.role||'-';$('#kNodes').textContent=nodes.length;
+  let broken=0,worst=0,unknown=0;
+  nodes.forEach(n=>{if(!n.healthy)broken++;if(n.lag_seconds<0)unknown++;else if(n.lag_seconds>worst)worst=n.lag_seconds});
+  $('#kBroken').textContent=broken;$('#kLag').innerHTML=nodes.length?(unknown&&!worst?'측정 불가':lag(worst)):'-';
+  const details=Object.entries(d.details||{});
+  $('#replDetails').style.display=details.length?'':'none';
+  $('#replDetails').innerHTML=details.map(([k,v])=>'<span><b>'+esc(k)+'</b> '+esc(v)+'</span>').join('');
+  $('#replRows').innerHTML=nodes.length?nodes.map(n=>'<tr><td><b>'+esc(n.name)+'</b></td><td><span class="badge">'+esc(n.kind)+'</span></td><td>'+esc(n.target||'-')+'</td><td>'+esc(n.state||'-')+'</td><td>'+esc(n.sync_state||'-')+'</td><td>'+lag(n.lag_seconds)+(n.lag_bytes?'<div class="muted">'+Math.round(n.lag_bytes/1024)+' KiB</div>':'')+'</td><td>'+health(n.healthy)+'</td><td>'+esc(n.error||'-')+'</td></tr>').join(''):'<tr><td colspan="8" class="empty">'+(d.role==='standalone'?'복제 구성이 감지되지 않았습니다 (단독 인스턴스).':'정상 수집되었으며 표시할 구성 요소가 없습니다.')+'</td></tr>';
+  return [...(body.warnings||[]),...(body.limitations||[])];
+}
+const ARCH_KO={enabled:'활성',disabled:'비활성 — PITR 불가',unknown:'미확인'};
+function renderBackup(body){
+  const d=body.data||{},items=d.items||[];
+  $('#kArchiving').textContent=ARCH_KO[d.archiving]||d.archiving||'-';
+  const bad=items.filter(i=>!i.healthy).length;$('#kBackupBad').textContent=bad;
+  const details=[['아카이빙 방식',d.archiving_kind||'-'],['마지막 성공',d.last_success_at||'-'],['마지막 실패',d.last_failure_at||'-']].filter(x=>x[1]!=='-');
+  $('#backupDetails').style.display=details.length?'':'none';
+  $('#backupDetails').innerHTML=details.map(([k,v])=>'<span><b>'+esc(k)+'</b> '+esc(v)+'</span>').join('');
+  $('#backupRows').innerHTML=items.length?items.map(i=>'<tr><td><b>'+esc(i.name)+'</b></td><td><span class="badge">'+esc(i.kind)+'</span></td><td>'+esc(i.status||'-')+'</td><td>'+esc(i.detail||'-')+'</td><td>'+esc(i.occurred_at||'-')+'</td><td>'+health(i.healthy)+'</td><td>'+esc(i.error||'-')+'</td></tr>').join(''):'<tr><td colspan="7" class="empty">DB 서버가 보고하는 백업 항목이 없습니다 — 외부 백업 도구 연동이 필요할 수 있습니다.</td></tr>';
+  return [...(body.warnings||[]),...(body.limitations||[])];
+}
+async function load(){const id=$('#profile').value;if(!id)return;$('#fresh').textContent='수집 중…';
+  try{
+    const [repl,backup]=await Promise.all([get('/api/observability/replication?profile='+encodeURIComponent(id)),get('/api/observability/backup?profile='+encodeURIComponent(id))]);
+    const profile=profiles.find(p=>p.id===id)||{};
+    context(profile,(repl.data||{}).role,repl.collected_at);
+    $('#fresh').textContent='최신 수집 '+when(repl.collected_at)+' · '+esc(repl.trace_id||'');
+    showMessages([...renderReplication(repl),...renderBackup(backup)],false);
+  }catch(e){showMessages(['수집 실패: '+e.message+' — 데이터 없음과 수집 실패는 서로 다른 상태입니다.'],true);$('#fresh').textContent='수집 실패'}}
+$('#refresh').onclick=load;JASQL.mount({page:'availability',onReady:async()=>{try{await loadProfiles();await load()}catch(e){showMessages(['프로파일 조회 실패: '+e.message],true)}}});
+</script>
+</body></html>

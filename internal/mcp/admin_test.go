@@ -148,6 +148,7 @@ func TestAdminStaticPages(t *testing.T) {
 		"/admin":                     "데이터셋 관리 콘솔",
 		"/admin/editor":              "테이블 편집기",
 		"/admin/changes":             "변경 관리",
+		"/admin/availability":        "복제 · 백업",
 		"/docs":                      "swagger-ui",
 		"/openapi.json":              "SQLON AI Database Operations API",
 		"/docs/swagger-ui.css":       "swagger-ui",
