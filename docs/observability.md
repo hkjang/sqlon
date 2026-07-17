@@ -127,6 +127,24 @@ limitation으로 표시됩니다(권한 부족은 `permission_denied`로 구분)
   운영 현황 대시보드에서 즉시 경고로 보입니다. 원복은 변경 관리 승인
   흐름으로 수행합니다.
 
+## SQL 재작성 코파일럿
+
+`suggest_sql_rewrite`(MCP) / `POST /api/query/rewrite`(REST)는 안티패턴을
+탐지해 before→after 재작성 템플릿을 제안합니다(SQL Lab이 아닌 튜닝 보조).
+
+- **안전 원칙**: 임의 SQL을 정적 휴리스틱으로 자동 재작성하면 의미가 바뀔
+  수 있으므로, 대부분의 재작성은 DBA가 적용 전 **EXPLAIN으로 검증**해야 하는
+  템플릿입니다(`auto_applicable=false`). 유일한 정확 변환은 `SELECT *`를
+  카탈로그의 실제 컬럼으로 확장하는 것으로, 쿼리가 단일 테이블(자기조인·JOIN·
+  콤마조인 없음)로 해석될 때만 수행합니다.
+- 지원 안티패턴: `NOT IN (서브쿼리)`→`NOT EXISTS`, `OR`→`IN`/`UNION ALL`,
+  선두 와일드카드 LIKE, 인덱스 컬럼 함수 래핑→범위 조건, 콤마 조인→명시 JOIN,
+  `SELECT *`→명시 컬럼.
+- `profile`을 주면 **원본 쿼리의 실제 EXPLAIN 기준선**(위험도·비용·최대행)을
+  첨부합니다. 비용 감소율은 조작하지 않습니다 — 재작성은 실행하지 않으므로
+  채택 후 다시 EXPLAIN해 실제 개선을 확인합니다.
+- 웹 콘솔 `/admin/dba`의 **SQL 린트** 탭에서 "재작성 제안" 버튼으로 사용합니다.
+
 ## 커넥션 풀 진단
 
 `diagnose_connection_pool`(MCP) / `GET /api/observability/pool`(REST)은

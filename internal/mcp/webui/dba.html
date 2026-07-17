@@ -130,6 +130,7 @@
       <textarea id="lintSql" placeholder="SELECT * FROM ... 처럼 점검할 SQL을 붙여넣으세요"></textarea>
       <div class="toolbar" style="margin-top:10px">
         <span class="grow"></span>
+        <button class="btn" id="rewriteRun">재작성 제안</button>
         <button class="btn primary" id="lintRun">린트 실행</button>
       </div>
       <div id="lintOut"></div>
@@ -287,6 +288,26 @@ function runLint(){
     flash(true,f.length+'건 감지');
   }).catch(function(e){out.innerHTML='';flash(false,e.message);});
 }
+function runRewrite(){
+  var sql=$('lintSql').value.trim();if(!sql){flash(false,'SQL을 입력하세요');return;}
+  var out=$('lintOut');busy(out);
+  post('/api/query/rewrite',{sql:sql,profile:prof()}).then(function(d){
+    if(d.error){out.innerHTML='';flash(false,d.error);return;}
+    var s=d.suggestions||[];
+    var base=d.baseline_plan?('<div class="note">원본 EXPLAIN 기준선 — 위험도 <b>'+esc(d.baseline_plan.risk)+'</b>, 비용 '+esc(d.baseline_plan.total_cost)+', 예상 최대행 '+esc(d.baseline_plan.max_cardinality)+'. 재작성 채택 후 다시 EXPLAIN해 실제 개선을 확인하세요.</div>'):'';
+    out.innerHTML=base+(s.length?s.map(function(x){
+      return '<div class="finding '+esc(x.severity)+'"><span class="'+sevCls(x.severity)+'">'+esc(x.severity)+'</span> <b>'+esc(x.rule)+'</b>'+
+        (x.auto_applicable?' <span class="mini" style="color:#15803d">정확 변환</span>':' <span class="mini" style="color:#a16207">검토 필요</span>')+
+        '<div style="margin-top:4px">'+esc(x.message)+'</div>'+
+        '<div class="mini" style="margin-top:5px">변경 전</div><div class="ddl">'+esc(x.before)+'</div>'+
+        '<div class="mini" style="margin-top:4px">변경 후</div><div class="ddl">'+esc(x.after)+'</div>'+
+        (x.after?'<button class="btn mini" style="margin-top:6px" onclick="copyText(this,\''+esc(x.after).replace(/'/g,"\\'").replace(/\n/g,"\\n")+'\')">변경 후 복사</button>':'')+
+        '<div class="mini" style="margin-top:4px">💡 '+esc(x.note)+'</div></div>';
+    }).join(''):'<div class="finding info" style="margin-top:12px">✓ 재작성이 필요한 안티패턴이 없습니다.</div>')+
+      '<div class="note">재작성은 검토용 템플릿입니다(SELECT * 컬럼 확장만 정확). 채택 전 반드시 EXPLAIN으로 의미·성능을 검증하세요. 실행·자동 수정하지 않습니다.</div>';
+    flash(true,s.length+'건 제안');
+  }).catch(function(e){out.innerHTML='';flash(false,e.message);});
+}
 
 /* ---------- 설명 ---------- */
 function runExplain(){
@@ -319,7 +340,7 @@ $('tabs').addEventListener('click',function(e){
 $('healthRun').onclick=runHealth;
 $('idxRun').onclick=runIndex;
 $('wlRun').onclick=runWorkload;
-$('lintRun').onclick=runLint;
+$('lintRun').onclick=runLint;$('rewriteRun').onclick=runRewrite;
 $('expRun').onclick=runExplain;
 
 function loadDigest(){

@@ -526,6 +526,10 @@ func (s *Server) tools() []map[string]any {
 			"days":           integer("How many days of audit log to scan (default 7)"),
 			"verify":         boolSchema("When true and a profile is given, run a live EXPLAIN (read-only) on each top candidate's sample query to confirm a full/seq scan on the table — trims false positives; sets plan_confirms/plan_cost"),
 		}, nil)),
+		tool("suggest_sql_rewrite", "SQL 재작성 코파일럿: 안티패턴(NOT IN 서브쿼리, WHERE의 OR, 선두 와일드카드 LIKE, 인덱스 컬럼 함수 래핑, 콤마 조인, SELECT *)을 탐지해 before→after 재작성 템플릿을 제안합니다. SELECT *는 카탈로그의 실제 컬럼으로 정확히 확장(단일 테이블일 때)하며, 그 외 재작성은 의미 동치가 자동 보장되지 않는 검토용 템플릿입니다. profile을 주면 원본 쿼리의 실제 EXPLAIN 기준선(위험도·비용)을 첨부합니다. 실행하거나 SQL을 자동 수정하지 않습니다.", objectSchema(map[string]any{
+			"sql":     str("재작성 제안을 받을 SQL 문장"),
+			"profile": str("선택: EXPLAIN 기준선과 카탈로그 컬럼 확장에 사용할 DB 프로파일 ID"),
+		}, []string{"sql"})),
 		tool("lint_sql", "SQL anti-pattern linter: statically scan one statement for classic performance/correctness smells — SELECT *, leading-wildcard LIKE, NOT IN (subquery), function-wrapped indexed columns (non-sargable), inequality on an indexed column, implicit comma cross-join, OR in WHERE, ORDER BY without LIMIT, and DML without WHERE — each with a severity and a concrete fix suggestion. Catalog-aware (index coverage) and advisory: it flags, it does not rewrite. Read-only.", objectSchema(map[string]any{
 			"sql":     str("SQL statement to lint"),
 			"profile": str("Optional DB profile id: lint against that profile's catalog workspace (index coverage) instead of the active catalog"),
@@ -996,6 +1000,7 @@ var dbProfileTools = map[string]bool{
 	"run_sql_safely":           true,
 	"execute_with_repair":      true,
 	"explain_sql":              true,
+	"suggest_sql_rewrite":      true,
 	"run_evaluation":           true,
 	"route_db_profile":         true,
 	"discover_metadata":        true,
@@ -1399,6 +1404,36 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			"catalog_source": src,
 			"note":           "정적 안티패턴 점검(권고용). 실행하지 않으며 SQL을 자동 수정하지 않습니다.",
 		}, nil
+	case "suggest_sql_rewrite":
+		var a struct {
+			SQL     string `json:"sql"`
+			Profile string `json:"profile"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(a.SQL) == "" {
+			return map[string]any{"status": "error", "error": "sql is required"}, nil
+		}
+		vcat, src := s.catalogFor(a.Profile)
+		suggestions := vcat.SuggestRewrites(a.SQL)
+		result := map[string]any{
+			"suggestions":    suggestions,
+			"count":          len(suggestions),
+			"catalog_source": src,
+			"note":           "재작성은 검토용 템플릿입니다(SELECT * 컬럼 확장만 정확). 의미 동치는 자동 보장되지 않으니 채택 전 EXPLAIN으로 검증하세요. 실행·자동 수정하지 않습니다.",
+		}
+		// When a profile is given, attach a real EXPLAIN baseline for the
+		// original query — an honest cost anchor instead of a fabricated
+		// reduction percentage (the rewrites are not executed).
+		if strings.TrimSpace(a.Profile) != "" {
+			if plan, err := s.DB.ExplainPlan(ctx, a.Profile, a.SQL); err == nil && plan != nil {
+				result["baseline_plan"] = map[string]any{
+					"risk": plan.Risk, "risk_score": plan.RiskScore, "total_cost": plan.TotalCost, "max_cardinality": plan.MaxCardinality, "risk_factors": plan.RiskFactors,
+				}
+			}
+		}
+		return result, nil
 	case "explain_sql_in_words":
 		var a struct {
 			SQL     string `json:"sql"`

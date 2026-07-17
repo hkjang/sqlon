@@ -70,7 +70,7 @@ AI-generated changes were not accepted automatically. The project owner remained
 This combination allowed Codex to accelerate implementation while GPT-5.6 supported architectural reasoning and systematic review, with human judgment controlling the final result.
 
 **📚 상세 문서**: [docs/README.md](docs/README.md) — 아키텍처, MCP 도구
-레퍼런스(96종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
+레퍼런스(97종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
 가이드(18종), REST API, DB 커넥터, 운영/평가/보안/개발자 가이드.
 
 ## Quick Start
@@ -436,6 +436,7 @@ Invoke-RestMethod `
 - `db_health_report` — **DBA 헬스 점검**: 연결된 프로파일 DB의 시스템 카탈로그를 읽어 PK 없는 테이블(high)·인덱스 없는 FK 컬럼(medium)·미사용 인덱스(low)·통계 오래됨/없음(medium)·대형 테이블(코멘트 여부, info)을 진단. PostgreSQL 전체, MySQL/MariaDB는 이식 가능 항목만. 읽기 전용(수정·실행 없음, 개선은 DBA 검토 후)
 - `suggest_indexes` — **인덱스 어드바이저**: 쿼리 감사 로그(query-*.jsonl)에서 느린 성공 쿼리를 분석해 인덱스가 없는 WHERE/JOIN/ORDER BY 컬럼을 집계하고, 영향도(발생 횟수 × 평균 지연) 순으로 후보 인덱스를 제안. 각 후보에 검토용 `CREATE INDEX` DDL과 대표 쿼리 포함. 읽기 전용·권고용(자동 생성하지 않으며 DBA가 카디널리티·쓰기부하 검토 후 수행). `profile`(선택)·`min_elapsed_ms`(기본 200)·`days`(기본 7)
 - `lint_sql` — **SQL 안티패턴 린트**: 단일 문장을 정적 분석해 고전적 성능·정합성 스멜을 진단 — `SELECT *`, 선두 와일드카드 `LIKE '%…'`, `NOT IN (서브쿼리)`, 인덱스 컬럼을 함수로 감싼 비-sargable 조건, 인덱스 컬럼 부등호, 콤마 크로스 조인, `WHERE`의 `OR`, `LIMIT` 없는 `ORDER BY`, `WHERE` 없는 DML. 각 항목에 심각도와 개선 제안 포함. 카탈로그 인덱스 커버리지 인식·권고용(자동 수정 안 함). `sql`·`profile`(선택)
+- `suggest_sql_rewrite` — **SQL 재작성 코파일럿**: 안티패턴을 탐지해 before→after 재작성 템플릿 제안. `SELECT *`는 카탈로그 실제 컬럼으로 정확 확장(단일 테이블), 그 외는 의미 동치 미보장 검토용 템플릿. `profile` 지정 시 원본 쿼리 실제 EXPLAIN 기준선(위험도·비용) 첨부. 실행·자동 수정 안 함. `sql`·`profile`(선택)
 - `explain_sql_in_words` — **SQL 자연어 설명**: SQL이 어떤 테이블(카탈로그 논리명)에서 무엇을 필터·조인·그룹·정렬하고 어떤 집계를 계산하는지 한국어로 요약. 정적 구조 분석(실행 안 함). `sql`·`profile`(선택)
 - `workload_report` — **워크로드 리포트**: 감사 로그를 기간별로 집계해 총/성공/오류 건수·오류율, 지연 분포(avg/p50/p95/p99/max), 느린 쿼리 수, 가장 많이 접근한 테이블, 상위 오류 코드, 툴·프로파일별 사용량, 가장 느린 문장, 피크 시간대를 리포트. 읽기 전용. `profile`(선택)·`days`(기본 7)·`slow_ms`(기본 200)
 - `get_dba_digest` — **DBA 다이제스트**: 워크로드 리포트와 인덱스 어드바이저를 압축한 능동형 운영 스냅샷 — 쿼리량·오류율·p95/최대 지연·느린 쿼리 수·핫 테이블·상위 인덱스 후보와 한 줄 헤드라인. 읽기 전용. 스케줄러(`-sync-interval` + `-digest-webhook` + `-dba-digest`)가 틱마다 웹훅으로 push하는 것과 동일한 데이터. `profile`(선택)·`days`(기본 7)·`slow_ms`(기본 200)

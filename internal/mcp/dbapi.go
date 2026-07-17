@@ -446,6 +446,33 @@ func (s *Server) registerDBAPI(mux *http.ServeMux) {
 		findings := vcat.LintSQL(req.SQL)
 		writeJSON(w, http.StatusOK, map[string]any{"findings": findings, "count": len(findings), "catalog_source": src})
 	})
+	mux.HandleFunc("POST /api/query/rewrite", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		var req struct {
+			SQL     string `json:"sql"`
+			Profile string `json:"profile"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		if strings.TrimSpace(req.SQL) == "" {
+			writeAPIError(w, http.StatusBadRequest, errEmpty("sql is required"))
+			return
+		}
+		vcat, src := s.catalogFor(req.Profile)
+		suggestions := vcat.SuggestRewrites(req.SQL)
+		out := map[string]any{"suggestions": suggestions, "count": len(suggestions), "catalog_source": src,
+			"note": "재작성은 검토용 템플릿입니다(SELECT * 컬럼 확장만 정확). 채택 전 EXPLAIN으로 검증하세요."}
+		if strings.TrimSpace(req.Profile) != "" {
+			if plan, err := s.DB.ExplainPlan(r.Context(), req.Profile, req.SQL); err == nil && plan != nil {
+				out["baseline_plan"] = map[string]any{"risk": plan.Risk, "risk_score": plan.RiskScore, "total_cost": plan.TotalCost, "max_cardinality": plan.MaxCardinality, "risk_factors": plan.RiskFactors}
+			}
+		}
+		writeJSON(w, http.StatusOK, out)
+	})
 	mux.HandleFunc("POST /api/query/explain-words", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := s.requireQueryActor(w, r); !ok {
 			return
