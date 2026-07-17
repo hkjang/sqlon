@@ -88,6 +88,21 @@ Oracle 기본 Provider는 AWR, ASH, ADDM, `DBA_HIST_*`,
 복제·백업 상태는 웹 콘솔 **복제 · 백업**(`/admin/availability`) 화면에서
 프로파일별로 조회할 수 있습니다.
 
+## 사용자·권한 진단
+
+`get_security_posture`(MCP) / `GET /api/observability/security`(REST)는
+권한 과다 항목을 근거·심각도와 함께 반환하는 **읽기 전용 진단**입니다.
+조치(권한 회수, 계정 잠금)는 반드시 변경계획으로 수행합니다.
+
+| 엔진 | 원천 | 탐지 항목 |
+| --- | --- | --- |
+| PostgreSQL | `pg_roles` | 로그인 가능한 비기본 SUPERUSER(critical), BYPASSRLS 로그인 역할, 만료 비밀번호 |
+| MySQL / MariaDB | `information_schema.USER_PRIVILEGES` | SUPER·FILE·PROCESS 등 위험 권한(SUPER는 critical), 와일드카드 호스트(%) 고권한 계정 |
+| Oracle | `DBA_ROLE_PRIVS`, `DBA_SYS_PRIVS`, `DBA_USERS` | 비기본 계정의 DBA 역할(critical), GRANT ANY 계열 권한, 만료됐지만 잠기지 않은 계정 |
+
+모니터링 계정의 가시 범위에 따라 결과가 제한될 수 있으며, 이 경우
+limitation으로 표시됩니다(권한 부족은 `permission_denied`로 구분).
+
 ## 운영 저장소와 보존
 
 단독 모드는 `<data>/operations/snapshots/YYYYMMDD.jsonl`에 append-only JSONL로
@@ -122,6 +137,7 @@ sqlon \
 | MCP `get_storage_status` | 저장공간 상태 |
 | MCP `get_replication_status` | 복제 상태 |
 | MCP `get_backup_status` | 백업·아카이브 상태 |
+| `GET /api/observability/security?profile=...` · MCP `get_security_posture` | 사용자·권한 진단 |
 
 조회 기본값은 저장소 데이터이며 대상 DB를 암묵적으로 재조회하지 않습니다.
 `fresh=true`일 때만 새 시스템 조회를 수행하고 저장합니다. REST와 MCP 모두 같은

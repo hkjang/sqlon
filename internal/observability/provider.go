@@ -39,6 +39,13 @@ type BackupProvider interface {
 	Backup(context.Context, SystemQueryer, dbconn.Profile) (BackupData, error)
 }
 
+// SecurityProvider is the privilege-posture observation role: users/roles
+// with elevated or dangerous privileges, wildcard hosts, expired passwords.
+// Read-only diagnosis — remediation always goes through a change plan.
+type SecurityProvider interface {
+	Security(context.Context, SystemQueryer, dbconn.Profile) (SecurityData, error)
+}
+
 // SnapshotRowLimit is a hard protection against unbounded operational views.
 // Reaching it is reported as a limitation instead of silently looking whole.
 const SnapshotRowLimit = 10_000

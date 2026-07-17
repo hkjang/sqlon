@@ -146,6 +146,21 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, s.Observability.Backup(ctx, profile))
 	})
+	mux.HandleFunc("GET /api/observability/security", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		profile, ok := allowedProfile(profiles, r.URL.Query().Get("profile"))
+		if !ok {
+			writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted"))
+			return
+		}
+		writeJSON(w, http.StatusOK, s.Observability.Security(ctx, profile))
+	})
 	for path, kind := range map[string]string{
 		"/api/observability/workload": "workload",
 		"/api/observability/top-sql":  "top_sql",

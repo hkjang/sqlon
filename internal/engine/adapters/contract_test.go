@@ -51,11 +51,31 @@ func assertReadOnlyBaseLicense(t *testing.T, query string) {
 	if !strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "SHOW ") {
 		t.Fatalf("non-read-only provider query: %s", query)
 	}
+	// Mask single-quoted literals first: a security-posture query legitimately
+	// names privileges like 'ALTER SYSTEM' as data, not as a statement.
+	masked := maskStringLiterals(upper)
 	for _, forbidden := range []string{"INSERT ", "UPDATE ", "DELETE ", "ALTER ", "DROP ", "ACTIVE_SESSION_HISTORY", "DBA_HIST", "DBMS_WORKLOAD_REPOSITORY", "DBMS_SQLTUNE"} {
-		if strings.Contains(upper, forbidden) {
+		if strings.Contains(masked, forbidden) {
 			t.Fatalf("provider query contains write/licensed feature %q: %s", forbidden, query)
 		}
 	}
+}
+
+func maskStringLiterals(query string) string {
+	var b strings.Builder
+	inLiteral := false
+	for _, r := range query {
+		switch {
+		case r == '\'':
+			inLiteral = !inLiteral
+			b.WriteRune(r)
+		case inLiteral:
+			b.WriteRune('_')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // TestEveryDeclaredEngineHasProvidersForItsCapabilities pins wiring to the
@@ -68,6 +88,7 @@ func TestEveryDeclaredEngineHasProvidersForItsCapabilities(t *testing.T) {
 	observation := adapters.ObservabilityProviders()
 	replication := adapters.ReplicationProviders()
 	backup := adapters.BackupProviders()
+	security := adapters.SecurityProviders()
 	for _, name := range engines.Names() {
 		adapter, _ := engines.Get(name)
 		if adapter.Capabilities.Workload {
@@ -90,10 +111,20 @@ func TestEveryDeclaredEngineHasProvidersForItsCapabilities(t *testing.T) {
 				t.Errorf("engine %s declares BackupStatus but has no backup provider", name)
 			}
 		}
+		if adapter.Capabilities.UserManagement {
+			if _, ok := security[name]; !ok {
+				t.Errorf("engine %s declares UserManagement but has no security provider", name)
+			}
+		}
 	}
 	for name := range backup {
 		if _, ok := engines.Get(name); !ok {
 			t.Errorf("backup provider %s has no capability declaration", name)
+		}
+	}
+	for name := range security {
+		if _, ok := engines.Get(name); !ok {
+			t.Errorf("security provider %s has no capability declaration", name)
 		}
 	}
 	for name := range workload {
@@ -335,6 +366,78 @@ func TestAllBackupProvidersSatisfyStatusContract(t *testing.T) {
 			}
 			if sawUnhealthy != want.unhealthy {
 				t.Fatalf("health classification: got unhealthy=%v want %v (%+v)", sawUnhealthy, want.unhealthy, data.Items)
+			}
+			for _, query := range q.queries {
+				assertReadOnlyBaseLicense(t, query)
+			}
+		})
+	}
+}
+
+func TestAllSecurityProvidersSatisfyPostureContract(t *testing.T) {
+	answers := map[string]func(string) ([]map[string]any, error){
+		"postgres": func(query string) ([]map[string]any, error) {
+			if strings.Contains(strings.ToUpper(query), "PG_ROLES") {
+				return []map[string]any{
+					{"name": "app_admin", "is_superuser": "true", "can_login": "true", "bypass_rls": "false", "password_expired": "false"},
+					{"name": "app_ro", "is_superuser": "false", "can_login": "true", "bypass_rls": "false", "password_expired": "false"},
+				}, nil
+			}
+			return []map[string]any{}, nil
+		},
+		"mysql": func(query string) ([]map[string]any, error) {
+			upper := strings.ToUpper(query)
+			switch {
+			case strings.Contains(upper, "COUNT(DISTINCT GRANTEE)"):
+				return []map[string]any{{"principals": 7}}, nil
+			case strings.Contains(upper, "USER_PRIVILEGES"):
+				return []map[string]any{{"grantee": "'root'@'%'", "privileges": "FILE, SUPER", "grantable": 1}}, nil
+			}
+			return []map[string]any{}, nil
+		},
+		"mariadb": func(query string) ([]map[string]any, error) {
+			upper := strings.ToUpper(query)
+			switch {
+			case strings.Contains(upper, "COUNT(DISTINCT GRANTEE)"):
+				return []map[string]any{{"principals": 3}}, nil
+			case strings.Contains(upper, "USER_PRIVILEGES"):
+				return []map[string]any{{"grantee": "'ops'@'10.0.0.5'", "privileges": "PROCESS", "grantable": 0}}, nil
+			}
+			return []map[string]any{}, nil
+		},
+		"oracle": func(query string) ([]map[string]any, error) {
+			upper := strings.ToUpper(query)
+			switch {
+			case strings.Contains(upper, "DBA_ROLE_PRIVS"):
+				return []map[string]any{{"name": "LEGACY_APP"}}, nil
+			case strings.Contains(upper, "DBA_SYS_PRIVS"):
+				return []map[string]any{{"name": "BATCH_USER", "privilege": "ALTER SYSTEM"}}, nil
+			case strings.Contains(upper, "ACCOUNT_STATUS = 'OPEN'"):
+				return []map[string]any{{"principals": 12}}, nil
+			}
+			return []map[string]any{}, nil
+		},
+	}
+	expectCritical := map[string]bool{"postgres": true, "mysql": true, "mariadb": false, "oracle": true}
+	providers := adapters.SecurityProviders()
+	for engineName, provider := range providers {
+		t.Run(engineName, func(t *testing.T) {
+			q := &funcQueryer{fn: answers[engineName]}
+			data, err := provider.Security(context.Background(), q, dbconn.Profile{ID: "p", Type: engineName})
+			if err != nil {
+				t.Fatalf("security contract: %v", err)
+			}
+			if data.Engine != engineName || len(data.Findings) == 0 {
+				t.Fatalf("security contract: findings=%d data=%+v", len(data.Findings), data)
+			}
+			sawCritical := false
+			for _, finding := range data.Findings {
+				if finding.Severity == "critical" {
+					sawCritical = true
+				}
+			}
+			if sawCritical != expectCritical[engineName] {
+				t.Fatalf("severity classification: got critical=%v want %v (%+v)", sawCritical, expectCritical[engineName], data.Findings)
 			}
 			for _, query := range q.queries {
 				assertReadOnlyBaseLicense(t, query)

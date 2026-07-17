@@ -18,6 +18,7 @@ type Service struct {
 	Providers            *Registry
 	ReplicationProviders map[string]ReplicationProvider
 	BackupProviders      map[string]BackupProvider
+	SecurityProviders    map[string]SecurityProvider
 	Engines              *engine.Registry
 	Now                  func() time.Time
 }
@@ -26,7 +27,7 @@ type Service struct {
 // adapters.ObservabilityProviders()/ReplicationProviders()/BackupProviders()
 // — injected so this package never depends on concrete engine
 // implementations.
-func New(queryer SystemQueryer, providers map[string]Provider, replication map[string]ReplicationProvider, backup map[string]BackupProvider) *Service {
+func New(queryer SystemQueryer, providers map[string]Provider, replication map[string]ReplicationProvider, backup map[string]BackupProvider, security map[string]SecurityProvider) *Service {
 	replicationNormalized := make(map[string]ReplicationProvider, len(replication))
 	for name, provider := range replication {
 		replicationNormalized[strings.ToLower(strings.TrimSpace(name))] = provider
@@ -35,7 +36,11 @@ func New(queryer SystemQueryer, providers map[string]Provider, replication map[s
 	for name, provider := range backup {
 		backupNormalized[strings.ToLower(strings.TrimSpace(name))] = provider
 	}
-	return &Service{Queryer: queryer, Providers: NewRegistry(providers), ReplicationProviders: replicationNormalized, BackupProviders: backupNormalized, Engines: engine.NewDefaultRegistry(), Now: time.Now}
+	securityNormalized := make(map[string]SecurityProvider, len(security))
+	for name, provider := range security {
+		securityNormalized[strings.ToLower(strings.TrimSpace(name))] = provider
+	}
+	return &Service{Queryer: queryer, Providers: NewRegistry(providers), ReplicationProviders: replicationNormalized, BackupProviders: backupNormalized, SecurityProviders: securityNormalized, Engines: engine.NewDefaultRegistry(), Now: time.Now}
 }
 
 func (s *Service) Sessions(ctx context.Context, raw dbconn.Profile) Response[SessionData] {
@@ -235,6 +240,80 @@ func (s *Service) Backup(ctx context.Context, raw dbconn.Profile) Response[Backu
 	if len(response.Warnings) > 0 && response.Status == "ok" {
 		response.Status = "partial"
 	}
+	return response
+}
+
+func (s *Service) Security(ctx context.Context, raw dbconn.Profile) Response[SecurityData] {
+	p := dbconn.ApplyDefaults(raw)
+	now := s.now()
+	data := SecurityData{ProfileID: p.ID, Engine: p.Type, Findings: []SecurityFinding{}}
+	response := Response[SecurityData]{Status: "ok", Data: data, Evidence: []Evidence{}, Warnings: []string{}, Limitations: []string{}, CollectedAt: now, TraceID: observationTraceID()}
+	provider, reason := s.securityProvider(p.Type)
+	if provider == nil {
+		response.Status = "unsupported"
+		response.Limitations = append(response.Limitations, reason)
+		response.Evidence = append(response.Evidence, Evidence{Code: "SECURITY_UNSUPPORTED", Severity: "warning", Summary: reason, CollectedAt: now})
+		return response
+	}
+	result, err := provider.Security(ctx, s.Queryer, p)
+	response.CollectedAt = s.now()
+	if err != nil {
+		return securityError(response, err)
+	}
+	if result.Findings == nil {
+		result.Findings = []SecurityFinding{}
+	}
+	response.Warnings = append(response.Warnings, result.Warnings...)
+	response.Limitations = append(response.Limitations, result.Limitations...)
+	result.Warnings, result.Limitations = nil, nil
+	response.Data = result
+
+	critical, warning := 0, 0
+	for _, finding := range result.Findings {
+		switch finding.Severity {
+		case "critical":
+			critical++
+		case "warning":
+			warning++
+		}
+	}
+	attrs := map[string]any{"principals": result.Principals, "findings": len(result.Findings), "critical": critical, "warning": warning}
+	switch {
+	case critical > 0:
+		response.Status = "critical"
+		response.Evidence = append(response.Evidence, Evidence{Code: "SECURITY_EXCESS_PRIVILEGE", Severity: "critical", Summary: "치명적 권한 과다 항목이 발견되었습니다", Attributes: attrs, CollectedAt: response.CollectedAt})
+	case warning > 0:
+		response.Status = "warning"
+		response.Evidence = append(response.Evidence, Evidence{Code: "SECURITY_EXCESS_PRIVILEGE", Severity: "warning", Summary: "권한 과다 의심 항목이 발견되었습니다", Attributes: attrs, CollectedAt: response.CollectedAt})
+	default:
+		response.Evidence = append(response.Evidence, Evidence{Code: "SECURITY_POSTURE_COLLECTED", Severity: "info", Summary: "사용자·권한 진단 수집 완료", Attributes: attrs, CollectedAt: response.CollectedAt})
+	}
+	if len(response.Warnings) > 0 && response.Status == "ok" {
+		response.Status = "partial"
+	}
+	return response
+}
+
+func (s *Service) securityProvider(engineName string) (SecurityProvider, string) {
+	adapter, ok := s.Engines.Get(engineName)
+	if !ok {
+		return nil, "등록되지 않은 데이터베이스 엔진입니다."
+	}
+	if !adapter.Capabilities.UserManagement {
+		return nil, "user_management 기능을 엔진 Capability가 지원하지 않습니다."
+	}
+	provider, ok := s.SecurityProviders[strings.ToLower(strings.TrimSpace(engineName))]
+	if !ok {
+		return nil, "security Provider가 이 배포판에 등록되지 않았습니다."
+	}
+	return provider, ""
+}
+
+func securityError(response Response[SecurityData], err error) Response[SecurityData] {
+	status, code, hint := classifyCollectionError(err)
+	response.Status = status
+	response.Warnings = append(response.Warnings, hint)
+	response.Evidence = append(response.Evidence, Evidence{Code: code, Severity: "warning", Summary: hint, CollectedAt: response.CollectedAt})
 	return response
 }
 

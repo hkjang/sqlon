@@ -24,7 +24,7 @@ func (f *fakeQueryer) SystemQuery(_ context.Context, _ string, query string, _ .
 }
 
 func newTestService(q observability.SystemQueryer) *observability.Service {
-	return observability.New(q, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders())
+	return observability.New(q, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders(), adapters.SecurityProviders())
 }
 
 func TestOracleSessionsUseRACSafeKeyAndProtectSystemSession(t *testing.T) {
@@ -113,7 +113,7 @@ func TestReplicationBrokenNodeEscalatesToCritical(t *testing.T) {
 }
 
 func TestReplicationUnsupportedEngineIsExplicit(t *testing.T) {
-	svc := observability.New(&fakeQueryer{}, adapters.ObservabilityProviders(), nil, nil)
+	svc := observability.New(&fakeQueryer{}, adapters.ObservabilityProviders(), nil, nil, nil)
 	res := svc.Replication(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
 	if res.Status != "unsupported" || len(res.Limitations) == 0 {
 		t.Fatalf("missing provider must be explicit, got %+v", res)
@@ -143,6 +143,25 @@ func TestBackupPITRDisabledIsWarningWithEvidence(t *testing.T) {
 	}
 	if len(res.Limitations) == 0 {
 		t.Fatalf("external-tool limitation must always be reported: %+v", res)
+	}
+}
+
+func TestSecurityCriticalFindingEscalatesResponse(t *testing.T) {
+	// A login-capable non-default superuser: every query returns this row, so
+	// the postgres provider flags it critical.
+	q := &fakeQueryer{rows: []map[string]any{{"name": "app_admin", "is_superuser": "true", "can_login": "true"}}}
+	res := newTestService(q).Security(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
+	if res.Status != "critical" || len(res.Data.Findings) == 0 {
+		t.Fatalf("critical privilege finding not escalated: %+v", res)
+	}
+	found := false
+	for _, evidence := range res.Evidence {
+		if evidence.Code == "SECURITY_EXCESS_PRIVILEGE" && evidence.Severity == "critical" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("SECURITY_EXCESS_PRIVILEGE evidence missing: %+v", res.Evidence)
 	}
 }
 

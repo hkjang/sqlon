@@ -68,3 +68,11 @@ var binlogStatusQueries = []string{"SHOW MASTER STATUS", "SHOW BINARY LOG STATUS
 func (Backup) Backup(ctx context.Context, q observability.SystemQueryer, p dbconn.Profile) (observability.BackupData, error) {
 	return mysql.CollectBackup(ctx, q, p, "mariadb", binlogStatusQueries)
 }
+
+// Security implements observability.SecurityProvider via the shared
+// MySQL-family USER_PRIVILEGES posture collection.
+type Security struct{}
+
+func (Security) Security(ctx context.Context, q observability.SystemQueryer, p dbconn.Profile) (observability.SecurityData, error) {
+	return mysql.CollectSecurity(ctx, q, p, "mariadb")
+}

@@ -251,6 +251,15 @@ var openAPISpec = `{
         "responses": {"200":{"description":"evidence-bearing backup status"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
       }
     },
+    "/api/observability/security": {
+      "get": {
+        "tags": ["fleet"], "summary": "DB 사용자·권한 진단",
+        "description": "권한 과다 항목을 근거·심각도와 함께 반환합니다: 로그인 가능한 비기본 SUPERUSER(PostgreSQL), 위험 권한·와일드카드 호스트(MySQL/MariaDB USER_PRIVILEGES), DBA 역할·위험 시스템 권한(Oracle DBA_* 뷰). 읽기 전용 진단입니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"evidence-bearing security posture"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
+      }
+    },
     "/api/observability/workload": {
       "get": {
         "tags": ["fleet"], "summary": "저장된 DB 워크로드 요약",

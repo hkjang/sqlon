@@ -134,6 +134,28 @@ type BackupData struct {
 	Limitations []string `json:"-"`
 }
 
+// SecurityFinding is one observed privilege-posture fact: a superuser
+// account, a DBA-role grant, a dangerous system privilege, a wildcard host,
+// or an expired password.
+type SecurityFinding struct {
+	Principal   string    `json:"principal"`
+	Kind        string    `json:"kind"`
+	Detail      string    `json:"detail,omitempty"`
+	Severity    string    `json:"severity"` // info | warning | critical
+	CollectedAt time.Time `json:"collected_at"`
+}
+
+type SecurityData struct {
+	ProfileID  string            `json:"profile_id"`
+	Engine     string            `json:"engine"`
+	Principals int               `json:"principals"`
+	Findings   []SecurityFinding `json:"findings"`
+	// Provider-reported partial-collection notes; the service merges them
+	// into the response envelope.
+	Warnings    []string `json:"-"`
+	Limitations []string `json:"-"`
+}
+
 type Response[T any] struct {
 	Status      string     `json:"status"`
 	Data        T          `json:"data"`

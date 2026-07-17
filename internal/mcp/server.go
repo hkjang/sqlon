@@ -158,7 +158,7 @@ func NewServer(c *catalog.Catalog, opts Options) *Server {
 		dataDir:         c.DataDir,
 		DB:              dbManager,
 		Collector:       coll,
-		Observability:   observability.New(dbManager, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders()),
+		Observability:   observability.New(dbManager, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders(), adapters.SecurityProviders()),
 		Changes:         changes,
 		sessions:        map[string]time.Time{},
 		events:          map[string]uint64{},
@@ -478,6 +478,9 @@ func (s *Server) tools() []map[string]any {
 			"profile": str("조회할 DB 프로파일 ID"),
 		}, []string{"profile"})),
 		tool("get_backup_status", "대상 DB가 스스로 보고할 수 있는 백업·아카이브 상태를 반환합니다. PostgreSQL은 archive_mode와 WAL 아카이버 성공/실패, MySQL/MariaDB는 binlog(PITR 기반) 상태, Oracle은 ARCHIVELOG 모드·RMAN 작업 이력·FRA 사용률(base 뷰만)입니다. pgBackRest·XtraBackup 등 외부 도구의 잡 상태는 limitation으로 명시합니다. 읽기 전용.", objectSchema(map[string]any{
+			"profile": str("조회할 DB 프로파일 ID"),
+		}, []string{"profile"})),
+		tool("get_security_posture", "대상 DB의 사용자·권한 진단: 로그인 가능한 비기본 SUPERUSER/DBA 역할, 위험 시스템 권한(GRANT ANY 등), 와일드카드 호스트 고권한 계정, 만료 비밀번호를 근거·심각도와 함께 반환합니다. 읽기 전용 진단이며 조치는 반드시 변경계획으로 수행합니다.", objectSchema(map[string]any{
 			"profile": str("조회할 DB 프로파일 ID"),
 		}, []string{"profile"})),
 		tool("route_db_profile", "Given a SQL statement, pick the DB profile that can actually serve it when many profiles are registered. Extracts the referenced tables via the dialect parser and scores each usable profile on live table inventory (does the DB really contain those tables), operator-declared routing.schemas, engine dialect, circuit-breaker health, and routing priority/default. Returns selected_profile with decisive=true when there is one clear winner, otherwise decisive=false with ranked candidates to choose from. run_sql_safely(profile=\"auto\") calls this internally.", objectSchema(map[string]any{
@@ -970,6 +973,7 @@ var dbProfileTools = map[string]bool{
 	"get_lock_tree":           true,
 	"get_replication_status":  true,
 	"get_backup_status":       true,
+	"get_security_posture":    true,
 	"get_workload_summary":    true,
 	"get_top_sql":             true,
 	"get_storage_status":      true,
@@ -1243,7 +1247,7 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
 		}
 		return s.Observability.Locks(ctx, profile), nil
-	case "get_replication_status", "get_backup_status":
+	case "get_replication_status", "get_backup_status", "get_security_posture":
 		var a struct {
 			Profile string `json:"profile"`
 		}
@@ -1258,8 +1262,11 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 		if !ok {
 			return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
 		}
-		if req.Name == "get_backup_status" {
+		switch req.Name {
+		case "get_backup_status":
 			return s.Observability.Backup(ctx, profile), nil
+		case "get_security_posture":
+			return s.Observability.Security(ctx, profile), nil
 		}
 		return s.Observability.Replication(ctx, profile), nil
 	case "get_workload_summary", "get_top_sql", "get_storage_status":

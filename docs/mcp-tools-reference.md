@@ -13,7 +13,7 @@
 | ② 스키마 선택 | `retrieve_context`, `search_schema`, `search_examples`, `get_column_stats` |
 | ③ 근거 확보 | `get_metric_definition`, `get_join_paths`, `get_schema_context` |
 | ④ SQL 생성 | `build_sql_skeleton` |
-| ④ DB 플릿·관찰 | `list_db_profiles`, `list_database_instances`, `get_fleet_health`, `list_sessions`, `get_lock_tree`, `get_replication_status`, `get_backup_status`, `get_workload_summary`, `get_top_sql`, `get_storage_status`, `route_db_profile` |
+| ④ DB 플릿·관찰 | `list_db_profiles`, `list_database_instances`, `get_fleet_health`, `list_sessions`, `get_lock_tree`, `get_replication_status`, `get_backup_status`, `get_security_posture`, `get_workload_summary`, `get_top_sql`, `get_storage_status`, `route_db_profile` |
 | ⑤ 검증·선택 | `validate_sql`, `rank_candidates`, `explain_sql`, `run_sql_safely`, `execute_with_repair` |
 | ⑥ 환류 | `record_feedback`, `review_feedback`, `learn_from_feedback` |
 | 운영 | `get_catalog_health`, `run_evaluation`, `suggest_joins`, `suggest_join_relations`, `list_datasets`, `get_dataset`, `put_dataset`, `remove_dataset`, `reload_catalog`, `profile_metadata_assets` |

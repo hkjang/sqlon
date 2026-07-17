@@ -57,3 +57,14 @@ func BackupProviders() map[string]observability.BackupProvider {
 		"oracle":   oracle.Backup{},
 	}
 }
+
+// SecurityProviders returns the privilege-posture implementation for every
+// supported engine.
+func SecurityProviders() map[string]observability.SecurityProvider {
+	return map[string]observability.SecurityProvider{
+		"postgres": postgres.Security{},
+		"mysql":    mysql.Security{},
+		"mariadb":  mariadb.Security{},
+		"oracle":   oracle.Security{},
+	}
+}
