@@ -148,7 +148,7 @@ func TestAdminStaticPages(t *testing.T) {
 		"/admin":                     "데이터셋 관리 콘솔",
 		"/admin/editor":              "테이블 편집기",
 		"/docs":                      "swagger-ui",
-		"/openapi.json":              "Management & Query API",
+		"/openapi.json":              "SQLON AI Database Operations API",
 		"/docs/swagger-ui.css":       "swagger-ui",
 		"/docs/swagger-ui-bundle.js": "webpack",
 	} {

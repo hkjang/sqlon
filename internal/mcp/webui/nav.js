@@ -18,15 +18,21 @@
 
   // nav groups. show: always | auth (meta DB) | admin
   var GROUPS = [
-    { title: '작업', items: [
-      { key: 'ask',      href: '/admin/ask',     icon: '💬', label: '질의',      show: 'always' },
+    { title: '운영', items: [
+      { key: 'fleet',    href: '/',              icon: '📡', label: '운영 현황', show: 'always' },
+      { key: 'sessions', href: '/admin/sessions', icon: '⛓️', label: '세션 · 잠금', show: 'always' },
+      { key: 'workload', href: '/admin/workload', icon: '📈', label: '워크로드', show: 'always' },
+      { key: 'capacity', href: '/admin/workload#capacity', icon: '💾', label: '객체 · 용량', show: 'always' },
+      { key: 'dba',      href: '/admin/dba',     icon: '🩺', label: '인시던트 · 진단', show: 'always' },
+      { key: 'dba-console', href: '/admin/dba-console', icon: '🛢', label: '변경 관리', show: 'dba' },
+      { key: 'db',       href: '/admin/db',      icon: '🔌', label: 'DB 플릿 설정', show: 'always' },
+    ]},
+    { title: 'SQL Lab · 메타데이터', items: [
+      { key: 'ask',      href: '/admin/ask',     icon: '🧪', label: 'SQL Lab',   show: 'always' },
       { key: 'history',  href: '/admin/history', icon: '🕘', label: '내 이력',   show: 'auth' },
       { key: 'stats',    href: '/admin/stats',   icon: '📊', label: '통계',      show: 'auth' },
       { key: 'datasets', href: '/admin',         icon: '🗂', label: '데이터셋',  show: 'always' },
       { key: 'editor',   href: '/admin/editor',  icon: '✏️', label: '테이블 편집', show: 'always' },
-      { key: 'db',       href: '/admin/db',      icon: '🔌', label: 'DB · 쿼리',  show: 'always' },
-      { key: 'dba',      href: '/admin/dba',     icon: '🩺', label: 'DBA 코파일럿', show: 'always' },
-      { key: 'dba-console', href: '/admin/dba-console', icon: '🛢', label: 'DBA 콘솔', show: 'dba' },
       { key: 'reviews',  href: '/admin/reviews', icon: '🧾', label: '메타 검토',  show: 'always' },
     ]},
     { title: '관리', items: [
@@ -46,6 +52,8 @@
   // Per-page user guides, rendered on demand in a modal via the header
   // "❓ 가이드" button. Keyed by the page key passed to JASQL.mount({page}).
   var GUIDES = {
+    sessions: '## 세션 · 잠금\n\n선택한 DB의 읽기 전용 시스템 뷰를 조회해 활성·장기 세션과 blocker→blocked 관계를 표시합니다.\n\n- SQL 실행시간과 트랜잭션 지속시간은 별도 열입니다.\n- Oracle은 `INST_ID:SID:SERIAL#`를 세션 키로 사용합니다.\n- SYS·SYSTEM·백그라운드·복제 세션은 보호 대상으로 표시합니다.\n- SQL 본문과 bind 값은 민감정보 보호를 위해 표시하지 않습니다.\n- 권한 부족·라이선스 정책·수집 실패는 빈 목록과 구분됩니다.\n\n> 이 화면은 관찰 전용입니다. 취소·종료는 승인된 변경계획을 통해서만 수행합니다.',
+    workload: '## 워크로드 · 용량\n\n대상 DB의 실제 누적 시스템 카운터를 주기적으로 저장하고 이전 스냅숏과 비교해 QPS/TPS와 용량 증가량을 계산합니다.\n\n- **저장 데이터 조회**는 대상 DB를 다시 조회하지 않습니다.\n- **지금 수집**은 엔진 Provider의 고정된 읽기 전용 시스템 쿼리만 실행합니다.\n- Top SQL은 SQL 원문 없이 fingerprint/SQL ID와 통계만 표시합니다.\n- Oracle 기본 수집은 AWR/ASH/ADDM/Tuning Advisor를 사용하지 않습니다.\n- 첫 스냅숏에는 비교 기준이 없어 변화율이 표시되지 않습니다.\n\n> 권한 부족, 부분 수집, 보존 상한은 limitation으로 표시되며 정상 데이터로 숨기지 않습니다.',
     ask: '## 질의 (NL2SQL)\n\n자연어 질문으로 SQL을 만들고 실행합니다.\n\n1. 질문을 입력하면 **prepare_sql_context**가 테이블·컬럼·조인·시간조건·검증 힌트를 한 번에 묶어 줍니다.\n2. 응답이 **재질문(needs_clarification)** 이면 제시된 질문에 답한 뒤 다시 실행하세요.\n3. `ready`가 되면 스켈레톤의 `/* SLOT */`만 채워 SQL을 완성합니다.\n4. **검증 → 실행계획 → 실행** 순서로 진행합니다.\n\n> 팁: 특정 DB 프로파일의 카탈로그로 질의하려면 profile을 지정하세요(멀티 DB).',
     datasets: '## 데이터셋 관리\n\n이 서버는 Text2SQL 정확도를 위해 **18개의 JSON 데이터셋**을 참조합니다.\n\n### 1. 데이터셋 이해하기 (목록 뱃지)\n- **필수** — 물리/논리 모델. 서버 기동에 필수라 제거 불가(교체는 가능)\n- **선택** — 없으면 해당 기능 축소 또는 내장 기본값 사용\n- **편집가능** — 이 화면에서 교체/제거 가능\n- **시스템** — feedback/audit. 서버가 자동 기록, 조회만 가능\n- **이슈 N** — 이 파일의 로드 오류/경고 수(상세는 행 클릭)\n\n### 2. 내용 확인\n- 행 클릭 → 용도·기대 스키마·사용 도구·내용 샘플 표시\n- **[현재 내용 불러오기]** → 파일 전체를 편집기에 로드\n- 각 데이터셋의 "기대 스키마"가 곧 작성 규칙입니다\n\n### 3. 넣기/바꾸기 (교체)\n편집기 내용이 **파일의 새 전체 내용**이 됩니다(부분 병합 아님).\n- **[① JSON 검사]** — 문법·형식 사전 확인\n- **[② 적용]** — 자동으로 백업 → 저장 → 재컴파일 → **핫스왑**(재기동 불필요)\n- 컴파일 실패/신규 오류 시 **자동 롤백**. 알고도 적용하려면 **강제 적용** 체크\n\n### 4. 빼기/되돌리기\n- **[데이터셋 제거]** — 백업 후 삭제+핫스왑(필수·시스템은 거부)\n- 모든 변경 전 상태는 **백업/복원** 섹션에 남고, 복원 직전 파일도 재백업되어 복원도 되돌릴 수 있습니다\n\n### 5. 파일을 직접 수정했다면\n볼륨/SSH로 파일을 직접 바꾼 경우 **[🔄 카탈로그 리로드]**로 재컴파일하세요. 실패 시 이전 카탈로그 유지.\n\n### 6. 보안\n`-admin-token`(또는 환경변수) 설정 시 변경 작업에 토큰 필요 — 상단 입력란에 넣으면 자동 전송됩니다.\n\n### 7. MCP 도구 대응\n화면 작업은 MCP 도구와 동일 코드로 실행됩니다: 목록 `list_datasets`, 상세 `get_dataset`, 교체 `put_dataset`, 제거 `remove_dataset`, 리로드 `reload_catalog` (REST `GET/PUT/DELETE /api/datasets`, `POST /api/reload`).',
     editor: '## 테이블 편집\n\n데이터셋을 표(그리드)로 편집하고 **[저장]** 하면 즉시 반영됩니다.\n\n- **셀 수정**: 셀 클릭 → 입력 → `Enter` 확정 / `Esc` 취소. 숫자·true/false·null·JSON(배열/객체) 타입 자동 보존 (예: `["별칭1","별칭2"]`는 배열로 저장)\n- **행 추가**: `[+ 행 추가]` — 빈 행이 맨 위에 생성. 행 번호 옆 `⧉` 복제 / `✕` 삭제\n- **컬럼 추가/이름변경/삭제**: `[+ 컬럼 추가]`, 머리글 호버 시 `✎`(모든 행의 키 변경) / `✕`(모든 행에서 키 제거)\n- **빈 셀**: 저장 시 해당 키를 넣지 않음(빈 문자열이 필요하면 `""` 입력)\n- **저장**: 표 전체가 파일의 새 내용이 됨. 서버가 **백업 → 컴파일 검증 → 핫스왑**, 문제 시 **자동 롤백**. 되돌리기는 데이터셋 화면의 백업/복원 사용\n- **검색**: 일치 행만 표시하되 편집·저장은 전체 데이터 기준\n\n> 중첩이 깊은 `overrides`와 시스템(feedback/audit) 데이터셋은 이 화면에서 제외 — 데이터셋 화면(JSON 콘솔)을 사용하세요.',
@@ -59,7 +67,7 @@
     stats: '## 통계\n\nMCP 활동량과 SQL 유효율, 실행 상태, 최근 추이를 확인합니다.\n\n- 관리자는 **전체 사용자** 집계와 사용자별 호출량을 볼 수 있습니다.\n- 유효율이 낮으면 **내 이력**에서 invalid 생성을 확인하고, 재질문 학습 제안에 따라 지표·용어 사전을 보강하세요.\n- 서버 운영 지표는 `/metrics`의 Prometheus 형식으로도 제공됩니다.',
     history: '## 내 이력\n\n프롬프트·SQL·프로파일·도구명으로 과거 활동을 검색합니다.\n\n- **질의로 다시 사용**: 과거 프롬프트를 질의 화면에 채웁니다.\n- **DB 콘솔로 보내기**: 과거 SQL과 프로파일을 DB 콘솔로 전달합니다.\n- 관리자는 **전체 사용자** 범위로 전환할 수 있습니다.\n\n> 실행 실패와 invalid 생성을 검색해 반복 오류를 찾고, 통계 화면의 품질 신호와 함께 확인하세요.',
     users: '## 사용자 (관리자)\n\n로컬 계정·역할을 관리합니다. admin 역할이 전체 관리 권한을 가집니다.',
-    keys: '## MCP 키\n\nMCP 클라이언트 인증용 API 키(jsk_...)를 발급·회전·폐기합니다.',
+    keys: '## MCP 키\n\nMCP 클라이언트 인증용 API 키(ssk_...)를 발급·회전·폐기합니다.',
     settings: '## 서버 설정 (관리자)\n\n마스터 토큰·허용 Origin·Keycloak SSO를 메타 DB에 저장하고 즉시 적용합니다.',
   };
 

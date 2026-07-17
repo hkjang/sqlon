@@ -9,7 +9,7 @@ go test ./...                      # 골든셋 평가 포함 (~17초)
 go test ./internal/mcp/ -run TestAdmin -v   # 부분 실행
 
 # 실행
-go run ./cmd/jamypg-mcp -transport http -data ./data/metadb
+go run ./cmd/sqlon -transport http -data ./data/metadb
 go run ./cmd/jamypg-eval -verbose
 go run ./cmd/jamypg-goldgen -n 80
 
@@ -20,13 +20,14 @@ go test -tags integration ./test/integration -v
 
 # 크로스 빌드 (정적, CGO_ENABLED=0 — scripts/build.sh가 windows-amd64 /
 # linux-amd64 / linux-arm64 3종을 생성)
-GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/jamypg-mcp-windows-amd64.exe ./cmd/jamypg-mcp
-docker build -t jamypg-mcp:dev .
+GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/sqlon-windows-amd64.exe ./cmd/sqlon
+docker build -t sqlon/sqlon:dev .
+CGO_ENABLED=1 go build -tags oracle -o dist/sqlon-oracle ./cmd/sqlon
 ```
 
 Go 1.25+ (ServeMux 메서드/와일드카드 패턴, `atomic.Pointer` 사용).
-빌드 태그는 통합 테스트용 `integration`뿐입니다 — DB 드라이버는 항상
-컴파일에 포함되며 조건부 빌드(구 `-tags oracle`)는 없습니다.
+통합 테스트는 `integration`, Oracle판 드라이버는 `oracle` 빌드 태그를
+사용합니다. 표준판은 `CGO_ENABLED=0`을 유지합니다.
 
 ## 코드 구조
 

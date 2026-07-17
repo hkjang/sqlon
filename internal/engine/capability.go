@@ -39,6 +39,16 @@ type Connector interface {
 	Ping(context.Context) (Identity, error)
 }
 
+type DialectProvider interface {
+	QuoteIdentifier(string) (string, error)
+	BindVariable(int) string
+	Limit(string, int) (string, error)
+}
+
+type QueryGuard interface {
+	ValidateReadOnly(string) error
+}
+
 // MetadataProvider, SessionProvider and LockProvider deliberately expose
 // normalized records. Rich engine-native fields can be held in Details.
 type MetadataProvider interface {
@@ -49,6 +59,52 @@ type SessionProvider interface {
 }
 type LockProvider interface {
 	ListLocks(context.Context) ([]LockEdge, error)
+}
+type WorkloadProvider interface {
+	CollectWorkload(context.Context) ([]Record, error)
+}
+type ExplainProvider interface {
+	Explain(context.Context, string, []any) (Plan, error)
+}
+type StorageProvider interface {
+	CollectStorage(context.Context) ([]Record, error)
+}
+type ReplicationProvider interface {
+	CollectReplication(context.Context) ([]Record, error)
+}
+type BackupProvider interface {
+	CollectBackupStatus(context.Context) ([]Record, error)
+}
+type SecurityProvider interface {
+	CollectSecurity(context.Context) ([]Record, error)
+}
+type AdminProvider interface {
+	ExecuteApproved(context.Context, string, map[string]any) error
+}
+type MaintenanceProvider interface {
+	ExecuteMaintenance(context.Context, string, map[string]any) error
+}
+
+type Record struct {
+	Identity Identity       `json:"identity"`
+	Kind     string         `json:"kind"`
+	Values   map[string]any `json:"values"`
+}
+
+type Plan struct {
+	Identity Identity       `json:"identity"`
+	Hash     string         `json:"hash,omitempty"`
+	Root     map[string]any `json:"root"`
+}
+
+func (c CapabilitySet) Map() map[string]bool {
+	return map[string]bool{
+		"sessions": c.Sessions, "lock_tree": c.LockTree, "workload": c.Workload,
+		"query_plans": c.QueryPlans, "replication": c.Replication,
+		"backup_status": c.BackupStatus, "storage": c.Storage,
+		"user_management": c.UserManagement, "maintenance": c.Maintenance,
+		"multitenant": c.Multitenant, "rac": c.RAC,
+	}
 }
 
 type Asset struct {

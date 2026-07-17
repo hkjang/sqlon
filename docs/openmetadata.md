@@ -21,7 +21,7 @@ displayName·PII 태그·용어집·오너십)의 중앙 저장소이고, jamypg
 ```sh
 export JAMYPG_OPENMETADATA_URL=http://openmetadata:8585   # 콘솔/URL 또는 .../api
 export JAMYPG_OPENMETADATA_TOKEN=<bot-jwt>                 # OpenMetadata bot JWT
-go run ./cmd/jamypg-mcp -data ./data/metadb -addr 127.0.0.1:9797
+go run ./cmd/sqlon -data ./data/metadb -addr 127.0.0.1:9797
 # 또는 플래그: -openmetadata-url ... -openmetadata-token ...
 ```
 
@@ -161,7 +161,7 @@ import(업무 의미, 빈 필드만) → 다이제스트 웹훅(통지)** 순서
 불필요). 설정된 단계만 동작합니다.
 
 ```sh
-go run ./cmd/jamypg-mcp -data ./data/metadb -addr 127.0.0.1:9797 \
+go run ./cmd/sqlon -data ./data/metadb -addr 127.0.0.1:9797 \
   -openmetadata-url http://openmetadata:8585 -openmetadata-token <bot-jwt> \
   -sync-interval 24h \
   -sync-source pg-prod \          # 물리 구조 증분 수집(선택)

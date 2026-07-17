@@ -73,6 +73,26 @@ func TestStructHashIgnoresCommentAndRowCount(t *testing.T) {
 	}
 }
 
+func TestOracleMetadataCollectorNormalizesBaseDictionaryViews(t *testing.T) {
+	f := &fakeQuerier{dialect: "oracle", rows: map[string][]map[string]any{
+		"FROM all_tables":      {{"schema": "APP", "name": "ORDERS", "kind": "table", "comment": "주문", "est_rows": int64(12)}},
+		"FROM all_tab_columns": {{"schema": "APP", "name": "ORDERS", "col": "ID", "ord": int64(1), "data_type": "NUMBER", "full_type": "NUMBER(10,0)", "nullable": "N"}},
+		"FROM all_constraints": {{"schema": "APP", "name": "ORDERS", "cname": "PK_ORDERS", "ctype": "PRIMARY KEY", "col": "ID", "col_ord": int64(1)}},
+		"FROM all_indexes":     {{"schema": "APP", "name": "ORDERS", "iname": "PK_ORDERS", "is_unique": int64(1), "is_primary": int64(1), "col": "ID", "col_pos": int64(1)}},
+	}}
+	snap, err := NewCollector(f).Collect(context.Background(), CollectRequest{SourceID: "ora", Schemas: []string{"app"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Dialect != "oracle" || len(snap.Tables) != 1 {
+		t.Fatalf("snapshot = %+v", snap)
+	}
+	table := snap.Tables[0]
+	if table.FQN() != "APP.ORDERS" || len(table.Columns) != 1 || !table.Columns[0].IsPrimaryKey || len(table.Indexes) != 1 {
+		t.Fatalf("oracle table = %+v", table)
+	}
+}
+
 func TestDiffDetectsChanges(t *testing.T) {
 	base := snap("s1",
 		tbl("s", "keep", col("id", "int", false, true)),

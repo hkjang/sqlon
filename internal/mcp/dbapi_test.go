@@ -149,9 +149,27 @@ func TestDBAPITokenEnforcement(t *testing.T) {
 			t.Fatalf("%s %s should require token, got %d", c[0], c[1], rec.Code)
 		}
 	}
+	for _, path := range []string{"/api/fleet/health", "/api/observability/sessions?profile=x", "/api/observability/locks?profile=x", "/api/observability/workload?profile=x", "/api/observability/top-sql?profile=x", "/api/observability/capacity?profile=x", "/api/observability/history?profile=x"} {
+		if rec := doReq(t, mux, "GET", path, "", nil); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("GET %s should require token, got %d", path, rec.Code)
+		}
+	}
+	if rec := doReq(t, mux, "POST", "/api/collector/run", "", nil); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("manual collector should require token, got %d", rec.Code)
+	}
 	// db.html page served
 	rec := doReq(t, mux, "GET", "/admin/db", "", nil)
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "DB 연결 관리") {
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "DB 연결 관리") ||
+		!strings.Contains(rec.Body.String(), "godror · OCI/Instant Client") ||
+		!strings.Contains(rec.Body.String(), "Diagnostics Pack") {
 		t.Fatalf("/admin/db: %d", rec.Code)
+	}
+	rec = doReq(t, mux, "GET", "/admin/sessions", "", nil)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "블로킹 트리") || !strings.Contains(rec.Body.String(), "SQL 본문과 bind 값") {
+		t.Fatalf("/admin/sessions: %d", rec.Code)
+	}
+	rec = doReq(t, mux, "GET", "/admin/workload", "", nil)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "처리량 추이") || !strings.Contains(rec.Body.String(), "SQL 원문 없이") {
+		t.Fatalf("/admin/workload: %d", rec.Code)
 	}
 }

@@ -15,6 +15,16 @@ type Adapter struct {
 	Metadata     MetadataProvider
 	Sessions     SessionProvider
 	Locks        LockProvider
+	Dialect      DialectProvider
+	QueryGuard   QueryGuard
+	Workload     WorkloadProvider
+	Explain      ExplainProvider
+	Storage      StorageProvider
+	Replication  ReplicationProvider
+	Backup       BackupProvider
+	Security     SecurityProvider
+	Admin        AdminProvider
+	Maintenance  MaintenanceProvider
 }
 
 // Registry centralizes adapter lookup. It rejects duplicate names so a build
@@ -25,6 +35,25 @@ type Registry struct {
 }
 
 func NewRegistry() *Registry { return &Registry{adapters: make(map[string]Adapter)} }
+
+// NewDefaultRegistry is the only product-level engine-name declaration.
+// Service packages consume capabilities from this registry and never switch
+// on postgres/mysql/mariadb/oracle themselves.
+func NewDefaultRegistry() *Registry {
+	r := NewRegistry()
+	declarations := []Adapter{
+		{Name: "postgres", Capabilities: CapabilitySet{Sessions: true, LockTree: true, Workload: true, QueryPlans: true, Storage: true, UserManagement: true, Maintenance: true, Replication: true}},
+		{Name: "mysql", Capabilities: CapabilitySet{Sessions: true, LockTree: true, Workload: true, QueryPlans: true, Storage: true, UserManagement: true, Maintenance: true, Replication: true}},
+		{Name: "mariadb", Capabilities: CapabilitySet{Sessions: true, LockTree: true, Workload: true, QueryPlans: true, Storage: true, UserManagement: true, Maintenance: true, Replication: true}},
+		{Name: "oracle", Capabilities: CapabilitySet{Sessions: true, LockTree: true, Workload: true, QueryPlans: true, Storage: true, UserManagement: true, Maintenance: true, Replication: true, Multitenant: true, RAC: true}},
+	}
+	for _, declaration := range declarations {
+		if err := r.Register(declaration); err != nil {
+			panic(err)
+		}
+	}
+	return r
+}
 
 func (r *Registry) Register(a Adapter) error {
 	name := strings.ToLower(strings.TrimSpace(a.Name))

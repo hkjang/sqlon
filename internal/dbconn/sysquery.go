@@ -37,6 +37,10 @@ func (m *Manager) SystemQuery(ctx context.Context, profileID, query string, args
 	if err != nil {
 		return nil, err
 	}
+	if err := EnforceOracleLicense(p, query); err != nil {
+		m.audit(p.ID, query, ExecOptions{User: "sqlon-collector"}, nil, 0, err)
+		return nil, err
+	}
 	if err := m.breakerCheck(p.ID); err != nil {
 		return nil, err
 	}

@@ -63,7 +63,7 @@
   .profile-hero h2{font-size:21px;margin-bottom:5px}.profile-hero p{margin:0;color:#cbdcf5}.profile-hero .btn{font-weight:700}
   .form-shell{background:#fbfcff;border:1px solid #cbd8eb!important;border-radius:14px;padding:0!important;overflow:hidden}.form-head{padding:18px 20px;background:#f0f5fd;border-bottom:1px solid #d7e1ef;display:flex;gap:12px;align-items:center}.form-head h2{font-size:18px;margin:0}.form-body{padding:20px}
   .flow{display:grid;grid-template-columns:repeat(4,1fr);margin-bottom:20px}.flow-step{padding:9px 10px;border-bottom:3px solid #dce3ed;color:var(--sub);font-size:12px}.flow-step b{display:inline-grid;place-items:center;width:22px;height:22px;margin-right:6px;border-radius:50%;background:#e3e8f0}.flow-step.active{border-color:var(--blue);color:var(--blue);font-weight:700}.flow-step.active b{background:var(--blue);color:#fff}
-  .engine-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:7px 0 16px}.engine-card{position:relative;border:1px solid var(--line);background:#fff;border-radius:11px;padding:13px;cursor:pointer;transition:.15s}.engine-card:hover{transform:translateY(-1px);border-color:#91afe0}.engine-card.selected{border:2px solid var(--blue);background:#f4f8ff;padding:12px;box-shadow:0 4px 15px rgba(37,99,235,.1)}.engine-card input{position:absolute;opacity:0}.engine-card b{display:block;font-size:14px}.engine-card span{font-size:11.5px;color:var(--sub)}
+  .engine-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:7px 0 16px}.engine-card{position:relative;border:1px solid var(--line);background:#fff;border-radius:11px;padding:13px;cursor:pointer;transition:.15s}.engine-card:hover{transform:translateY(-1px);border-color:#91afe0}.engine-card.selected{border:2px solid var(--blue);background:#f4f8ff;padding:12px;box-shadow:0 4px 15px rgba(37,99,235,.1)}.engine-card input{position:absolute;opacity:0}.engine-card b{display:block;font-size:14px}.engine-card span{font-size:11.5px;color:var(--sub)}
   .field-section{background:#fff;border:1px solid var(--line);border-radius:11px;padding:15px;margin-bottom:12px}.field-section h3{font-size:13px;margin:0 0 5px}.field-section>p{font-size:12px;color:var(--sub);margin:0 0 10px}.field-hint{font-size:11.5px;color:var(--sub);margin-top:4px}.form-actions{position:sticky;bottom:0;background:rgba(255,255,255,.96);border-top:1px solid var(--line);padding:12px 20px;margin:18px -20px -20px;display:flex;align-items:center;gap:8px;backdrop-filter:blur(6px)}
   .diagnostic{margin-top:7px;border-left:3px solid var(--red);padding:7px 10px;background:#fff6f6;border-radius:0 7px 7px 0}.diagnostic b{display:block}.diagnostic ul{margin:5px 0 0;padding-left:18px}
   @media(max-width:760px){.engine-grid,.flow{grid-template-columns:1fr}.flow-step{display:none}.flow-step.active{display:block}.form-body{padding:14px}.form-actions{margin-left:-14px;margin-right:-14px}.profile-hero .toolbar{align-items:flex-start}}
@@ -102,9 +102,23 @@
             <label class="engine-card selected" data-engine="postgres"><input type="radio" name="dbtype" value="postgres" checked><b>🐘 PostgreSQL</b><span>pgx · 기본 포트 5432</span></label>
             <label class="engine-card" data-engine="mysql"><input type="radio" name="dbtype" value="mysql"><b>🐬 MySQL</b><span>go-sql-driver/mysql · 3306</span></label>
             <label class="engine-card" data-engine="mariadb"><input type="radio" name="dbtype" value="mariadb"><b>🦭 MariaDB</b><span>MySQL wire protocol · 3306</span></label>
+            <label class="engine-card" data-engine="oracle"><input type="radio" name="dbtype" value="oracle"><b>🔶 Oracle</b><span>godror · OCI/Instant Client</span></label>
           </div>
         </div>
-        <div class="field-section"><h3>2. 기본 접속 정보</h3><p id="engineHelp">PostgreSQL 접속 정보를 입력하세요.</p>
+        <div class="field-section"><h3>2. 운영 컨텍스트</h3><p>플릿 화면의 분류·위험도·담당 조직에 사용됩니다. 운영 환경과 중요도는 정확히 지정하세요.</p>
+          <div class="row">
+            <div><label>업무 서비스</label><input id="f_service" placeholder="결제 서비스"></div>
+            <div><label>환경</label><select id="f_env"><option value="production">운영</option><option value="staging">검증</option><option value="development">개발</option><option value="dr">재해복구</option><option value="test">테스트</option><option value="unspecified">미지정</option></select></div>
+            <div><label>중요도</label><select id="f_criticality"><option value="critical">Critical</option><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select></div>
+            <div><label>역할</label><select id="f_role"><option value="primary">Primary</option><option value="standby">Standby</option><option value="replica">Replica</option><option value="cdb">CDB</option><option value="pdb">PDB</option><option value="unspecified">미지정</option></select></div>
+            <div><label>담당 조직</label><input id="f_team" placeholder="DBA 플랫폼팀"></div>
+            <div><label>위치</label><input id="f_location" placeholder="서울 리전 / IDC-A"></div>
+            <div><label>유지보수 창</label><input id="f_maintenance" placeholder="토 02:00-04:00 KST"></div>
+            <div><label>태그 (콤마 구분)</label><input id="f_tags" placeholder="payment, pci, tier-1"></div>
+          </div>
+          <div class="field-hint">운영(production) 프로파일은 평문 비밀번호를 저장할 수 없습니다. env: 또는 file: Secret 참조를 사용하세요.</div>
+        </div>
+        <div class="field-section"><h3>3. 기본 접속 정보</h3><p id="engineHelp">PostgreSQL 접속 정보를 입력하세요.</p>
         <div class="cols2">
           <div>
             <label>ID (영문/숫자/._-, 저장 후 변경 불가)</label>
@@ -151,6 +165,18 @@
             </select>
           </div>
         </div>
+        </div>
+        <div class="field-section" id="oracleFields" style="display:none"><h3>4. Oracle 연결·라이선스 정책</h3><p>Pack 사용 여부는 운영자가 보유 계약을 확인하여 선언하며 기본값은 모두 비활성입니다.</p>
+          <div class="row">
+            <div><label>서비스 이름</label><input id="f_ora_service" placeholder="PRODPDB"></div>
+            <div><label>컨테이너 범위</label><select id="f_ora_scope"><option value="pdb">PDB</option><option value="root">CDB Root</option></select></div>
+            <div><label>Wallet 디렉터리</label><input id="f_ora_wallet" placeholder="/run/secrets/oracle_wallet"></div>
+            <div><label>Oracle Client 디렉터리</label><input id="f_ora_client" placeholder="/opt/oracle/instantclient"></div>
+            <div><label>Diagnostics Pack</label><select id="f_ora_diag"><option value="disabled">비활성 (기본)</option><option value="enabled">활성 — 라이선스 확인됨</option></select></div>
+            <div><label>Tuning Pack</label><select id="f_ora_tuning"><option value="disabled">비활성 (기본)</option><option value="enabled">활성 — Diagnostics 필요</option></select></div>
+            <div><label><input id="f_ora_rac" type="checkbox" style="width:auto"> RAC 서비스 연결</label></div>
+          </div>
+          <div class="field-hint">Oracle 모니터링 계정에는 SYS를 사용할 수 없습니다. Wallet·비밀번호는 감사 로그에 기록되지 않습니다.</div>
         </div>
         <div class="form-actions">
           <button class="btn primary" type="submit">저장하고 연결 테스트</button>
@@ -262,8 +288,11 @@ function toast(msg, ms = 3200) {
 async function refreshProfiles() {
   const data = await api('GET', '/api/db-profiles');
   PROFILES = data.profiles || [];
+  const drivers = data.drivers || {};
+  const enabled = Object.keys(drivers).filter(k => drivers[k]).map(k => k === 'postgres' ? 'PostgreSQL' : k === 'oracle' ? 'Oracle' : k === 'mysql' ? 'MySQL' : 'MariaDB');
+  const oracleNote = drivers.oracle ? ' · Oracle 사용 가능' : ' · Oracle는 sqlon-oracle 배포판 필요';
   $('#driverChip').innerHTML = data.driver_available
-    ? '<span class="chip" title="' + esc(data.driver_note) + '">드라이버: PostgreSQL · MySQL · MariaDB 포함</span>'
+    ? '<span class="chip" title="' + esc(data.driver_note) + '">드라이버: ' + esc(enabled.join(' · ')) + oracleNote + '</span>'
     : '<span class="chip err" title="' + esc(data.driver_note) + '">DB 드라이버 없음 — 실행 불가</span>';
   $('#pRows').innerHTML = PROFILES.length === 0
     ? '<tr><td colspan="6" class="mini">등록된 프로파일이 없습니다 — [＋ 프로파일 추가]로 시작하세요.</td></tr>'
@@ -279,9 +308,11 @@ function profileRow(p) {
   const perm = p.my_permission;
   const canManage = !window.AUTH || perm === 'owner' || perm === 'manage';
   const canDelete = !window.AUTH || perm === 'owner' || isAdmin;
+  const context = [p.service_name, p.environment, p.criticality, p.role].filter(Boolean).map(esc).join(' · ');
   return '<tr><td><b class="mono">' + esc(p.id) + '</b><div class="mini">' + esc(p.name || '') +
       (p.visibility ? ' · <span class="b ' + (p.visibility === 'shared' ? 'ok' : 'gray') + '">' + p.visibility + '</span>' : '') +
-      (p.owner ? ' · 소유 ' + esc(p.owner) : '') + (perm ? ' · 내권한 ' + esc(perm) : '') + '</div></td>' +
+      (p.owner ? ' · 소유 ' + esc(p.owner) : '') + (perm ? ' · 내권한 ' + esc(perm) : '') + '</div>' +
+      (context ? '<div class="mini"><span class="b ' + (p.environment === 'production' ? 'bad' : 'gray') + '">' + context + '</span></div>' : '') + '</td>' +
     '<td class="mono" style="word-break:break-all">' + esc(p.connect_string) + '</td>' +
     '<td class="mono">' + esc(p.username) + '<div class="mini">' + esc(p.password_ref) + '</div></td>' +
     '<td class="mini">pool ' + p.pool.max_open_conns + '/' + p.pool.max_idle_conns +
@@ -332,6 +363,14 @@ function openForm(id) {
   setEngine(p.type || 'postgres');
   $('#f_id').value = p.id || ''; $('#f_id').disabled = !!id;
   $('#f_name').value = p.name || '';
+  $('#f_service').value = p.service_name || '';
+  $('#f_env').value = p.environment || 'unspecified';
+  $('#f_criticality').value = p.criticality || 'medium';
+  $('#f_role').value = p.role || 'unspecified';
+  $('#f_team').value = p.owner_team || '';
+  $('#f_location').value = p.location || '';
+  $('#f_maintenance').value = p.maintenance_window || '';
+  $('#f_tags').value = (p.tags || []).join(', ');
   $('#f_conn').value = p.connect_string || '';
   $('#f_user').value = p.username || '';
   $('#f_pw').value = id ? (p.password_ref.startsWith('plain:') ? '' : p.password_ref) : '';
@@ -350,6 +389,15 @@ function openForm(id) {
   $('#f_dba_user').value = dba.username || '';
   $('#f_dba_pw').value = id ? (dba.password_ref && !dba.password_ref.startsWith('plain:') ? dba.password_ref : '') : '';
   $('#f_dba_conn').value = dba.connect_string || '';
+  const oracle = p.oracle || {};
+  const license = p.license_policy || {};
+  $('#f_ora_service').value = oracle.service_name || '';
+  $('#f_ora_scope').value = oracle.cdb_scope || 'pdb';
+  $('#f_ora_rac').checked = !!oracle.rac_enabled;
+  $('#f_ora_wallet').value = oracle.wallet_dir || '';
+  $('#f_ora_client').value = oracle.client_lib_dir || '';
+  $('#f_ora_diag').value = license.diagnostics_pack || 'disabled';
+  $('#f_ora_tuning').value = license.tuning_pack || 'disabled';
   if (window.AUTH) {
     $('#visLabel').style.display = ''; $('#f_visibility').style.display = '';
     $('#f_visibility').value = p.visibility || 'private';
@@ -360,12 +408,14 @@ function closeForm() { $('#formWrap').style.display = 'none'; EDIT_ID = null; }
 const engineCopy={
   postgres:{help:'PostgreSQL · pgx 드라이버가 내장되어 있습니다.',conn:'db.example.com:5432/appdb',hint:'형식: host:port/database 또는 postgres://host:port/database'},
   mysql:{help:'MySQL · 순수 Go 드라이버가 바이너리에 포함되어 별도 client library가 필요 없습니다.',conn:'mysql.example.com:3306/appdb',hint:'형식: host:port/database 또는 mysql://host:port/database'},
-  mariadb:{help:'MariaDB · MySQL wire protocol 드라이버가 바이너리에 포함되어 별도 client library가 필요 없습니다.',conn:'mariadb.example.com:3306/appdb',hint:'형식: host:port/database 또는 mariadb://host:port/database'}
+  mariadb:{help:'MariaDB · MySQL wire protocol 드라이버가 바이너리에 포함되어 별도 client library가 필요 없습니다.',conn:'mariadb.example.com:3306/appdb',hint:'형식: host:port/database 또는 mariadb://host:port/database'},
+  oracle:{help:'Oracle · godror와 Oracle Instant Client가 포함된 sqlon-oracle 배포판이 필요합니다.',conn:'db.example.com:1521/PRODPDB',hint:'Easy Connect host:port/service_name 또는 TNS descriptor를 입력하세요.'}
 };
 function setEngine(type){
   if(!engineCopy[type])type='postgres';
   document.querySelectorAll('.engine-card').forEach(c=>{const on=c.dataset.engine===type;c.classList.toggle('selected',on);c.querySelector('input').checked=on;});
   $('#engineHelp').textContent=engineCopy[type].help;$('#f_conn').placeholder=engineCopy[type].conn;$('#connHint').textContent=engineCopy[type].hint;
+  $('#oracleFields').style.display=type==='oracle'?'block':'none';
 }
 document.querySelectorAll('.engine-card').forEach(c=>c.addEventListener('click',()=>setEngine(c.dataset.engine)));
 async function saveProfile(ev) {
@@ -373,6 +423,11 @@ async function saveProfile(ev) {
   const num = id => { const v = $(id).value.trim(); return v ? Number(v) : 0; };
   const body = {
     id: $('#f_id').value.trim(), name: $('#f_name').value.trim(),
+    service_name: $('#f_service').value.trim(), environment: $('#f_env').value,
+    criticality: $('#f_criticality').value, role: $('#f_role').value,
+    owner_team: $('#f_team').value.trim(), location: $('#f_location').value.trim(),
+    maintenance_window: $('#f_maintenance').value.trim(),
+    tags: $('#f_tags').value.split(',').map(s => s.trim()).filter(Boolean),
     type: document.querySelector('input[name="dbtype"]:checked').value,
     connect_string: $('#f_conn').value.trim(), username: $('#f_user').value.trim(),
     password_ref: $('#f_pw').value.trim(),
@@ -382,6 +437,13 @@ async function saveProfile(ev) {
               default_max_rows: num('#f_defrows'), max_rows: num('#f_maxrows'),
               denied_keywords: $('#f_denied').value.split(',').map(s => s.trim()).filter(Boolean) }
   };
+  if (body.type === 'oracle') {
+    body.oracle = { service_name: $('#f_ora_service').value.trim(), connection_role: 'normal',
+      cdb_scope: $('#f_ora_scope').value, rac_enabled: $('#f_ora_rac').checked,
+      wallet_dir: $('#f_ora_wallet').value.trim(), client_lib_dir: $('#f_ora_client').value.trim() };
+    body.license_policy = { diagnostics_pack: $('#f_ora_diag').value,
+      tuning_pack: $('#f_ora_tuning').value, source: 'operator_declared' };
+  }
   if (window.AUTH) body.visibility = $('#f_visibility').value;
   // DBA credentials (optional)
   const dbaUser = $('#f_dba_user').value.trim();

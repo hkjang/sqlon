@@ -22,8 +22,12 @@ import (
 
 	"sqlon/internal/catalog"
 	"sqlon/internal/change"
+	"sqlon/internal/collector"
 	"sqlon/internal/dbconn"
+	"sqlon/internal/fleet"
 	"sqlon/internal/meta"
+	"sqlon/internal/observability"
+	"sqlon/internal/storage"
 )
 
 const ProtocolVersion = "2025-06-18"
@@ -52,6 +56,7 @@ type Server struct {
 	catalogPtr   atomic.Pointer[catalog.Catalog]
 	Options      Options
 	DB           *dbconn.Manager
+	Collector    *collector.Service
 	Changes      *change.Service
 	Meta         *meta.Service // nil = standalone mode (auth disabled)
 	OIDC         *OIDCProvider // nil = SSO disabled
@@ -133,10 +138,12 @@ func NewServer(c *catalog.Catalog, opts Options) *Server {
 	if strings.TrimSpace(opts.FeedbackTenantID) == "" {
 		opts.FeedbackTenantID = "default"
 	}
+	dbManager := dbconn.NewManager(c.DataDir)
 	s := &Server{
 		Options:         opts,
 		dataDir:         c.DataDir,
-		DB:              dbconn.NewManager(c.DataDir),
+		DB:              dbManager,
+		Collector:       collector.New(dbManager, storage.NewFileStore(c.DataDir)),
 		Changes:         change.NewService(),
 		sessions:        map[string]time.Time{},
 		events:          map[string]uint64{},
@@ -191,7 +198,7 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
 		u, err := s.authenticate(r)
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="jamypg-mcp"`)
-			http.Error(w, "authentication required: pass an MCP key via Authorization: Bearer jsk_... or X-MCP-Key (manage keys at /admin/keys)", http.StatusUnauthorized)
+			http.Error(w, "authentication required: pass an MCP key via Authorization: Bearer ssk_... or X-MCP-Key (manage keys at /admin/keys)", http.StatusUnauthorized)
 			return
 		}
 		r = r.WithContext(withUser(r.Context(), u))
@@ -435,6 +442,23 @@ func (s *Server) tools() []map[string]any {
 			"profile": str("DB profile id for a live EXPLAIN PLAN; omit for static-only"),
 		}, []string{"sql"})),
 		tool("list_db_profiles", "List the DB DB connection profiles the caller may use (id, name, masked connect target, pool/policy, driver availability). Call this to discover which profile id to pass to run_sql_safely / explain_sql / run_evaluation. In auth mode only profiles you own, were granted, or that are shared are returned; admins see all.", objectSchema(map[string]any{}, nil)),
+		tool("list_database_instances", "권한 범위 안의 SQLON DB 플릿 인벤토리를 반환합니다. 대상 DB에 연결하지 않으며 환경, 업무서비스, 중요도, 엔진, 역할, 담당팀, 위치와 선언된 Capability를 제공합니다.", objectSchema(map[string]any{}, nil)),
+		tool("get_fleet_health", "모든 사용 가능 DB 프로파일의 연결 상태를 독립적으로 병렬 수집하고 위험도 순으로 반환합니다. 각 결과에는 수집 시각, 구조화된 실패 원인, 근거, 영향 중요도와 기능 지원 상태가 포함됩니다.", objectSchema(map[string]any{}, nil)),
+		tool("list_sessions", "대상 DB의 활성·비활성 세션과 장기 SQL·장기 트랜잭션을 분리해 조회합니다. Oracle 세션 키는 INST_ID:SID:SERIAL#이며 시스템·복제 세션 보호 여부, 근거와 수집 시각을 포함합니다. SQL 본문과 bind 값은 반환하지 않습니다.", objectSchema(map[string]any{
+			"profile": str("조회할 DB 프로파일 ID"),
+		}, []string{"profile"})),
+		tool("get_lock_tree", "엔진 시스템 뷰에서 blocker→blocked 관계를 수집해 루트 블로커, 영향받는 세션 수, 대기시간과 근거를 반환합니다. 읽기 전용이며 세션을 취소하거나 종료하지 않습니다.", objectSchema(map[string]any{
+			"profile": str("조회할 DB 프로파일 ID"),
+		}, []string{"profile"})),
+		tool("get_workload_summary", "대상 DB 시스템 카운터의 QPS/TPS, 연결, I/O, 대기 이벤트를 최신 저장 스냅숏에서 반환합니다. fresh=true면 고정된 읽기 전용 Provider 쿼리로 새 스냅숏을 수집합니다.", objectSchema(map[string]any{
+			"profile": str("조회할 DB 프로파일 ID"), "fresh": boolSchema("새 스냅숏을 즉시 수집하고 저장"),
+		}, []string{"profile"})),
+		tool("get_top_sql", "대상 엔진의 누적 SQL 통계에서 원문 없이 fingerprint/SQL ID별 호출 수, elapsed, CPU, reads, rows와 Oracle plan hash를 반환합니다. 라이선스·권한 제한은 limitation으로 구분합니다.", objectSchema(map[string]any{
+			"profile": str("조회할 DB 프로파일 ID"), "fresh": boolSchema("새 스냅숏을 즉시 수집하고 저장"),
+		}, []string{"profile"})),
+		tool("get_storage_status", "DB·테이블·tablespace 용량과 사용률, 이전 스냅숏 대비 일간 증가량을 반환합니다. 80/90퍼센트 임계치 근거를 포함합니다.", objectSchema(map[string]any{
+			"profile": str("조회할 DB 프로파일 ID"), "fresh": boolSchema("새 스냅숏을 즉시 수집하고 저장"),
+		}, []string{"profile"})),
 		tool("route_db_profile", "Given a SQL statement, pick the DB profile that can actually serve it when many profiles are registered. Extracts the referenced tables via the dialect parser and scores each usable profile on live table inventory (does the DB really contain those tables), operator-declared routing.schemas, engine dialect, circuit-breaker health, and routing priority/default. Returns selected_profile with decisive=true when there is one clear winner, otherwise decisive=false with ranked candidates to choose from. run_sql_safely(profile=\"auto\") calls this internally.", objectSchema(map[string]any{
 			"sql": str("SQL whose target profile should be resolved"),
 		}, []string{"sql"})),
@@ -489,6 +513,25 @@ func (s *Server) tools() []map[string]any {
 			"days":    integer("How many days of audit log to summarize (default 7)"),
 			"slow_ms": integer("Slow-query threshold in ms (default 200)"),
 		}, nil)),
+		tool("create_change_plan", "변경 실행 전 사전 상태·영향·검증·보상 작업을 구조화한 초안을 생성합니다. 이 호출은 DB를 변경하지 않습니다.", objectSchema(map[string]any{
+			"id": str("Unique change request id"), "profile_id": str("Target DB profile id"), "target": str("Instance/database/schema/object target"),
+			"reason": str("Business and operational reason"), "risk": str("low | medium | high | critical | emergency"),
+			"pre_state": map[string]any{"description": "Observed pre-change evidence"}, "impact": map[string]any{"description": "Affected objects and services"},
+			"expected_lock": str("Expected lock type and scope"), "estimated_duration": str("Estimated duration or unknown"),
+			"preconditions": arrayOf("string", "Backup, replication, capacity, and session preconditions"), "maintenance_window": str("Allowed execution window"),
+			"steps": arrayOfObjects("Ordered steps: {order, command, verification, compensation}"),
+		}, []string{"id", "profile_id", "target", "reason", "risk", "steps"})),
+		tool("evaluate_change_risk", "서버 정책으로 위험도와 필요한 승인 수를 평가합니다. 클라이언트가 승인 수를 낮출 수 없습니다.", objectSchema(map[string]any{
+			"risk": str("low | medium | high | critical | emergency"),
+		}, []string{"risk"})),
+		tool("submit_change", "변경계획 초안을 분석/검토 상태로 제출합니다. 중간 이상 위험은 승인 전 실행할 수 없습니다.", objectSchema(map[string]any{"id": str("Change request id")}, []string{"id"})),
+		tool("approve_change", "검토 대기 중인 변경을 현재 DBA 자격으로 승인합니다. 치명적 변경은 서로 다른 2인의 승인이 필요합니다.", objectSchema(map[string]any{"id": str("Change request id")}, []string{"id"})),
+		tool("execute_approved_change", "승인 ID와 실행 직전 재검증을 거쳐 승인된 불변 단계만 실행하고 사후 검증합니다.", objectSchema(map[string]any{
+			"id": str("Change request id"), "approval_id": str("Approval id returned by approve_change; required for approval-gated risk"),
+		}, []string{"id"})),
+		tool("verify_change", "변경 상태, 승인, 실행·검증 결과를 조회합니다. 이 호출은 추가 SQL을 실행하지 않습니다.", objectSchema(map[string]any{"id": str("Change request id")}, []string{"id"})),
+		tool("rollback_change", "rollback_required 상태의 변경에 대해 보상 작업을 역순 실행합니다.", objectSchema(map[string]any{"id": str("Change request id")}, []string{"id"})),
+		tool("cancel_change", "실행 전의 초안·검토·승인·예약 변경을 취소합니다.", objectSchema(map[string]any{"id": str("Change request id")}, []string{"id"})),
 		tool("dba_overview", "DBA console overview for a profile: dialect, whether DBA credentials are configured, server version, and role/database counts. Read-only. Requires the dba/admin role and a DBA-enabled profile (db_profiles.dba).", objectSchema(map[string]any{
 			"profile": str("DB profile id (must have dba credentials configured)"),
 		}, []string{"profile"})),
@@ -763,7 +806,19 @@ func (s *Server) tools() []map[string]any {
 		}, []string{"name"})),
 		tool("reload_catalog", "Recompile the catalog from the files on disk and hot-swap it. Use after editing dataset files directly (e.g. via a mounted volume).", objectSchema(map[string]any{}, nil)),
 	}
-	return annotateTools(list)
+	return annotateTools(publicTools(list))
+}
+
+func publicTools(list []map[string]any) []map[string]any {
+	out := make([]map[string]any, 0, len(list))
+	for _, definition := range list {
+		name, _ := definition["name"].(string)
+		if internalDBAExecutors[name] {
+			continue
+		}
+		out = append(out, definition)
+	}
+	return out
 }
 
 // annotateTools attaches MCP tool annotations (readOnlyHint / destructiveHint /
@@ -795,6 +850,12 @@ func annotateTools(list []map[string]any) []map[string]any {
 		"set_active_catalog":             {destructive: true, idempotent: true},   // hot-swaps the active catalog
 		"build_all_profile_catalogs":     {destructive: true, idempotent: true},   // batch-builds workspaces
 		"import_openmetadata_to_profile": {destructive: true, idempotent: true},   // imports OM metadata into a workspace
+		"create_change_plan":             {destructive: false, idempotent: true},
+		"submit_change":                  {destructive: false, idempotent: false},
+		"approve_change":                 {destructive: false, idempotent: false},
+		"execute_approved_change":        {destructive: true, idempotent: false},
+		"rollback_change":                {destructive: true, idempotent: false},
+		"cancel_change":                  {destructive: false, idempotent: true},
 	}
 	for _, t := range list {
 		name, _ := t["name"].(string)
@@ -844,21 +905,38 @@ var adminOnlyTools = map[string]bool{
 // (dba_overview / dba_list_*) are included so the whole suite is role-gated as
 // one coherent surface.
 var dbaTools = map[string]bool{
-	"dba_overview":          true,
-	"dba_list_users":        true,
-	"dba_list_databases":    true,
-	"dba_list_settings":     true,
-	"dba_list_sessions":     true,
-	"dba_create_user":       true,
-	"dba_alter_user":        true,
-	"dba_drop_user":         true,
-	"dba_grant":             true,
-	"dba_create_database":   true,
-	"dba_drop_database":     true,
-	"dba_set_parameter":     true,
-	"dba_terminate_session": true,
-	"dba_run_maintenance":   true,
-	"dba_execute":           true,
+	"create_change_plan":      true,
+	"evaluate_change_risk":    true,
+	"submit_change":           true,
+	"approve_change":          true,
+	"execute_approved_change": true,
+	"verify_change":           true,
+	"rollback_change":         true,
+	"cancel_change":           true,
+	"dba_overview":            true,
+	"dba_list_users":          true,
+	"dba_list_databases":      true,
+	"dba_list_settings":       true,
+	"dba_list_sessions":       true,
+	"dba_create_user":         true,
+	"dba_alter_user":          true,
+	"dba_drop_user":           true,
+	"dba_grant":               true,
+	"dba_create_database":     true,
+	"dba_drop_database":       true,
+	"dba_set_parameter":       true,
+	"dba_terminate_session":   true,
+	"dba_run_maintenance":     true,
+	"dba_execute":             true,
+}
+
+// internalDBAExecutors are retained as implementation helpers during the
+// migration window, but are neither advertised nor callable over MCP.
+var internalDBAExecutors = map[string]bool{
+	"dba_create_user": true, "dba_alter_user": true, "dba_drop_user": true,
+	"dba_grant": true, "dba_create_database": true, "dba_drop_database": true,
+	"dba_set_parameter": true, "dba_terminate_session": true,
+	"dba_run_maintenance": true, "dba_execute": true,
 }
 
 // dbProfileTools is the single registry for MCP tools that can reach an
@@ -866,6 +944,12 @@ var dbaTools = map[string]bool{
 // open-world annotation, it ensures standalone HTTP applies the same master
 // token gate to every such tool. Calls without a profile are catalog-only.
 var dbProfileTools = map[string]bool{
+	"get_fleet_health":        true,
+	"list_sessions":           true,
+	"get_lock_tree":           true,
+	"get_workload_summary":    true,
+	"get_top_sql":             true,
+	"get_storage_status":      true,
 	"run_sql_safely":          true,
 	"execute_with_repair":     true,
 	"explain_sql":             true,
@@ -904,6 +988,7 @@ func (s *Server) authorizeDBProfileTool(ctx context.Context, name string, argume
 	// explicit profile value. The metadata-sync tools address the DB by
 	// `source` and always touch it.
 	probesAll := name == "route_db_profile" ||
+		name == "get_fleet_health" ||
 		name == "discover_metadata" || name == "run_metadata_sync" || name == "profile_metadata_assets" ||
 		(name == "run_sql_safely" && strings.EqualFold(strings.TrimSpace(a.Profile), "auto"))
 	// Retrieval-only evaluation never opens a DB, even if a client happens to
@@ -928,6 +1013,12 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 	}
 	if err := json.Unmarshal(params, &req); err != nil {
 		return nil, err
+	}
+	if internalDBAExecutors[req.Name] {
+		return map[string]any{
+			"status": "deprecated",
+			"error":  "direct DBA mutation tools are disabled; create and execute an approved ChangePlan",
+		}, nil
 	}
 	// Admin-only tools (dataset mutations, learning) must enforce admin over
 	// MCP too, matching the REST layer. In meta mode this is the admin role;
@@ -1085,6 +1176,60 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 		return res, nil
 	case "list_db_profiles":
 		return s.mcpListProfiles(ctx), nil
+	case "list_database_instances":
+		profiles, err := s.usableProfiles(ctx)
+		if err != nil {
+			return map[string]any{"status": "error", "warnings": []string{err.Error()}, "data": []any{}}, nil
+		}
+		return fleet.New(s.DB).InventoryProfiles(profiles), nil
+	case "get_fleet_health":
+		profiles, err := s.usableProfiles(ctx)
+		if err != nil {
+			return map[string]any{"status": "error", "warnings": []string{err.Error()}, "data": []any{}}, nil
+		}
+		return fleet.NewWithOperations(s.DB, s.Collector).HealthProfiles(ctx, profiles), nil
+	case "list_sessions":
+		var a struct {
+			Profile string `json:"profile"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		profiles, err := s.usableProfiles(ctx)
+		if err != nil {
+			return nil, err
+		}
+		profile, ok := allowedProfile(profiles, a.Profile)
+		if !ok {
+			return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
+		}
+		return observability.New(s.DB).Sessions(ctx, profile), nil
+	case "get_lock_tree":
+		var a struct {
+			Profile string `json:"profile"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		profiles, err := s.usableProfiles(ctx)
+		if err != nil {
+			return nil, err
+		}
+		profile, ok := allowedProfile(profiles, a.Profile)
+		if !ok {
+			return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
+		}
+		return observability.New(s.DB).Locks(ctx, profile), nil
+	case "get_workload_summary", "get_top_sql", "get_storage_status":
+		var a struct {
+			Profile string `json:"profile"`
+			Fresh   bool   `json:"fresh"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		kind := map[string]string{"get_workload_summary": "workload", "get_top_sql": "top_sql", "get_storage_status": "capacity"}[req.Name]
+		return s.mcpOperational(ctx, a.Profile, kind, a.Fresh), nil
 	case "route_db_profile":
 		var a struct {
 			SQL string `json:"sql"`
@@ -1228,6 +1373,121 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			}
 		}
 		return s.mcpDBADigest(a.Profile, a.Days, a.SlowMs), nil
+	case "create_change_plan":
+		var p change.Plan
+		if err := decodeArgs(req.Arguments, &p); err != nil {
+			return nil, err
+		}
+		created, err := s.Changes.Create(p, p.ID)
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error()}, nil
+		}
+		return map[string]any{"status": "ok", "data": created, "collected_at": time.Now().UTC()}, nil
+	case "evaluate_change_risk":
+		var a struct {
+			Risk change.Risk `json:"risk"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		required, err := change.ApprovalRequirement(a.Risk)
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error()}, nil
+		}
+		return map[string]any{"status": "ok", "risk": a.Risk, "required_approvals": required}, nil
+	case "submit_change":
+		var a struct {
+			ID string `json:"id"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		p, err := s.Changes.Submit(a.ID)
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error()}, nil
+		}
+		return map[string]any{"status": "ok", "data": p}, nil
+	case "approve_change":
+		var a struct {
+			ID string `json:"id"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		actor := "dba"
+		if u := userFrom(ctx); u != nil {
+			actor = u.Username
+		}
+		p, err := s.Changes.Approve(a.ID, actor)
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error()}, nil
+		}
+		return map[string]any{"status": "ok", "data": p, "approval": p.Approvals[len(p.Approvals)-1]}, nil
+	case "execute_approved_change":
+		var a struct {
+			ID         string `json:"id"`
+			ApprovalID string `json:"approval_id"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		p, ok := s.Changes.Get(a.ID)
+		if !ok {
+			return map[string]any{"status": "error", "error": "change plan not found"}, nil
+		}
+		if p.RequiredApprovals > 0 {
+			valid := false
+			for _, approval := range p.Approvals {
+				if approval.ID == a.ApprovalID {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				return map[string]any{"status": "forbidden", "error": "a valid approval_id is required"}, nil
+			}
+		}
+		p, err := s.Changes.Execute(ctx, a.ID, approvedChangeRunner{server: s})
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error(), "data": p}, nil
+		}
+		return map[string]any{"status": "ok", "data": p}, nil
+	case "verify_change":
+		var a struct {
+			ID string `json:"id"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		p, ok := s.Changes.Get(a.ID)
+		if !ok {
+			return map[string]any{"status": "error", "error": "change plan not found"}, nil
+		}
+		return map[string]any{"status": "ok", "data": p}, nil
+	case "rollback_change":
+		var a struct {
+			ID string `json:"id"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		p, err := s.Changes.Rollback(ctx, a.ID, approvedChangeRunner{server: s})
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error(), "data": p}, nil
+		}
+		return map[string]any{"status": "ok", "data": p}, nil
+	case "cancel_change":
+		var a struct {
+			ID string `json:"id"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		p, err := s.Changes.Cancel(a.ID)
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error()}, nil
+		}
+		return map[string]any{"status": "ok", "data": p}, nil
 	case "dba_overview":
 		var a struct {
 			Profile string `json:"profile"`

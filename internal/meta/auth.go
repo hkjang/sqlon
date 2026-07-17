@@ -14,10 +14,20 @@ import (
 )
 
 const (
-	SessionTTL     = 24 * time.Hour
-	SessionCookie  = "jamypg_session"
-	keyPrefixMagic = "jsk_" // jamypg secret key
+	SessionTTL          = 24 * time.Hour
+	SessionCookie       = "sqlon_session"
+	LegacySessionCookie = "jamypg_session"
+	keyPrefixMagic      = "ssk_" // SQLON secret key
+	legacyKeyPrefix     = "jsk_"
 )
+
+// IsMCPKeyFormat recognizes current SQLON keys and the one-release JAMYPG
+// compatibility prefix. It checks only format; AuthenticateKey verifies the
+// stored hash, owner, expiry and revocation state.
+func IsMCPKeyFormat(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	return strings.HasPrefix(raw, keyPrefixMagic) || strings.HasPrefix(raw, legacyKeyPrefix)
+}
 
 // Service is the authentication/authorization facade the HTTP layer uses.
 type Service struct {
@@ -231,7 +241,7 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 
 // ---- MCP key lifecycle ----
 
-// CreateMCPKey issues a new API key. The raw key ("jsk_<64hex>") is returned
+// CreateMCPKey issues a new API key. The raw key ("ssk_<64hex>") is returned
 // exactly once; ttl<=0 means no expiry.
 func (s *Service) CreateMCPKey(ctx context.Context, userID, name string, ttl time.Duration) (string, *MCPKey, error) {
 	return s.createKey(ctx, userID, name, ttl, "")
@@ -265,7 +275,7 @@ func (s *Service) createKey(ctx context.Context, userID, name string, ttl time.D
 // revocation and expiry, and records last use.
 func (s *Service) AuthenticateKey(ctx context.Context, raw string) (*User, *MCPKey, error) {
 	raw = strings.TrimSpace(raw)
-	if !strings.HasPrefix(raw, keyPrefixMagic) {
+	if !IsMCPKeyFormat(raw) {
 		return nil, nil, ErrUnauthorized
 	}
 	k, err := s.Store.GetKeyByHash(ctx, hashToken(raw))

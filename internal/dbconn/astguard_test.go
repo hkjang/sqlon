@@ -109,8 +109,11 @@ func TestASTGuardFailsClosedOnUnparseable(t *testing.T) {
 			t.Fatalf("%s: expected parse-failure message, got %v", dialect, err)
 		}
 	}
-	if err := ValidateReadOnlyAST("oracle", "SELECT 1"); err == nil {
-		t.Fatal("unknown dialect must be rejected")
+	if err := ValidateReadOnlyAST("oracle", "SELECT 1"); err != nil {
+		t.Fatalf("safe Oracle SELECT rejected: %v", err)
+	}
+	if err := ValidateReadOnlyAST("oracle", "SELECT FROM WHERE (("); err == nil {
+		t.Fatal("ambiguous Oracle SQL must be rejected")
 	}
 }
 

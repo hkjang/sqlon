@@ -6,10 +6,9 @@ import (
 	"net/http"
 )
 
-// REST surface for the DBA console (/admin/dba-console). Every route is gated
-// by requireDBA (dba/admin role, or standalone master token) and delegates to
-// the same dba* methods the MCP tools use, so the UI and the agent share one
-// audited, privileged code path.
+// REST surface for privileged read-only inspection. Write-capable dba*
+// methods remain internal executors and are reachable only through an
+// approved ChangePlan (/api/changes).
 
 func (s *Server) registerDBAConsole(mux *http.ServeMux) {
 	// the console page itself
@@ -51,43 +50,6 @@ func (s *Server) registerDBAConsole(mux *http.ServeMux) {
 	post("/api/dba/settings", func(ctx context.Context, q dbaReq) map[string]any { return s.dbaListSettings(ctx, q.Profile, q.Filter) })
 	post("/api/dba/sessions", func(ctx context.Context, q dbaReq) map[string]any { return s.dbaListSessions(ctx, q.Profile) })
 
-	// ---- mutation ----
-	post("/api/dba/create-user", func(ctx context.Context, q dbaReq) map[string]any {
-		return s.dbaCreateUser(ctx, q.Profile, dbaUserOpts{
-			Username: q.Username, Password: q.Password, CanLogin: q.CanLogin,
-			Superuser: q.Superuser, CreateDB: q.CreateDB, CreateRole: q.CreateRole,
-		})
-	})
-	post("/api/dba/alter-user", func(ctx context.Context, q dbaReq) map[string]any {
-		return s.dbaAlterUser(ctx, q.Profile, dbaUserOpts{
-			Username: q.Username, Password: q.Password, CanLogin: q.CanLogin,
-			Superuser: q.Superuser, CreateDB: q.CreateDB, CreateRole: q.CreateRole,
-		})
-	})
-	post("/api/dba/drop-user", func(ctx context.Context, q dbaReq) map[string]any {
-		return s.dbaDropUser(ctx, q.Profile, q.Username, q.Confirm)
-	})
-	post("/api/dba/grant", func(ctx context.Context, q dbaReq) map[string]any {
-		return s.dbaGrant(ctx, q.Profile, q.Privileges, q.Object, q.Grantee, q.Revoke, q.WithGrant)
-	})
-	post("/api/dba/create-database", func(ctx context.Context, q dbaReq) map[string]any {
-		return s.dbaCreateDatabase(ctx, q.Profile, q.Name, q.Owner, q.Encoding)
-	})
-	post("/api/dba/drop-database", func(ctx context.Context, q dbaReq) map[string]any {
-		return s.dbaDropDatabase(ctx, q.Profile, q.Name, q.Confirm)
-	})
-	post("/api/dba/set-parameter", func(ctx context.Context, q dbaReq) map[string]any {
-		return s.dbaSetParameter(ctx, q.Profile, q.Parameter, q.Value, q.Scope)
-	})
-	post("/api/dba/terminate-session", func(ctx context.Context, q dbaReq) map[string]any {
-		return s.dbaTerminateSession(ctx, q.Profile, q.PID, q.CancelOnly)
-	})
-	post("/api/dba/maintenance", func(ctx context.Context, q dbaReq) map[string]any {
-		return s.dbaRunMaintenance(ctx, q.Profile, q.Operation, q.Target)
-	})
-	post("/api/dba/execute", func(ctx context.Context, q dbaReq) map[string]any {
-		return s.dbaExecute(ctx, q.Profile, q.SQL, q.Confirm)
-	})
 }
 
 // dbaReq is the union request body for the DBA console endpoints.

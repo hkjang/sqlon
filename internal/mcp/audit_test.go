@@ -110,6 +110,13 @@ func TestMetricsRecordAndRender(t *testing.T) {
 	s.serveMetrics(rr, nil)
 	body := rr.Body.String()
 	for _, want := range []string{
+		`sqlon_up 1`,
+		`sqlon_tool_calls_total{tool="run_sql_safely",status="ok"} 1`,
+		`sqlon_tool_calls_total{tool="run_sql_safely",status="error"} 1`,
+		`sqlon_tool_duration_ms_sum{tool="run_sql_safely"} 20`,
+		`sqlon_catalog_tables 0`,
+		`sqlon_metadata_quality_score`,
+		// Deprecated aliases preserve existing dashboards for one release.
 		`jamypg_up 1`,
 		`jamypg_tool_calls_total{tool="run_sql_safely",status="ok"} 1`,
 		`jamypg_tool_calls_total{tool="run_sql_safely",status="error"} 1`,

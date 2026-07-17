@@ -25,7 +25,7 @@ import (
 //	Meta != nil: requests are resolved to a user via (in order)
 //	  1. master admin token (break-glass, acts as a synthetic admin)
 //	  2. session cookie (browser console)
-//	  3. MCP key: Authorization: Bearer jsk_... or X-MCP-Key
+//	  3. MCP key: Authorization: Bearer ssk_... or X-MCP-Key
 //	/mcp over HTTP requires authentication; stdio stays local-trusted.
 
 type ctxKeyUser struct{}
@@ -114,6 +114,15 @@ func userFrom(ctx context.Context) *meta.User {
 // authEnabled reports whether the meta DB (and therefore auth) is active.
 func (s *Server) authEnabled() bool { return s.Meta != nil }
 
+func sessionToken(r *http.Request) string {
+	for _, name := range []string{meta.SessionCookie, meta.LegacySessionCookie} {
+		if c, err := r.Cookie(name); err == nil && c.Value != "" {
+			return c.Value
+		}
+	}
+	return ""
+}
+
 // authenticate resolves the request to a user. Never called in standalone.
 func (s *Server) authenticate(r *http.Request) (*meta.User, error) {
 	// 1. master token (constant-time compare)
@@ -127,15 +136,15 @@ func (s *Server) authenticate(r *http.Request) (*meta.User, error) {
 		}
 	}
 	// 2. session cookie
-	if c, err := r.Cookie(meta.SessionCookie); err == nil && c.Value != "" {
-		if u, err := s.Meta.Authenticate(r.Context(), c.Value); err == nil {
+	if token := sessionToken(r); token != "" {
+		if u, err := s.Meta.Authenticate(r.Context(), token); err == nil {
 			return u, nil
 		}
 	}
 	// 3. MCP key
 	key := r.Header.Get("X-MCP-Key")
 	if key == "" {
-		if b := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "); strings.HasPrefix(b, "jsk_") {
+		if b := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "); meta.IsMCPKeyFormat(b) {
 			key = b
 		}
 	}
@@ -161,7 +170,7 @@ func (s *Server) requireActor(w http.ResponseWriter, r *http.Request) (*meta.Use
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{
 			"error": "authentication required",
-			"hint":  "세션 쿠키(로그인), MCP 키(Authorization: Bearer jsk_... 또는 X-MCP-Key), 또는 X-Admin-Token 중 하나가 필요합니다. 로그인: /auth/login",
+			"hint":  "세션 쿠키(로그인), MCP 키(Authorization: Bearer ssk_... 또는 X-MCP-Key), 또는 X-Admin-Token 중 하나가 필요합니다. 로그인: /auth/login",
 		})
 		return nil, false
 	}
@@ -278,11 +287,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if s.authEnabled() {
-		if c, err := r.Cookie(meta.SessionCookie); err == nil {
-			_ = s.Meta.Logout(r.Context(), c.Value)
+		if token := sessionToken(r); token != "" {
+			_ = s.Meta.Logout(r.Context(), token)
 		}
 	}
-	http.SetCookie(w, &http.Cookie{Name: meta.SessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	for _, name := range []string{meta.SessionCookie, meta.LegacySessionCookie} {
+		http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	}
 	s.authAudit(r, "logout", "")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
@@ -359,8 +370,8 @@ func (s *Server) guard(next http.HandlerFunc, adminOnly bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.authEnabled() {
 			var u *meta.User
-			if c, err := r.Cookie(meta.SessionCookie); err == nil {
-				u, _ = s.Meta.Authenticate(r.Context(), c.Value)
+			if token := sessionToken(r); token != "" {
+				u, _ = s.Meta.Authenticate(r.Context(), token)
 			}
 			if u == nil {
 				http.Redirect(w, r, "/auth/login?next="+url.QueryEscape(r.URL.Path), http.StatusFound)
@@ -449,7 +460,7 @@ func (p *OIDCProvider) discover(ctx context.Context) (*oidcDiscovery, error) {
 
 func (s *Server) handleSSOLogin(w http.ResponseWriter, r *http.Request) {
 	if !s.authEnabled() || s.OIDC == nil {
-		writeAPIError(w, http.StatusServiceUnavailable, errEmpty("SSO is not configured (set JAMYPG_OIDC_ISSUER/CLIENT_ID/CLIENT_SECRET/REDIRECT_URL)"))
+		writeAPIError(w, http.StatusServiceUnavailable, errEmpty("SSO is not configured (set SQLON_OIDC_ISSUER/CLIENT_ID/CLIENT_SECRET/REDIRECT_URL)"))
 		return
 	}
 	d, err := s.OIDC.discover(r.Context())
@@ -463,7 +474,7 @@ func (s *Server) handleSSOLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := hex.EncodeToString(b[:])
-	http.SetCookie(w, &http.Cookie{Name: "jamypg_oauth_state", Value: state, Path: "/auth/sso",
+	http.SetCookie(w, &http.Cookie{Name: "sqlon_oauth_state", Value: state, Path: "/auth/sso",
 		MaxAge: 300, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: requestIsHTTPS(r)})
 	q := url.Values{
 		"response_type": {"code"},
@@ -484,11 +495,15 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "SSO 오류: "+e+" — "+r.URL.Query().Get("error_description"), http.StatusBadGateway)
 		return
 	}
-	stateCookie, err := r.Cookie("jamypg_oauth_state")
+	stateCookie, err := r.Cookie("sqlon_oauth_state")
+	if err != nil {
+		stateCookie, err = r.Cookie("jamypg_oauth_state")
+	}
 	if err != nil || stateCookie.Value == "" || stateCookie.Value != r.URL.Query().Get("state") {
 		http.Error(w, "SSO state 불일치 — 로그인 페이지에서 다시 시도하세요", http.StatusBadRequest)
 		return
 	}
+	http.SetCookie(w, &http.Cookie{Name: "sqlon_oauth_state", Value: "", Path: "/auth/sso", MaxAge: -1})
 	http.SetCookie(w, &http.Cookie{Name: "jamypg_oauth_state", Value: "", Path: "/auth/sso", MaxAge: -1})
 	code := r.URL.Query().Get("code")
 	if code == "" {

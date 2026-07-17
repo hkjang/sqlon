@@ -22,16 +22,24 @@ const ProfilesFile = "db_profiles.json"
 // Passwords are never stored in plain text in the profile itself unless the
 // operator explicitly uses the discouraged "plain:" scheme (AC-012).
 type Profile struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name,omitempty"`
-	Type          string  `json:"type,omitempty"`   // postgres | mysql | mariadb | oracle (default postgres)
-	Driver        string  `json:"driver,omitempty"` // derived from type
-	ConnectString string  `json:"connect_string"`   // host:port/dbname, postgres://..., mysql://..., or user:pass@tcp(host:port)/db
-	Username      string  `json:"username"`
-	PasswordRef   string  `json:"password_ref"` // env:NAME | file:PATH | plain:VALUE
-	Pool          Pool    `json:"pool,omitempty"`
-	Policy        Policy  `json:"policy,omitempty"`
-	Routing       Routing `json:"routing,omitempty"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name,omitempty"`
+	Type          string   `json:"type,omitempty"`   // postgres | mysql | mariadb | oracle (default postgres)
+	Driver        string   `json:"driver,omitempty"` // derived from type
+	ServiceName   string   `json:"service_name,omitempty"`
+	Environment   string   `json:"environment,omitempty"` // production | staging | development | dr
+	Criticality   string   `json:"criticality,omitempty"` // critical | high | medium | low
+	Role          string   `json:"role,omitempty"`        // primary | standby | replica | cdb | pdb
+	OwnerTeam     string   `json:"owner_team,omitempty"`
+	Location      string   `json:"location,omitempty"`
+	Maintenance   string   `json:"maintenance_window,omitempty"`
+	Tags          []string `json:"tags,omitempty"`
+	ConnectString string   `json:"connect_string"` // host:port/dbname, postgres://..., mysql://..., or user:pass@tcp(host:port)/db
+	Username      string   `json:"username"`
+	PasswordRef   string   `json:"password_ref"` // env:NAME | file:PATH | plain:VALUE
+	Pool          Pool     `json:"pool,omitempty"`
+	Policy        Policy   `json:"policy,omitempty"`
+	Routing       Routing  `json:"routing,omitempty"`
 	// Oracle contains connection topology settings. It is ignored by other
 	// engines and keeps Oracle-specific conditionals out of service code.
 	Oracle        *OracleConfig `json:"oracle,omitempty"`
@@ -45,7 +53,7 @@ type Profile struct {
 type OracleConfig struct {
 	ServiceName    string `json:"service_name,omitempty"`
 	ConnectionRole string `json:"connection_role,omitempty"`
-	CBDScope       string `json:"cdb_scope,omitempty"`
+	CDBScope       string `json:"cdb_scope,omitempty"`
 	RACEnabled     bool   `json:"rac_enabled,omitempty"`
 	WalletDir      string `json:"wallet_dir,omitempty"`
 	ClientLibDir   string `json:"client_lib_dir,omitempty"`
@@ -121,6 +129,18 @@ func (p *Profile) withDefaults() Profile {
 		out.Type = "postgres"
 	}
 	out.Type = strings.ToLower(out.Type)
+	out.Environment = strings.ToLower(strings.TrimSpace(out.Environment))
+	if out.Environment == "" {
+		out.Environment = "unspecified"
+	}
+	out.Criticality = strings.ToLower(strings.TrimSpace(out.Criticality))
+	if out.Criticality == "" {
+		out.Criticality = "medium"
+	}
+	out.Role = strings.ToLower(strings.TrimSpace(out.Role))
+	if out.Role == "" {
+		out.Role = "unspecified"
+	}
 	if d, err := DialectFor(out.Type); err == nil {
 		out.Type = d.Name()
 		out.Driver = d.DriverName()
@@ -137,6 +157,12 @@ func (p *Profile) withDefaults() Profile {
 		}
 		if out.LicensePolicy.Source == "" {
 			out.LicensePolicy.Source = "operator_declared"
+		}
+		if out.Oracle.ConnectionRole == "" {
+			out.Oracle.ConnectionRole = "normal"
+		}
+		if out.Oracle.CDBScope == "" {
+			out.Oracle.CDBScope = "pdb"
 		}
 	}
 	if out.Pool.MaxOpenConns <= 0 {
@@ -213,21 +239,51 @@ func (p *Profile) Validate() error {
 	if strings.TrimSpace(p.PasswordRef) == "" {
 		return errors.New("password_ref is required (env:NAME, file:PATH, or plain:VALUE)")
 	}
-	if _, err := parsePasswordRef(p.PasswordRef); err != nil {
+	if p.Environment != "" {
+		switch strings.ToLower(strings.TrimSpace(p.Environment)) {
+		case "production", "staging", "development", "dr", "test", "unspecified":
+		default:
+			return errors.New("environment must be production, staging, development, dr, test, or unspecified")
+		}
+	}
+	if p.Criticality != "" {
+		switch strings.ToLower(strings.TrimSpace(p.Criticality)) {
+		case "critical", "high", "medium", "low":
+		default:
+			return errors.New("criticality must be critical, high, medium, or low")
+		}
+	}
+	passwordScheme, err := parsePasswordRef(p.PasswordRef)
+	if err != nil {
 		return err
+	}
+	if strings.EqualFold(strings.TrimSpace(p.Environment), "production") && passwordScheme == "plain" {
+		return errors.New("production profiles must use env: or file: secret references; plain: is forbidden")
 	}
 	d, err := DialectFor(p.Type)
 	if err != nil {
 		return err
 	}
 	if strings.EqualFold(p.Type, "oracle") {
+		if strings.EqualFold(strings.TrimSpace(p.Username), "sys") {
+			return errors.New("SYS is not allowed for an Oracle read-only monitoring profile")
+		}
 		if p.Oracle != nil && p.Oracle.ConnectionRole != "" && !strings.EqualFold(p.Oracle.ConnectionRole, "normal") {
 			return errors.New("oracle.connection_role must be normal for the read-only profile")
+		}
+		if p.Oracle != nil && p.Oracle.CDBScope != "" && !strings.EqualFold(p.Oracle.CDBScope, "pdb") && !strings.EqualFold(p.Oracle.CDBScope, "root") {
+			return errors.New("oracle.cdb_scope must be pdb or root")
 		}
 		for _, v := range []string{p.LicensePolicy.DiagnosticsPack, p.LicensePolicy.TuningPack} {
 			if v != "" && !strings.EqualFold(v, "enabled") && !strings.EqualFold(v, "disabled") {
 				return errors.New("oracle license pack policy must be enabled or disabled")
 			}
+		}
+		if strings.EqualFold(p.LicensePolicy.TuningPack, "enabled") && !strings.EqualFold(p.LicensePolicy.DiagnosticsPack, "enabled") {
+			return errors.New("oracle tuning_pack requires diagnostics_pack to be enabled")
+		}
+		if p.LicensePolicy.Source != "" && !strings.EqualFold(p.LicensePolicy.Source, "operator_declared") {
+			return errors.New("oracle license_policy.source must be operator_declared")
 		}
 	}
 	if p.Driver != "" && !strings.EqualFold(p.Driver, d.DriverName()) {
@@ -248,8 +304,12 @@ func (p *Profile) Validate() error {
 		if strings.TrimSpace(p.DBA.PasswordRef) == "" {
 			return errors.New("dba.password_ref is required when dba is configured (env:NAME, file:PATH, or plain:VALUE)")
 		}
-		if _, err := parsePasswordRef(p.DBA.PasswordRef); err != nil {
+		dbaScheme, err := parsePasswordRef(p.DBA.PasswordRef)
+		if err != nil {
 			return fmt.Errorf("dba.%w", err)
+		}
+		if strings.EqualFold(strings.TrimSpace(p.Environment), "production") && dbaScheme == "plain" {
+			return errors.New("production DBA credentials must use env: or file: secret references; plain: is forbidden")
 		}
 	}
 	return nil
@@ -437,15 +497,27 @@ func RemoveProfile(dataDir, id string) ([]Profile, error) {
 // Masked returns an API-safe copy (password_ref masked when plain).
 func (p Profile) Masked() map[string]any {
 	m := map[string]any{
-		"id":             p.ID,
-		"name":           p.Name,
-		"type":           p.Type,
-		"driver":         p.Driver,
-		"connect_string": p.ConnectString,
-		"username":       p.Username,
-		"password_ref":   MaskedRef(p.PasswordRef),
-		"pool":           p.Pool,
-		"policy":         p.Policy,
+		"id":                 p.ID,
+		"name":               p.Name,
+		"type":               p.Type,
+		"driver":             p.Driver,
+		"service_name":       p.ServiceName,
+		"environment":        p.Environment,
+		"criticality":        p.Criticality,
+		"role":               p.Role,
+		"owner_team":         p.OwnerTeam,
+		"location":           p.Location,
+		"maintenance_window": p.Maintenance,
+		"tags":               p.Tags,
+		"connect_string":     p.ConnectString,
+		"username":           p.Username,
+		"password_ref":       MaskedRef(p.PasswordRef),
+		"pool":               p.Pool,
+		"policy":             p.Policy,
+	}
+	if p.Oracle != nil {
+		m["oracle"] = p.Oracle
+		m["license_policy"] = p.LicensePolicy
 	}
 	if p.DBA != nil {
 		// expose DBA config for the console, but never the raw secret

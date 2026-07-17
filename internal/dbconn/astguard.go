@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/pingcap/tidb/pkg/parser"
@@ -45,9 +46,118 @@ func ValidateReadOnlyAST(dialect, sqlText string) error {
 		return validateMySQLAST(sqlText, false)
 	case "mariadb":
 		return validateMySQLAST(sqlText, true)
+	case "oracle":
+		return validateOracleGuard(sqlText)
 	default:
 		return fmt.Errorf("unsupported dialect for AST validation: %s", dialect)
 	}
+}
+
+// validateOracleGuard is the phase-1 fail-closed Oracle strategy. It does not
+// pretend PostgreSQL/MySQL grammar is Oracle grammar: it accepts only one
+// lexically complete SELECT or WITH...SELECT and rejects constructs whose
+// read-only behavior cannot be established locally. A full Oracle parser can
+// replace this function behind the same QueryGuard contract later.
+func validateOracleGuard(sqlText string) error {
+	if err := oracleLexicallyComplete(sqlText); err != nil {
+		return fmt.Errorf("SQL이 Oracle 안전 문장으로 판별되지 않습니다 (fail-closed): %w", err)
+	}
+	masked := strings.TrimSpace(stripSQL(sqlText))
+	masked = strings.TrimSuffix(masked, ";")
+	upper := strings.ToUpper(masked)
+	if !selectWithRE.MatchString(masked) {
+		return errors.New("statement is not an Oracle SELECT/WITH query")
+	}
+	if strings.HasPrefix(strings.TrimSpace(upper), "WITH") && !regexp.MustCompile(`\bSELECT\b`).MatchString(upper) {
+		return errors.New("Oracle WITH statement has no SELECT query")
+	}
+	for _, pattern := range []*regexp.Regexp{
+		regexp.MustCompile(`\bINTO\b`),
+		regexp.MustCompile(`\bFOR\s+(UPDATE|SHARE)\b`),
+		regexp.MustCompile(`\b(DECLARE|BEGIN|END)\b`),
+		regexp.MustCompile(`\b(EXEC|EXECUTE|CALL)\b`),
+	} {
+		if pattern.MatchString(upper) {
+			return fmt.Errorf("unsupported or ambiguous Oracle SQL construct: %s", pattern.String())
+		}
+	}
+	depth := 0
+	for _, ch := range masked {
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth < 0 {
+				return errors.New("unbalanced parentheses")
+			}
+		}
+	}
+	if depth != 0 {
+		return errors.New("unbalanced parentheses")
+	}
+	return nil
+}
+
+func oracleLexicallyComplete(sqlText string) error {
+	inSingle, inDouble, inLine, inBlock := false, false, false, false
+	semicolons := 0
+	for i := 0; i < len(sqlText); i++ {
+		ch := sqlText[i]
+		var next byte
+		if i+1 < len(sqlText) {
+			next = sqlText[i+1]
+		}
+		switch {
+		case inLine:
+			if ch == '\n' {
+				inLine = false
+			}
+		case inBlock:
+			if ch == '*' && next == '/' {
+				inBlock = false
+				i++
+			}
+		case inSingle:
+			if ch == '\'' {
+				if next == '\'' {
+					i++
+				} else {
+					inSingle = false
+				}
+			}
+		case inDouble:
+			if ch == '"' {
+				if next == '"' {
+					i++
+				} else {
+					inDouble = false
+				}
+			}
+		case ch == '-' && next == '-':
+			inLine = true
+			i++
+		case ch == '/' && next == '*':
+			inBlock = true
+			i++
+		case ch == '\'':
+			inSingle = true
+		case ch == '"':
+			inDouble = true
+		case ch == ';':
+			semicolons++
+			if strings.TrimSpace(sqlText[i+1:]) != "" {
+				return errors.New("multiple statements are not allowed")
+			}
+		}
+	}
+	if inSingle || inDouble || inBlock {
+		return errors.New("unterminated literal, identifier, or comment")
+	}
+	if semicolons > 1 {
+		return errors.New("multiple statements are not allowed")
+	}
+	return nil
 }
 
 // ValidateReadOnly runs the keyword guard (denied functions/keywords,

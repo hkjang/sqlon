@@ -37,3 +37,9 @@ func (r approvedChangeRunner) Execute(ctx context.Context, p change.Plan, step c
 	return nil
 }
 func (r approvedChangeRunner) Verify(context.Context, change.Plan) error { return nil }
+func (r approvedChangeRunner) Compensate(ctx context.Context, p change.Plan, step change.Step) error {
+	if _, err := r.server.DB.AdminExec(ctx, p.ProfileID, step.Compensation, 60); err != nil {
+		return fmt.Errorf("step %d compensation failed: %w", step.Order, err)
+	}
+	return nil
+}

@@ -14,6 +14,53 @@ type Runner interface {
 	Revalidate(context.Context, Plan) error
 	Execute(context.Context, Plan, Step) error
 	Verify(context.Context, Plan) error
+	Compensate(context.Context, Plan, Step) error
+}
+
+// Rollback executes compensations in reverse order. It is allowed only after
+// an execution/verification failure has explicitly marked rollback_required.
+func (s *Service) Rollback(ctx context.Context, id string, runner Runner) (Plan, error) {
+	if runner == nil {
+		return Plan{}, errors.New("change runner is required")
+	}
+	s.mu.Lock()
+	p, ok := s.plans[id]
+	if !ok {
+		s.mu.Unlock()
+		return Plan{}, fmt.Errorf("change plan %q not found", id)
+	}
+	if p.State != RollbackRequired {
+		s.mu.Unlock()
+		return Plan{}, fmt.Errorf("plan %q does not require rollback", id)
+	}
+	if err := p.Transition(RollingBack, s.now()); err != nil {
+		s.mu.Unlock()
+		return Plan{}, err
+	}
+	s.plans[id] = p
+	s.mu.Unlock()
+	for i := len(p.Steps) - 1; i >= 0; i-- {
+		if err := runner.Compensate(ctx, p, p.Steps[i]); err != nil {
+			return s.failRollback(id, err)
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p = s.plans[id]
+	if err := p.Transition(RolledBack, s.now()); err != nil {
+		return Plan{}, err
+	}
+	s.plans[id] = p
+	return p, nil
+}
+
+func (s *Service) failRollback(id string, cause error) (Plan, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.plans[id]
+	_ = p.Transition(Failed, s.now())
+	s.plans[id] = p
+	return p, cause
 }
 
 // Service is the shared API/MCP change-control service. It stores plans in
@@ -46,6 +93,12 @@ func (s *Service) Create(p Plan, key string) (Plan, error) {
 	if p.State == "" {
 		p.State = Draft
 	}
+	required, err := ApprovalRequirement(p.Risk)
+	if err != nil {
+		return Plan{}, err
+	}
+	p.RequiredApprovals = required
+	p.Approvals = nil
 	if err := p.Validate(); err != nil {
 		return Plan{}, err
 	}
@@ -57,6 +110,33 @@ func (s *Service) Create(p Plan, key string) (Plan, error) {
 	}
 	return p, nil
 }
+
+// Submit freezes the plan for review. Low-risk plans can become executable
+// without human approval; every other risk class must enter review_required.
+func (s *Service) Submit(id string) (Plan, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.plans[id]
+	if !ok {
+		return Plan{}, fmt.Errorf("change plan %q not found", id)
+	}
+	if p.State != Draft {
+		return Plan{}, fmt.Errorf("plan %q is not a draft", id)
+	}
+	if err := p.Transition(Analyzing, s.now()); err != nil {
+		return Plan{}, err
+	}
+	next := ReviewRequired
+	if p.RequiredApprovals == 0 {
+		next = Approved
+	}
+	if err := p.Transition(next, s.now()); err != nil {
+		return Plan{}, err
+	}
+	s.plans[id] = p
+	return p, nil
+}
+
 func (s *Service) Get(id string) (Plan, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -73,22 +153,34 @@ func (s *Service) Approve(id, actor string) (Plan, error) {
 	if actor == "" {
 		return Plan{}, errors.New("approver is required")
 	}
-	if p.State == Draft {
-		if err := p.Transition(Analyzing, s.now()); err != nil {
-			return Plan{}, err
-		}
-		if err := p.Transition(ReviewRequired, s.now()); err != nil {
-			return Plan{}, err
-		}
-	}
 	if p.State != ReviewRequired {
 		return Plan{}, fmt.Errorf("plan %q is not awaiting approval", id)
 	}
-	p.Approvals = append(p.Approvals, Approval{Actor: actor, Decision: "approved", At: s.now().UTC()})
+	for _, approval := range p.Approvals {
+		if approval.Actor == actor && approval.Decision == "approved" {
+			return Plan{}, fmt.Errorf("approver %q has already approved plan %q", actor, id)
+		}
+	}
+	now := s.now().UTC()
+	p.Approvals = append(p.Approvals, Approval{ID: fmt.Sprintf("%s-a%d-%d", p.ID, len(p.Approvals)+1, now.UnixNano()), Actor: actor, Decision: "approved", At: now})
 	if len(p.Approvals) >= p.RequiredApprovals {
 		if err := p.Transition(Approved, s.now()); err != nil {
 			return Plan{}, err
 		}
+	}
+	s.plans[id] = p
+	return p, nil
+}
+
+func (s *Service) Cancel(id string) (Plan, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.plans[id]
+	if !ok {
+		return Plan{}, fmt.Errorf("change plan %q not found", id)
+	}
+	if err := p.Transition(Cancelled, s.now()); err != nil {
+		return Plan{}, err
 	}
 	s.plans[id] = p
 	return p, nil

@@ -4,40 +4,49 @@
 
 ### 오프라인망 (Docker, 권장)
 
-릴리즈 자산 `jamypg-mcp-<ver>-docker.tar.gz` 반입 → 검증 → 로드 → 실행.
+릴리즈 자산 `sqlon-<ver>-docker.tar.gz` 반입 → 검증 → 로드 → 실행.
 상세 절차는 릴리즈의 `DEPLOY-OFFLINE.md` 참조.
 
 ```sh
-docker run -d --name jamypg-mcp --restart unless-stopped \
+docker run -d --name sqlon --restart unless-stopped \
   -p 9797:9797 \
-  -v jamypg-data:/app/data/metadb \
-  -e JAMYPG_ADMIN_TOKEN='변경용-비밀토큰' \
-  jamypg-mcp:<ver>
+  -v sqlon-data:/app/data/sqlon \
+  -e SQLON_ADMIN_TOKEN='변경용-비밀토큰' \
+  sqlon/sqlon:<ver>
 ```
 
 - **볼륨 필수 권장**: feedback/audit/learned_rules/backups가 재기동 후에도
   유지됩니다. 최초 마운트 시 이미지 내장 메타데이터가 볼륨으로 복사됩니다.
-- 이미지에는 `jamypg-eval`, `jamypg-goldgen` CLI도 포함됩니다.
-- 단일 Dockerfile(CGO_ENABLED=0, 순수 Go 드라이버)입니다 — Oracle Instant
-  Client 같은 별도 클라이언트 라이브러리나 전용 이미지 변형이 없습니다.
+- 표준 이미지는 `Dockerfile`과 `CGO_ENABLED=0` 빌드로 PostgreSQL, MySQL,
+  MariaDB를 지원합니다.
+- Oracle 운영판은 `Dockerfile.oracle`/`scripts/build-oracle.sh`로 빌드하며
+  `godror`, CGO, Oracle Instant Client가 필요합니다. 상세 조건은
+  [oracle.md](oracle.md)를 참조하세요.
 
 ### 단독 바이너리
 
 ```sh
 # HTTP (웹 콘솔 포함)
-./jamypg-mcp -transport http -addr 0.0.0.0:9797 -data ./data/metadb -admin-token ...
+./sqlon -transport http -addr 0.0.0.0:9797 -data ./data/sqlon -admin-token ...
 # stdio (데스크톱 MCP 클라이언트용 — 웹 UI 없음)
-./jamypg-mcp -transport stdio -data ./data/metadb
+./sqlon -transport stdio -data ./data/sqlon
 ```
+
+데이터 옵션 없이 시작하면 기존 `data/metadb`를 백업 후 `data/sqlon`으로
+자동 병합합니다. 명시적 경로는 자동 이동하지 않습니다. 상세 규칙과 복구 절차는
+[migration.md](migration.md)를 참조하세요.
 
 주요 플래그: `-data`(메타 디렉터리), `-addr`, `-endpoint`(기본 /mcp),
 `-allow-origin`(추가 허용 Origin), `-stateless`, `-sse-post`,
-`-admin-token`(`JAMYPG_ADMIN_TOKEN`), `-meta-db`(`JAMYPG_META_DB` —
+`-admin-token`(`SQLON_ADMIN_TOKEN`, 구 `JAMYPG_ADMIN_TOKEN` 별칭),
+`-meta-db`(`SQLON_META_DB`, 구 `JAMYPG_META_DB` 별칭 —
 로그인/사용자/MCP 키/사용자별 프로파일 활성화, [auth.md](auth.md)),
-`-bootstrap-admin`(`JAMYPG_BOOTSTRAP_ADMIN`),
-`-oidc-*`(`JAMYPG_OIDC_ISSUER/CLIENT_ID/CLIENT_SECRET/REDIRECT_URL`).
+`-bootstrap-admin`(`SQLON_BOOTSTRAP_ADMIN`),
+`-oidc-*`(`SQLON_OIDC_ISSUER/CLIENT_ID/CLIENT_SECRET/REDIRECT_URL`),
+`-observe-interval`(`SQLON_OBSERVE_INTERVAL`, 기본 `1m`),
+`-observe-retention-days`(`SQLON_OBSERVE_RETENTION_DAYS`, 기본 `30`).
 
-대상 DB(PostgreSQL/MySQL/MariaDB) 접속 프로파일은 `db_profiles.json`으로
+대상 DB(PostgreSQL/MySQL/MariaDB/Oracle) 접속 프로파일은 `db_profiles.json`으로
 관리합니다 — [db-connector.md](db-connector.md) 참조.
 
 ## 기동 확인 체크리스트
@@ -64,8 +73,9 @@ docker logs jamypg-mcp | head -20
 | 컴파일 품질 | `GET /api/health` / MCP `get_catalog_health` | `status`, `error_count` 추이 |
 | 사용 추적 | `data/metadb/audit/audit-YYYYMMDD.jsonl` | 도구별 호출량·소요·오류율 집계 |
 | DB 실행 추적 | `data/metadb/audit/query-YYYYMMDD.jsonl` | `db:execute` 항목 — SQL·행 수·소요·오류코드(`PG-*`/`MY-*`/`TIMEOUT`) |
-| 쿼리·도구·품질 메트릭 | `GET /metrics` (Prometheus) | DB: `db_query_total`/`db_query_failure_total`/`db_query_slow_total`, `db_pool_*`. 서버: `jamypg_up`, `jamypg_build_info`, `jamypg_tool_calls_total{tool,status}`, `jamypg_tool_duration_ms_sum{tool}`, `jamypg_catalog_tables`/`_relations`, `jamypg_metadata_quality_score`, `jamypg_metadata_quality_gate_pass` |
+| 쿼리·도구·품질 메트릭 | `GET /metrics` (Prometheus) | DB: `db_query_total`/`db_query_failure_total`/`db_query_slow_total`, `db_pool_*`. 서버: `sqlon_up`, `sqlon_build_info`, `sqlon_tool_calls_total{tool,status}`, `sqlon_tool_duration_ms_sum{tool}`, `sqlon_catalog_tables`/`_relations`, `sqlon_metadata_quality_score`, `sqlon_metadata_quality_gate_pass`. 기존 `jamypg_*`는 한 릴리스 동안 deprecated 별칭으로 제공 |
 | 메타 품질 대시보드 | `/admin/quality` | 종합 점수·등급, 릴리스 게이트 위반, 테이블별 품질(점수 낮은 순), 감사 로그 무결성 검증 |
+| 대상 DB 워크로드·용량 | `/admin/workload`, `data/sqlon/operations/snapshots/*.jsonl` | QPS/TPS, 대기, 원문 없는 Top SQL, 사용률·증가율·고갈 예측. 수집 실패와 데이터 없음을 구분 |
 | 정확도 | `docker exec jamypg-mcp jamypg-eval -data /app/data/metadb` | 지표 하락 여부 |
 
 `/metrics`는 DB 커넥터 메트릭과 서버/카탈로그/품질 게이지를 한 엔드포인트에서

@@ -8,12 +8,16 @@ import (
 )
 
 // TestPGStore runs the full Store contract against a real Postgres when
-// JAMYPG_TEST_PG is set (e.g. a throwaway docker container in CI). Skipped
+// SQLON_TEST_PG (or the one-release JAMYPG_TEST_PG alias) is set (e.g. a
+// throwaway docker container in CI). Skipped
 // otherwise so `go test ./...` stays hermetic.
 func TestPGStore(t *testing.T) {
-	dsn := os.Getenv("JAMYPG_TEST_PG")
+	dsn := os.Getenv("SQLON_TEST_PG")
 	if dsn == "" {
-		t.Skip("set JAMYPG_TEST_PG to run Postgres integration tests")
+		dsn = os.Getenv("JAMYPG_TEST_PG")
+	}
+	if dsn == "" {
+		t.Skip("set SQLON_TEST_PG to run Postgres integration tests")
 	}
 	ctx := context.Background()
 	store, err := OpenPG(ctx, dsn)
@@ -21,6 +25,10 @@ func TestPGStore(t *testing.T) {
 		t.Fatalf("OpenPG: %v", err)
 	}
 	defer store.Close()
+	var schemaTable string
+	if err := store.db.QueryRowContext(ctx, `SELECT to_regclass('sqlon_meta.users')::text`).Scan(&schemaTable); err != nil || schemaTable == "" {
+		t.Fatalf("SQLON meta schema missing: table=%q err=%v", schemaTable, err)
+	}
 	// clean slate for a deterministic run
 	svc := NewService(store)
 

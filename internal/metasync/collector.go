@@ -40,6 +40,7 @@ func NewCollector(q SystemQuerier) *Collector { return &Collector{q: q} }
 var systemSchemas = map[string]bool{
 	"pg_catalog": true, "information_schema": true, "pg_toast": true,
 	"mysql": true, "performance_schema": true, "sys": true,
+	"system": true, "xdb": true, "outln": true, "dbsnmp": true,
 }
 
 // Collect reads the full physical model for the requested schemas.
@@ -61,6 +62,8 @@ func (c *Collector) Collect(ctx context.Context, req CollectRequest) (*RawSnapsh
 		tables, err = c.collectPostgres(ctx, req)
 	case "mysql", "mariadb":
 		tables, err = c.collectMySQL(ctx, req, dialect)
+	case "oracle":
+		tables, err = c.collectOracle(ctx, req)
 	default:
 		return nil, fmt.Errorf("unsupported dialect for metadata collection: %s", dialect)
 	}
@@ -103,6 +106,8 @@ func (c *Collector) DiscoverSchemas(ctx context.Context, sourceID string) ([]Dat
 		query = `SELECT schema_name FROM information_schema.schemata ORDER BY schema_name`
 	case "mysql", "mariadb":
 		query = `SELECT schema_name FROM information_schema.schemata ORDER BY schema_name`
+	case "oracle":
+		query = `SELECT DISTINCT owner AS "schema" FROM all_objects WHERE object_type IN ('TABLE','VIEW','MATERIALIZED VIEW') ORDER BY owner`
 	default:
 		return nil, fmt.Errorf("unsupported dialect: %s", dialect)
 	}
@@ -113,6 +118,9 @@ func (c *Collector) DiscoverSchemas(ctx context.Context, sourceID string) ([]Dat
 	var out []DatabaseAsset
 	for _, r := range rows {
 		s := asString(r["schema_name"])
+		if dialect == "oracle" {
+			s = asString(r["schema"])
+		}
 		if s == "" || systemSchemas[strings.ToLower(s)] {
 			continue
 		}

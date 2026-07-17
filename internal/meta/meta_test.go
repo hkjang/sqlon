@@ -3,6 +3,7 @@ package meta
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -111,6 +112,9 @@ func TestMCPKeyLifecycle(t *testing.T) {
 	if err != nil || len(raw) < 20 || k.KeyPrefix != raw[:12] {
 		t.Fatalf("create key: %v", err)
 	}
+	if !strings.HasPrefix(raw, "ssk_") {
+		t.Fatalf("new SQLON key prefix: %q", raw)
+	}
 	// 인증 + last_used 기록
 	gotU, gotK, err := s.AuthenticateKey(ctx, raw)
 	if err != nil || gotU.ID != u.ID || gotK.ID != k.ID {
@@ -145,7 +149,19 @@ func TestMCPKeyLifecycle(t *testing.T) {
 	}
 	// 접두사 없는 문자열 즉시 거부
 	if _, _, err := s.AuthenticateKey(ctx, "not-a-key"); !errors.Is(err, ErrUnauthorized) {
-		t.Fatal("non-jsk key must be rejected")
+		t.Fatal("unknown key prefix must be rejected")
+	}
+	// 한 릴리스 동안 저장된 JAMYPG 키를 계속 인증한다.
+	legacyRaw := "jsk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	legacy := &MCPKey{
+		ID: NewID(), UserID: u.ID, Name: "legacy", KeyHash: hashToken(legacyRaw),
+		KeyPrefix: legacyRaw[:12], CreatedAt: time.Now(),
+	}
+	if err := s.Store.CreateKey(ctx, legacy); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, err := s.AuthenticateKey(ctx, legacyRaw); err != nil || got.ID != u.ID {
+		t.Fatalf("legacy JAMYPG key must remain valid: user=%v err=%v", got, err)
 	}
 }
 

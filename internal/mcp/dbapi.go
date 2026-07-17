@@ -42,6 +42,7 @@ func (s *Server) registerDBAPI(mux *http.ServeMux) {
 			"profiles":         masked,
 			"driver_available": s.DB.Available(),
 			"driver_note":      s.DB.DriverNote(),
+			"drivers":          s.DB.DriverCapabilities(),
 		})
 	})
 	mux.HandleFunc("POST /api/db-profiles", func(w http.ResponseWriter, r *http.Request) {
@@ -802,6 +803,7 @@ func (s *Server) listProfilesMeta(w http.ResponseWriter, r *http.Request) {
 		"profiles":         out,
 		"driver_available": s.DB.Available(),
 		"driver_note":      s.DB.DriverNote(),
+		"drivers":          s.DB.DriverCapabilities(),
 		"auth_enabled":     true,
 	})
 }

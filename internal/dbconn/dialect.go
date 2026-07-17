@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
@@ -68,10 +69,11 @@ func (oracleDialect) BuildDSN(p Profile, password string) (string, error) {
 	// godror accepts Easy Connect, TNS descriptors, and connection parameters.
 	// Credentials are passed in the driver DSN rather than appended to an
 	// arbitrary descriptor, avoiding accidental mutation of wallet/TCPS text.
-	if strings.HasPrefix(cs, "oracle://") {
-		return cs, nil
+	dsn := fmt.Sprintf("user=%s password=%s connectString=%s", strconv.Quote(p.Username), strconv.Quote(password), strconv.Quote(cs))
+	if p.Oracle != nil && strings.TrimSpace(p.Oracle.ClientLibDir) != "" {
+		dsn += " libDir=" + strconv.Quote(strings.TrimSpace(p.Oracle.ClientLibDir))
 	}
-	return fmt.Sprintf(`user="%s" password="%s" connectString="%s"`, p.Username, password, cs), nil
+	return dsn, nil
 }
 func (oracleDialect) WrapLimit(sqlText string, limit int) string {
 	return fmt.Sprintf("SELECT * FROM (%s) sqlon_q FETCH FIRST %d ROWS ONLY", trimSQL(sqlText), limit)

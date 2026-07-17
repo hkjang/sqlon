@@ -10,11 +10,11 @@ build_one() {
   goarch="$2"
   name="$3"
   CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-    go build -trimpath -ldflags="-s -w" -o "$ROOT/$OUT/$name" ./cmd/jamypg-mcp
+    go build -trimpath -ldflags="-s -w" -o "$ROOT/$OUT/$name" ./cmd/sqlon
   echo "built $ROOT/$OUT/$name"
 }
 
 cd "$ROOT"
-build_one windows amd64 jamypg-mcp-windows-amd64.exe
-build_one linux amd64 jamypg-mcp-linux-amd64
-build_one linux arm64 jamypg-mcp-linux-arm64
+build_one windows amd64 sqlon-windows-amd64.exe
+build_one linux amd64 sqlon-linux-amd64
+build_one linux arm64 sqlon-linux-arm64

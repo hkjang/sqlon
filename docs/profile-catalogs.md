@@ -87,5 +87,5 @@ curl -s http://127.0.0.1:9797/api/profile-catalogs/active           # 현재 활
 전환을 영구화하려면 서버를 해당 워크스페이스로 기동합니다:
 
 ```sh
-go run ./cmd/jamypg-mcp -data ./data/metadb/profiles/pg-prod -addr 127.0.0.1:9797
+go run ./cmd/sqlon -data ./data/metadb/profiles/pg-prod -addr 127.0.0.1:9797
 ```

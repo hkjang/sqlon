@@ -1,0 +1,84 @@
+// Package observability collects evidence-bearing, read-only operational
+// snapshots through engine-native providers. It never accepts caller SQL.
+package observability
+
+import "time"
+
+type Evidence struct {
+	Code        string         `json:"code"`
+	Severity    string         `json:"severity"`
+	Summary     string         `json:"summary"`
+	Attributes  map[string]any `json:"attributes,omitempty"`
+	CollectedAt time.Time      `json:"collected_at"`
+}
+
+type Session struct {
+	ProfileID            string    `json:"profile_id"`
+	Engine               string    `json:"engine"`
+	SessionKey           string    `json:"session_key"`
+	InstanceID           string    `json:"instance_id,omitempty"`
+	SessionID            string    `json:"session_id"`
+	Serial               string    `json:"serial,omitempty"`
+	User                 string    `json:"user,omitempty"`
+	State                string    `json:"state,omitempty"`
+	Service              string    `json:"service,omitempty"`
+	Application          string    `json:"application,omitempty"`
+	Client               string    `json:"client,omitempty"`
+	SQLID                string    `json:"sql_id,omitempty"`
+	WaitClass            string    `json:"wait_class,omitempty"`
+	WaitEvent            string    `json:"wait_event,omitempty"`
+	QueryStartedAt       string    `json:"query_started_at,omitempty"`
+	TransactionStartedAt string    `json:"transaction_started_at,omitempty"`
+	DurationSeconds      int64     `json:"duration_seconds,omitempty"`
+	TransactionSeconds   int64     `json:"transaction_seconds,omitempty"`
+	Protected            bool      `json:"protected"`
+	ProtectionReason     string    `json:"protection_reason,omitempty"`
+	CollectedAt          time.Time `json:"collected_at"`
+}
+
+type LockEdge struct {
+	ProfileID    string    `json:"profile_id"`
+	Engine       string    `json:"engine"`
+	BlockerKey   string    `json:"blocker_key"`
+	BlockedKey   string    `json:"blocked_key"`
+	BlockerUser  string    `json:"blocker_user,omitempty"`
+	BlockedUser  string    `json:"blocked_user,omitempty"`
+	LockType     string    `json:"lock_type,omitempty"`
+	WaitSeconds  int64     `json:"wait_seconds,omitempty"`
+	BlockedSQLID string    `json:"blocked_sql_id,omitempty"`
+	CollectedAt  time.Time `json:"collected_at"`
+}
+
+type LockRoot struct {
+	SessionKey       string `json:"session_key"`
+	User             string `json:"user,omitempty"`
+	AffectedSessions int    `json:"affected_sessions"`
+}
+
+type SessionData struct {
+	ProfileID   string    `json:"profile_id"`
+	Engine      string    `json:"engine"`
+	Sessions    []Session `json:"sessions"`
+	Total       int       `json:"total"`
+	Active      int       `json:"active"`
+	Waiting     int       `json:"waiting"`
+	LongRunning int       `json:"long_running"`
+}
+
+type LockData struct {
+	ProfileID       string     `json:"profile_id"`
+	Engine          string     `json:"engine"`
+	Edges           []LockEdge `json:"edges"`
+	Roots           []LockRoot `json:"roots"`
+	BlockedSessions int        `json:"blocked_sessions"`
+}
+
+type Response[T any] struct {
+	Status      string     `json:"status"`
+	Data        T          `json:"data"`
+	Evidence    []Evidence `json:"evidence"`
+	Warnings    []string   `json:"warnings"`
+	Limitations []string   `json:"limitations"`
+	CollectedAt time.Time  `json:"collected_at"`
+	TraceID     string     `json:"trace_id"`
+}

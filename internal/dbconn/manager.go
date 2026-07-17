@@ -88,7 +88,11 @@ func NewManager(dataDir string) *Manager {
 func (m *Manager) Available() bool { return driverAvailable }
 
 // DriverNote explains how to enable the driver when it is absent.
-func (m *Manager) DriverNote() string { return driverNote }
+func (m *Manager) DriverNote() string { return driverSummary() }
+
+// DriverCapabilities lets API/UI distinguish an unsupported edition from a
+// failed connection or insufficient database privileges.
+func (m *Manager) DriverCapabilities() map[string]bool { return driverCapabilities() }
 
 // Profiles returns the currently visible profiles through the active store.
 // It is the single profile discovery path for fleet/collector services.
@@ -127,9 +131,6 @@ func profileSignature(p Profile) string {
 
 // db returns (building if needed) the pool for a profile.
 func (m *Manager) db(p Profile) (*sql.DB, error) {
-	if !driverAvailable {
-		return nil, errors.New(driverNote)
-	}
 	sig := profileSignature(p)
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -327,6 +328,10 @@ func (m *Manager) Execute(ctx context.Context, profileID, sqlText string, opts E
 		m.audit(p.ID, sqlText, opts, nil, 0, err)
 		return nil, err
 	}
+	if err := EnforceOracleLicense(p, sqlText); err != nil {
+		m.audit(p.ID, sqlText, opts, nil, 0, err)
+		return nil, err
+	}
 	if err := m.breakerCheck(p.ID); err != nil {
 		return nil, err
 	}
@@ -430,6 +435,9 @@ func (m *Manager) CountRows(ctx context.Context, profileID, sqlText string) (int
 	if err := ValidateReadOnly(d, sqlText, deniedForProfile(d, p)); err != nil {
 		return 0, err
 	}
+	if err := EnforceOracleLicense(p, sqlText); err != nil {
+		return 0, err
+	}
 	if err := m.breakerCheck(p.ID); err != nil {
 		return 0, err
 	}
@@ -460,6 +468,9 @@ func (m *Manager) Metadata(ctx context.Context, profileID, sqlText string) ([]Co
 		return nil, err
 	}
 	if err := ValidateReadOnly(d, sqlText, deniedForProfile(d, p)); err != nil {
+		return nil, err
+	}
+	if err := EnforceOracleLicense(p, sqlText); err != nil {
 		return nil, err
 	}
 	if err := m.breakerCheck(p.ID); err != nil {
@@ -762,6 +773,7 @@ func (m *Manager) Snapshot() map[string]any {
 
 	return map[string]any{
 		"driver_available": driverAvailable,
+		"drivers":          driverCapabilities(),
 		"counters":         counters,
 		"pools":            pools,
 		"breakers":         breakers,

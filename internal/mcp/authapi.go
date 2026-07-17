@@ -584,6 +584,7 @@ func (s *Server) mcpListProfiles(ctx context.Context) map[string]any {
 			"profiles":         profiles,
 			"driver_available": s.DB.Available(),
 			"driver_note":      s.DB.DriverNote(),
+			"drivers":          s.DB.DriverCapabilities(),
 			"count":            len(profiles),
 		}
 	}
@@ -614,6 +615,7 @@ func (s *Server) mcpListProfiles(ctx context.Context) map[string]any {
 		"profiles":         profiles,
 		"driver_available": s.DB.Available(),
 		"driver_note":      s.DB.DriverNote(),
+		"drivers":          s.DB.DriverCapabilities(),
 		"count":            len(profiles),
 		"note":             "run_sql_safely / explain_sql / run_evaluation 의 profile 인자로 아래 id를 사용하세요.",
 	}

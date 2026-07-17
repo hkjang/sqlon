@@ -197,6 +197,36 @@ func TestProfileValidateAndDefaults(t *testing.T) {
 	}
 }
 
+func TestProductionProfileRequiresSecretReferenceAndMasksFleetContext(t *testing.T) {
+	p := Profile{
+		ID: "prod-01", Type: "postgres", ConnectString: "db:5432/app",
+		Username: "monitor", PasswordRef: "plain:secret", Environment: "production",
+		ServiceName: "payments", Criticality: "critical", Role: "primary",
+		OwnerTeam: "dba", Location: "seoul", Maintenance: "sat 02:00-04:00",
+		Tags: []string{"tier-1", "pci"},
+	}
+	if err := p.Validate(); err == nil || !strings.Contains(err.Error(), "plain: is forbidden") {
+		t.Fatalf("production plain secret must be rejected, got %v", err)
+	}
+	p.PasswordRef = "file:/run/secrets/db_password"
+	if err := p.Validate(); err != nil {
+		t.Fatalf("production file secret must validate: %v", err)
+	}
+	got := ApplyDefaults(p)
+	view := got.Masked()
+	if view["service_name"] != "payments" || view["criticality"] != "critical" || view["maintenance_window"] != "sat 02:00-04:00" {
+		t.Fatalf("fleet context missing from API-safe view: %#v", view)
+	}
+	if view["password_ref"] != "file:/run/secrets/db_password" {
+		t.Fatalf("secret reference pointer should be preserved: %#v", view["password_ref"])
+	}
+
+	p.DBA = &DBAConfig{Enabled: true, Username: "admin", PasswordRef: "plain:secret"}
+	if err := p.Validate(); err == nil || !strings.Contains(err.Error(), "production DBA") {
+		t.Fatalf("production DBA plain secret must be rejected, got %v", err)
+	}
+}
+
 func TestAnalyzePostgresPlanJSON(t *testing.T) {
 	raw := []byte(`[{"Plan":{
 		"Node Type":"Nested Loop","Total Cost":250000.5,"Plan Rows":2500000,

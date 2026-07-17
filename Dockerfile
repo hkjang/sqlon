@@ -14,18 +14,18 @@ RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
 RUN LDFLAGS="-s -w -X sqlon/internal/mcp.Version=${VERSION}" \
- && CGO_ENABLED=0 go build -trimpath -ldflags="$LDFLAGS" -o /out/sqlon ./cmd/jamypg-mcp \
- && CGO_ENABLED=0 go build -trimpath -ldflags="$LDFLAGS" -o /out/jamypg-eval ./cmd/jamypg-eval \
- && CGO_ENABLED=0 go build -trimpath -ldflags="$LDFLAGS" -o /out/jamypg-goldgen ./cmd/jamypg-goldgen
+ && CGO_ENABLED=0 go build -trimpath -ldflags="$LDFLAGS" -o /out/sqlon ./cmd/sqlon \
+ && CGO_ENABLED=0 go build -trimpath -ldflags="$LDFLAGS" -o /out/sqlon-eval ./cmd/jamypg-eval \
+ && CGO_ENABLED=0 go build -trimpath -ldflags="$LDFLAGS" -o /out/sqlon-goldgen ./cmd/jamypg-goldgen
 
 FROM alpine:3.21
 RUN adduser -D -u 10001 sqlon
-COPY --from=build /out/sqlon /out/jamypg-eval /out/jamypg-goldgen /usr/local/bin/
-COPY --chown=sqlon:sqlon data/metadb /app/data/metadb
+COPY --from=build /out/sqlon /out/sqlon-eval /out/sqlon-goldgen /usr/local/bin/
+COPY --chown=sqlon:sqlon data/metadb /app/data/sqlon
 WORKDIR /app
 USER sqlon
 EXPOSE 9797
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
   CMD wget -qO- http://127.0.0.1:9797/healthz >/dev/null 2>&1 || exit 1
 ENTRYPOINT ["sqlon"]
-CMD ["-transport", "http", "-addr", "0.0.0.0:9797", "-public-mcp", "-data", "/app/data/metadb"]
+CMD ["-transport", "http", "-addr", "0.0.0.0:9797", "-public-mcp", "-data", "/app/data/sqlon"]

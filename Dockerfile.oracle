@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+# SQLON Oracle edition: godror/ODPI-C (CGO) plus Oracle Instant Client.
+FROM golang:1.26-bookworm AS build
+WORKDIR /src
+ARG VERSION=dev
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd ./cmd
+COPY internal ./internal
+RUN CGO_ENABLED=1 go build -tags oracle -trimpath \
+    -ldflags="-s -w -X sqlon/internal/mcp.Version=${VERSION}" \
+    -o /out/sqlon ./cmd/sqlon
+
+FROM oraclelinux:9-slim
+RUN microdnf install -y oracle-instantclient-release-el9 \
+ && microdnf install -y oracle-instantclient-basiclite libaio curl-minimal \
+ && microdnf clean all \
+ && useradd --system --uid 10001 --home-dir /app --create-home sqlon
+COPY --from=build /out/sqlon /usr/local/bin/sqlon
+COPY --chown=sqlon:sqlon data/metadb /app/data/sqlon
+WORKDIR /app
+USER sqlon
+EXPOSE 9797
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s \
+  CMD curl -fsS http://127.0.0.1:9797/healthz >/dev/null || exit 1
+ENTRYPOINT ["sqlon"]
+CMD ["-transport", "http", "-addr", "0.0.0.0:9797", "-public-mcp", "-data", "/app/data/sqlon"]

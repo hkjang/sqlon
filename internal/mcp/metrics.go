@@ -51,13 +51,6 @@ func (s *Server) serveMetrics(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	var b strings.Builder
 
-	b.WriteString("# HELP jamypg_up 1 if the server is serving.\n")
-	b.WriteString("# TYPE jamypg_up gauge\njamypg_up 1\n")
-
-	b.WriteString("# HELP jamypg_build_info Build version label.\n")
-	b.WriteString("# TYPE jamypg_build_info gauge\n")
-	fmt.Fprintf(&b, "jamypg_build_info{version=%q} 1\n", Version)
-
 	// tool-call counters
 	s.metrics.mu.Lock()
 	tools := make([]string, 0, len(s.metrics.byTool))
@@ -71,42 +64,16 @@ func (s *Server) serveMetrics(w http.ResponseWriter, _ *http.Request) {
 	}
 	s.metrics.mu.Unlock()
 
-	b.WriteString("# HELP jamypg_tool_calls_total MCP tool invocations by status.\n")
-	b.WriteString("# TYPE jamypg_tool_calls_total counter\n")
-	for _, t := range tools {
-		st := snap[t]
-		ok := st.calls - st.errors
-		fmt.Fprintf(&b, "jamypg_tool_calls_total{tool=%q,status=\"ok\"} %d\n", t, ok)
-		fmt.Fprintf(&b, "jamypg_tool_calls_total{tool=%q,status=\"error\"} %d\n", t, st.errors)
-	}
-	b.WriteString("# HELP jamypg_tool_duration_ms_sum Summed tool latency in ms.\n")
-	b.WriteString("# TYPE jamypg_tool_duration_ms_sum counter\n")
-	for _, t := range tools {
-		fmt.Fprintf(&b, "jamypg_tool_duration_ms_sum{tool=%q} %d\n", t, snap[t].durMillis)
-	}
-
-	// catalog gauges
 	cat := s.cat()
-	b.WriteString("# HELP jamypg_catalog_tables Number of compiled catalog tables.\n")
-	b.WriteString("# TYPE jamypg_catalog_tables gauge\n")
-	fmt.Fprintf(&b, "jamypg_catalog_tables %d\n", len(cat.Tables))
-	b.WriteString("# HELP jamypg_catalog_relations Number of compiled join relations.\n")
-	b.WriteString("# TYPE jamypg_catalog_relations gauge\n")
-	fmt.Fprintf(&b, "jamypg_catalog_relations %d\n", len(cat.Relations))
-
-	// metadata quality gauge (0..100) + release-gate pass
 	q := cat.QualityReport()
-	b.WriteString("# HELP jamypg_metadata_quality_score Overall metadata quality score (0-100).\n")
-	b.WriteString("# TYPE jamypg_metadata_quality_score gauge\n")
-	fmt.Fprintf(&b, "jamypg_metadata_quality_score %.1f\n", q.OverallScore)
 	gate := cat.QualityGate()
 	pass := 0
 	if gate.Pass {
 		pass = 1
 	}
-	b.WriteString("# HELP jamypg_metadata_quality_gate_pass 1 if the release quality gate passes.\n")
-	b.WriteString("# TYPE jamypg_metadata_quality_gate_pass gauge\n")
-	fmt.Fprintf(&b, "jamypg_metadata_quality_gate_pass %d\n", pass)
+	writeProductMetrics(&b, "sqlon", "", tools, snap, len(cat.Tables), len(cat.Relations), q.OverallScore, pass)
+	// One-release compatibility for existing dashboards and alerts.
+	writeProductMetrics(&b, "jamypg", "Deprecated alias; use sqlon_* metrics. ", tools, snap, len(cat.Tables), len(cat.Relations), q.OverallScore, pass)
 
 	_, _ = w.Write([]byte(b.String()))
 
@@ -114,4 +81,31 @@ func (s *Server) serveMetrics(w http.ResponseWriter, _ *http.Request) {
 	if s.DB != nil {
 		_, _ = io.WriteString(w, s.DB.PrometheusText())
 	}
+}
+
+func writeProductMetrics(b *strings.Builder, prefix, helpPrefix string, tools []string, snap map[string]callStat, tables, relations int, quality float64, gatePass int) {
+	fmt.Fprintf(b, "# HELP %s_up %s1 if the server is serving.\n", prefix, helpPrefix)
+	fmt.Fprintf(b, "# TYPE %s_up gauge\n%s_up 1\n", prefix, prefix)
+	fmt.Fprintf(b, "# HELP %s_build_info %sBuild version label.\n", prefix, helpPrefix)
+	fmt.Fprintf(b, "# TYPE %s_build_info gauge\n%s_build_info{version=%q} 1\n", prefix, prefix, Version)
+	fmt.Fprintf(b, "# HELP %s_tool_calls_total %sMCP tool invocations by status.\n", prefix, helpPrefix)
+	fmt.Fprintf(b, "# TYPE %s_tool_calls_total counter\n", prefix)
+	for _, tool := range tools {
+		st := snap[tool]
+		fmt.Fprintf(b, "%s_tool_calls_total{tool=%q,status=\"ok\"} %d\n", prefix, tool, st.calls-st.errors)
+		fmt.Fprintf(b, "%s_tool_calls_total{tool=%q,status=\"error\"} %d\n", prefix, tool, st.errors)
+	}
+	fmt.Fprintf(b, "# HELP %s_tool_duration_ms_sum %sSummed tool latency in ms.\n", prefix, helpPrefix)
+	fmt.Fprintf(b, "# TYPE %s_tool_duration_ms_sum counter\n", prefix)
+	for _, tool := range tools {
+		fmt.Fprintf(b, "%s_tool_duration_ms_sum{tool=%q} %d\n", prefix, tool, snap[tool].durMillis)
+	}
+	fmt.Fprintf(b, "# HELP %s_catalog_tables %sNumber of compiled catalog tables.\n", prefix, helpPrefix)
+	fmt.Fprintf(b, "# TYPE %s_catalog_tables gauge\n%s_catalog_tables %d\n", prefix, prefix, tables)
+	fmt.Fprintf(b, "# HELP %s_catalog_relations %sNumber of compiled join relations.\n", prefix, helpPrefix)
+	fmt.Fprintf(b, "# TYPE %s_catalog_relations gauge\n%s_catalog_relations %d\n", prefix, prefix, relations)
+	fmt.Fprintf(b, "# HELP %s_metadata_quality_score %sOverall metadata quality score (0-100).\n", prefix, helpPrefix)
+	fmt.Fprintf(b, "# TYPE %s_metadata_quality_score gauge\n%s_metadata_quality_score %.1f\n", prefix, prefix, quality)
+	fmt.Fprintf(b, "# HELP %s_metadata_quality_gate_pass %s1 if the release quality gate passes.\n", prefix, helpPrefix)
+	fmt.Fprintf(b, "# TYPE %s_metadata_quality_gate_pass gauge\n%s_metadata_quality_gate_pass %d\n", prefix, prefix, gatePass)
 }

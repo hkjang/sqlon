@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"sqlon/internal/fleet"
 	"sqlon/internal/meta"
 )
 
@@ -47,6 +48,10 @@ func withCookie(token string) map[string]string {
 	return map[string]string{"Cookie": meta.SessionCookie + "=" + token}
 }
 
+func withLegacyCookie(token string) map[string]string {
+	return map[string]string{"Cookie": meta.LegacySessionCookie + "=" + token}
+}
+
 func TestAuthLoginLogoutAndMe(t *testing.T) {
 	_, mux, adminTok, _ := newAuthServer(t)
 
@@ -59,6 +64,16 @@ func TestAuthLoginLogoutAndMe(t *testing.T) {
 	_ = json.Unmarshal(rec.Body.Bytes(), &me)
 	if !me.Authenticated || me.User.Role != "admin" {
 		t.Fatalf("me: %s", rec.Body.String())
+	}
+	// 기존 브라우저 세션은 한 릴리스 동안 레거시 쿠키명으로도 인증한다.
+	rec = doReq(t, mux, "GET", "/auth/me", "", withLegacyCookie(adminTok))
+	me = struct {
+		Authenticated bool                  `json:"authenticated"`
+		User          struct{ Role string } `json:"user"`
+	}{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &me)
+	if !me.Authenticated {
+		t.Fatalf("legacy session cookie rejected: %s", rec.Body.String())
 	}
 	// bad login
 	rec = doReq(t, mux, "POST", "/auth/login", `{"username":"admin","password":"nope"}`, nil)
@@ -74,6 +89,96 @@ func TestAuthLoginLogoutAndMe(t *testing.T) {
 	_ = json.Unmarshal(rec.Body.Bytes(), &me)
 	if me.Authenticated {
 		t.Fatal("session must be revoked after logout")
+	}
+}
+
+func TestFleetAPIAppliesProfilePermissionsAndReturnsEvidenceEnvelope(t *testing.T) {
+	s, mux, adminTok, aliceTok := newAuthServer(t)
+	admin, _ := s.Meta.Store.GetUserByUsername(t.Context(), "admin")
+	alice, _ := s.Meta.Store.GetUserByUsername(t.Context(), "alice")
+	definitions := []struct {
+		id, owner string
+		body      string
+	}{
+		{"admin-prod", admin.ID, `{"name":"관리자 운영 DB","type":"postgres","service_name":"payments","environment":"production","criticality":"critical","connect_string":"127.0.0.1:1/db","username":"monitor","password_ref":"plain:hidden"}`},
+		{"alice-dev", alice.ID, `{"name":"Alice 개발 DB","type":"postgres","service_name":"catalog","environment":"development","criticality":"low","connect_string":"127.0.0.1:1/db","username":"monitor","password_ref":"plain:hidden"}`},
+	}
+	for _, d := range definitions {
+		if err := s.Meta.Store.UpsertProfile(t.Context(), &meta.ProfileRecord{ID: d.id, OwnerID: d.owner, Definition: []byte(d.body), Visibility: meta.VisibilityPrivate}, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if rec := doReq(t, mux, "GET", "/api/fleet/instances", "", nil); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated fleet inventory = %d", rec.Code)
+	}
+	rec := doReq(t, mux, "GET", "/api/fleet/instances", "", withCookie(aliceTok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("alice inventory: %d %s", rec.Code, rec.Body.String())
+	}
+	var inventory fleet.Health
+	if err := json.Unmarshal(rec.Body.Bytes(), &inventory); err != nil {
+		t.Fatal(err)
+	}
+	if inventory.Summary.Total != 1 || inventory.Data[0].ID != "alice-dev" || inventory.Data[0].ServiceName != "catalog" {
+		t.Fatalf("profile ACL not applied: %+v", inventory)
+	}
+	if strings.Contains(rec.Body.String(), "hidden") || strings.Contains(rec.Body.String(), "connect_string") {
+		t.Fatalf("fleet response leaked connection secret/detail: %s", rec.Body.String())
+	}
+
+	rec = doReq(t, mux, "GET", "/api/fleet/instances", "", withCookie(adminTok))
+	if err := json.Unmarshal(rec.Body.Bytes(), &inventory); err != nil || inventory.Summary.Total != 2 {
+		t.Fatalf("admin fleet visibility: status=%d inventory=%+v err=%v", rec.Code, inventory, err)
+	}
+
+	// MCP and REST consume the same fleet service and ACL-filtered profiles.
+	params := json.RawMessage(`{"name":"list_database_instances","arguments":{}}`)
+	result, err := s.callTool(withUser(t.Context(), alice), params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mcpInventory, ok := result.(fleet.Health)
+	if !ok || mcpInventory.Summary.Total != 1 || mcpInventory.Data[0].ID != "alice-dev" {
+		t.Fatalf("MCP fleet inventory diverged from REST: %#v", result)
+	}
+
+	// Session/lock observation must apply the same profile ACL before any
+	// system query is attempted, and must not leak the secret definition.
+	if rec := doReq(t, mux, "GET", "/api/observability/sessions?profile=alice-dev", "", nil); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous session observation = %d", rec.Code)
+	}
+	if rec := doReq(t, mux, "GET", "/api/observability/sessions?profile=admin-prod", "", withCookie(aliceTok)); rec.Code != http.StatusNotFound {
+		t.Fatalf("Alice observed an unauthorized profile: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doReq(t, mux, "GET", "/api/observability/sessions?profile=alice-dev", "", withCookie(aliceTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"profile_id":"alice-dev"`) || strings.Contains(rec.Body.String(), "hidden") {
+		t.Fatalf("allowed observation envelope or masking failed: %d %s", rec.Code, rec.Body.String())
+	}
+
+	params = json.RawMessage(`{"name":"get_lock_tree","arguments":{"profile":"admin-prod"}}`)
+	result, err = s.callTool(withUser(t.Context(), alice), params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultMap, ok := result.(map[string]any); !ok || resultMap["status"] != "not_found" {
+		t.Fatalf("MCP lock tool bypassed profile ACL: %#v", result)
+	}
+
+	if rec := doReq(t, mux, "GET", "/api/observability/workload?profile=admin-prod", "", withCookie(aliceTok)); rec.Code != http.StatusNotFound {
+		t.Fatalf("Alice read unauthorized workload history: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doReq(t, mux, "GET", "/api/observability/workload?profile=alice-dev", "", withCookie(aliceTok))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"status":"not_collected"`) || strings.Contains(rec.Body.String(), "hidden") {
+		t.Fatalf("stored workload ACL/no-implicit-query contract failed: %d %s", rec.Code, rec.Body.String())
+	}
+	params = json.RawMessage(`{"name":"get_storage_status","arguments":{"profile":"admin-prod"}}`)
+	result, err = s.callTool(withUser(t.Context(), alice), params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resultMap, ok := result.(map[string]any); !ok || resultMap["status"] != "not_found" {
+		t.Fatalf("MCP storage tool bypassed profile ACL: %#v", result)
 	}
 }
 
@@ -114,8 +219,8 @@ func TestMCPKeyEndpointsAndAuth(t *testing.T) {
 		} `json:"key_info"`
 	}
 	_ = json.Unmarshal(rec.Body.Bytes(), &out)
-	if !strings.HasPrefix(out.Key, "jsk_") {
-		t.Fatalf("key must start with jsk_: %q", out.Key)
+	if !strings.HasPrefix(out.Key, "ssk_") {
+		t.Fatalf("key must start with ssk_: %q", out.Key)
 	}
 	// the key authenticates an MCP request
 	rec = doReq(t, mux, "POST", "/mcp",

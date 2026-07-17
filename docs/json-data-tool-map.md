@@ -10,7 +10,7 @@
 
 대상 구현:
 
-- 서버 진입점: `cmd/jamypg-mcp/main.go`
+- 서버 진입점: `cmd/sqlon/main.go` → `internal/app/runtime.go`
 - 카탈로그 로더: `internal/catalog/load.go`
 - MCP 도구/리소스/프롬프트 핸들러: `internal/mcp/server.go`
 - stdio/http transport는 같은 MCP 핸들러를 공유하므로 데이터 사용 방식은 동일합니다.

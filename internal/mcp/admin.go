@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"crypto/subtle"
 	"embed"
 	"encoding/json"
@@ -13,7 +14,9 @@ import (
 
 	"sqlon/internal/catalog"
 	"sqlon/internal/change"
+	"sqlon/internal/dbconn"
 	"sqlon/internal/fleet"
+	"sqlon/internal/observability"
 )
 
 //go:embed webui
@@ -26,7 +29,8 @@ var webuiFS embed.FS
 // backup, hot-swap, rollback — is identical on both surfaces.
 func (s *Server) registerAdmin(mux *http.ServeMux) {
 	// static UI
-	mux.HandleFunc("GET /{$}", s.serveWebUI("webui/landing.html", "text/html; charset=utf-8"))
+	mux.HandleFunc("GET /{$}", s.guardPage(s.serveWebUI("webui/fleet.html", "text/html; charset=utf-8")))
+	mux.HandleFunc("GET /welcome", s.serveWebUI("webui/landing.html", "text/html; charset=utf-8"))
 	mux.HandleFunc("GET /admin/nav.js", s.serveWebUI("webui/nav.js", "application/javascript"))
 	mux.HandleFunc("GET /admin/onboarding.md", s.serveWebUI("webui/onboarding.md", "text/markdown; charset=utf-8"))
 	mux.HandleFunc("GET /admin/logo-transparent.png", s.serveWebUI("webui/logo-transparent.png", "image/png"))
@@ -37,6 +41,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin", s.guardPage(s.serveWebUI("webui/admin.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/editor", s.guardPage(s.serveWebUI("webui/editor.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/db", s.guardPage(s.serveWebUI("webui/db.html", "text/html; charset=utf-8")))
+	mux.HandleFunc("GET /admin/sessions", s.guardPage(s.serveWebUI("webui/sessions.html", "text/html; charset=utf-8")))
+	mux.HandleFunc("GET /admin/workload", s.guardPage(s.serveWebUI("webui/workload.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/reviews", s.guardPage(s.serveWebUI("webui/reviews.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/quality", s.guardPage(s.serveWebUI("webui/quality.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/openmetadata", s.guardPage(s.serveWebUI("webui/openmetadata.html", "text/html; charset=utf-8")))
@@ -57,10 +63,118 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, s.cat().Health())
 	})
-	// Fleet health is read-only and probes each profile independently. A failed
-	// target never prevents other profile results from being returned.
+	// Fleet APIs and MCP tools share the same permission-filtered service path.
+	mux.HandleFunc("GET /api/fleet/instances", func(w http.ResponseWriter, r *http.Request) {
+		profiles, _, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		writeJSON(w, http.StatusOK, fleet.New(s.DB).InventoryProfiles(profiles))
+	})
+	// A failed target never prevents other profile results from being returned.
 	mux.HandleFunc("GET /api/fleet/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, fleet.New(s.DB).Health(r.Context()))
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		writeJSON(w, http.StatusOK, fleet.NewWithOperations(s.DB, s.Collector).HealthProfiles(ctx, profiles))
+	})
+	// Session and lock observation use fixed engine-native system queries. The
+	// profile is resolved only from the caller's permission-filtered fleet.
+	mux.HandleFunc("GET /api/observability/sessions", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		profile, ok := allowedProfile(profiles, r.URL.Query().Get("profile"))
+		if !ok {
+			writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted"))
+			return
+		}
+		writeJSON(w, http.StatusOK, observability.New(s.DB).Sessions(ctx, profile))
+	})
+	mux.HandleFunc("GET /api/observability/locks", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		profile, ok := allowedProfile(profiles, r.URL.Query().Get("profile"))
+		if !ok {
+			writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted"))
+			return
+		}
+		writeJSON(w, http.StatusOK, observability.New(s.DB).Locks(ctx, profile))
+	})
+	for path, kind := range map[string]string{
+		"/api/observability/workload": "workload",
+		"/api/observability/top-sql":  "top_sql",
+		"/api/observability/capacity": "capacity",
+	} {
+		viewKind := kind
+		mux.HandleFunc("GET "+path, func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := s.requireQueryActor(w, r); !ok {
+				return
+			}
+			profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+			if !ok {
+				return
+			}
+			profile, ok := allowedProfile(profiles, r.URL.Query().Get("profile"))
+			if !ok {
+				writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted"))
+				return
+			}
+			fresh := strings.EqualFold(r.URL.Query().Get("fresh"), "true")
+			writeJSON(w, http.StatusOK, operationalView(viewKind, s.operationalSnapshot(ctx, profile, fresh)))
+		})
+	}
+	mux.HandleFunc("GET /api/observability/history", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		profile, ok := allowedProfile(profiles, r.URL.Query().Get("profile"))
+		if !ok {
+			writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted"))
+			return
+		}
+		hours, _ := strconv.Atoi(r.URL.Query().Get("hours"))
+		if hours <= 0 || hours > 24*90 {
+			hours = 24
+		}
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		history, warnings, err := s.Collector.History(ctx, profile.ID, time.Now().UTC().Add(-time.Duration(hours)*time.Hour), limit)
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err)
+			return
+		}
+		traceID := "history-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+		if len(history) > 0 {
+			traceID = history[0].TraceID
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": history, "warnings": warnings, "limitations": []string{}, "collected_at": time.Now().UTC(), "trace_id": traceID})
+	})
+	mux.HandleFunc("POST /api/collector/run", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		writeJSON(w, http.StatusOK, s.Collector.CollectAll(ctx, profiles, true))
 	})
 	// Change management is intentionally separate from the legacy DBA executor.
 	// Plan creation and approval are shared service calls; no endpoint here can
@@ -92,6 +206,17 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": p})
 	})
+	mux.HandleFunc("POST /api/changes/{id}/submit", func(w http.ResponseWriter, r *http.Request) {
+		if !s.requireDBA(w, r) {
+			return
+		}
+		p, err := s.Changes.Submit(r.PathValue("id"))
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": p})
+	})
 	mux.HandleFunc("POST /api/changes/{id}/approve", func(w http.ResponseWriter, r *http.Request) {
 		if !s.requireDBA(w, r) {
 			return
@@ -112,6 +237,25 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 			return
 		}
 		id := r.PathValue("id")
+		approved, ok := s.Changes.Get(id)
+		if !ok {
+			writeAPIError(w, http.StatusNotFound, errEmpty("change plan not found"))
+			return
+		}
+		if approved.RequiredApprovals > 0 {
+			approvalID := strings.TrimSpace(r.Header.Get("X-Approval-ID"))
+			valid := false
+			for _, approval := range approved.Approvals {
+				if subtle.ConstantTimeCompare([]byte(approval.ID), []byte(approvalID)) == 1 {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				writeAPIError(w, http.StatusForbidden, errEmpty("a valid X-Approval-ID is required"))
+				return
+			}
+		}
 		p, err := s.Changes.Execute(r.Context(), id, approvedChangeRunner{server: s})
 		actor := "dba"
 		if u := userFrom(r.Context()); u != nil {
@@ -581,6 +725,36 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, res)
 	})
+}
+
+func (s *Server) fleetProfilesForRequest(w http.ResponseWriter, r *http.Request) ([]dbconn.Profile, context.Context, bool) {
+	ctx := r.Context()
+	if s.authEnabled() {
+		actor, ok := s.requireActor(w, r)
+		if !ok {
+			return nil, ctx, false
+		}
+		ctx = withUser(ctx, actor)
+	}
+	profiles, err := s.usableProfiles(ctx)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return nil, ctx, false
+	}
+	return profiles, ctx, true
+}
+
+func allowedProfile(profiles []dbconn.Profile, id string) (dbconn.Profile, bool) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return dbconn.Profile{}, false
+	}
+	for _, profile := range profiles {
+		if profile.ID == id {
+			return profile, true
+		}
+	}
+	return dbconn.Profile{}, false
 }
 
 // restoreDataset copies a backup over the live file (backing up the current

@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"context"
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -12,6 +14,27 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestDirectDBAMutationToolsAreInternalOnly(t *testing.T) {
+	public := toolNameSet(t, "public tools", registeredToolNames(t))
+	for name := range internalDBAExecutors {
+		if _, ok := public[name]; ok {
+			t.Fatalf("internal DBA executor %q is publicly advertised", name)
+		}
+		params, err := json.Marshal(map[string]any{"name": name, "arguments": map[string]any{}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := (&Server{}).callTool(context.Background(), params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, ok := got.(map[string]any)
+		if !ok || result["status"] != "deprecated" {
+			t.Fatalf("direct call %q was not rejected: %#v", name, got)
+		}
+	}
+}
 
 func TestToolRegistryMatchesDispatcher(t *testing.T) {
 	registry := registeredToolNames(t)
@@ -117,7 +140,9 @@ func dispatchedToolNames(t *testing.T, filename string) []string {
 				if err != nil {
 					t.Fatalf("decode dispatch case %s: %v", literal.Value, err)
 				}
-				names = append(names, name)
+				if !internalDBAExecutors[name] {
+					names = append(names, name)
+				}
 			}
 		}
 		return false

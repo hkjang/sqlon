@@ -6,7 +6,7 @@ import (
 )
 
 func validPlan() Plan {
-	return Plan{ID: "c1", ProfileID: "prod", Reason: "analyze", State: Draft, Steps: []Step{{Order: 1, Command: "ANALYZE", Verification: "check", Compensation: "document"}}, RequiredApprovals: 1}
+	return Plan{ID: "c1", ProfileID: "prod", Target: "public.orders", Reason: "analyze", Risk: Medium, State: Draft, Steps: []Step{{Order: 1, Command: "ANALYZE", Verification: "check", Compensation: "document"}}}
 }
 func TestPlanBlocksExecutionWithoutApproval(t *testing.T) {
 	p := validPlan()

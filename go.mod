@@ -3,16 +3,21 @@ module sqlon
 go 1.25.0
 
 require (
+	github.com/godror/godror v0.51.0
 	github.com/jackc/pgx/v5 v5.10.0
+	github.com/pganalyze/pg_query_go/v6 v6.2.2
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20260710103825-59ca78807ec8
 	github.com/wasilibs/go-pgquery v0.0.0-20260623022807-b68b28131ed3
 	golang.org/x/crypto v0.53.0
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/VictoriaMetrics/easyproto v0.1.4 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
-	github.com/pganalyze/pg_query_go/v6 v6.2.2 // indirect
+	github.com/go-logfmt/logfmt v0.6.0 // indirect
+	github.com/godror/knownpb v0.3.0 // indirect
 	github.com/pingcap/errors v0.11.5-0.20250523034308-74f78ae071ee // indirect
 	github.com/pingcap/failpoint v0.0.0-20240528011301-b51a646c7c86 // indirect
 	github.com/pingcap/log v1.1.0 // indirect
@@ -21,8 +26,8 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
+	golang.org/x/exp v0.0.0-20250506013437-ce4c2cf36ca6 // indirect
 	golang.org/x/sys v0.46.0 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 

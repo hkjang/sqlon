@@ -1,25 +1,26 @@
-# DB Query Connector (PostgreSQL / MySQL / MariaDB)
+# DB Query Connector (PostgreSQL / MySQL / MariaDB / Oracle)
 
 자연어→SQL 생성 결과를 **실제 대상 DB에 read-only로 실행**하는 커넥터입니다.
-`database/sql` 기반이며 드라이버는 모두 순수 Go입니다:
+`database/sql` 기반입니다. 표준판의 세 엔진은 순수 Go이며 Oracle 배포판은
+godror, CGO와 Oracle Instant Client를 사용합니다:
 
 | 대상 DB | `type` | 드라이버 | 비고 |
 | --- | --- | --- | --- |
 | PostgreSQL | `postgres` (기본) | `github.com/jackc/pgx/v5` (`pgx`) | 세션 `default_transaction_read_only=on` 강제 |
 | MySQL 8.x | `mysql` | `github.com/go-sql-driver/mysql` | 세션 `transaction_read_only=1` 강제 |
 | MariaDB 10.x/11.x | `mariadb` | `github.com/go-sql-driver/mysql` | 세션 `tx_read_only=1` 강제 |
+| Oracle | `oracle` | `github.com/godror/godror` | 별도 CGO/Instant Client 배포판, 트랜잭션 읽기 전용 정책 |
 
 ## 활성화 (빌드·런타임 요건)
 
-**없습니다.** 두 드라이버 모두 순수 Go라 CGO·클라이언트 라이브러리·빌드 태그가
-필요 없습니다. `go build ./...` 한 번이면 세 DB 모두 실행 가능하며, 단일
-`Dockerfile`(CGO_ENABLED=0)로 빌드됩니다. 과거 Oracle 시절의
-`-tags oracle`/`Dockerfile.oracle`/Instant Client 요건은 모두 제거되었습니다.
+표준판의 PostgreSQL/MySQL/MariaDB 드라이버는 순수 Go입니다. Oracle은
+`CGO_ENABLED=1 -tags oracle` 및 Instant Client가 필요한 별도 배포판입니다.
+구체적인 프로파일·라이선스 정책은 [Oracle 운영 지원](oracle.md)을 참조하세요.
 
 ```sh
-docker build -t jamypg-mcp .
-docker run -d -p 9797:9797 -v jamypg-data:/app/data/metadb \
-  -e JAMYPG_ADMIN_TOKEN='...' -e PG_PROD_PW='...' jamypg-mcp
+docker build -t sqlon/sqlon .
+docker run -d -p 9797:9797 -v sqlon-data:/app/data/sqlon \
+  -e SQLON_ADMIN_TOKEN='...' -e PG_PROD_PW='...' sqlon/sqlon
 ```
 
 ## DB 프로파일
@@ -33,6 +34,14 @@ docker run -d -p 9797:9797 -v jamypg-data:/app/data/metadb \
   "id": "pg-prod-01",
   "name": "운영 PostgreSQL",
   "type": "postgres",
+  "service_name": "결제 서비스",
+  "environment": "production",
+  "criticality": "critical",
+  "role": "primary",
+  "owner_team": "DBA 플랫폼팀",
+  "location": "seoul-region",
+  "maintenance_window": "sat 02:00-04:00 KST",
+  "tags": ["payment", "tier-1"],
   "connect_string": "db.example.com:5432/appdb",
   "username": "app_readonly",
   "password_ref": "env:PG_PROD_PW",
@@ -45,7 +54,7 @@ docker run -d -p 9797:9797 -v jamypg-data:/app/data/metadb \
 }]
 ```
 
-- **type**: `postgres`(기본) | `mysql` | `mariadb`. `driver`는 type에서
+- **type**: `postgres`(기본) | `mysql` | `mariadb` | `oracle`. `driver`는 type에서
   자동 유도(`pgx`/`mysql`)되므로 생략합니다. MariaDB는 프로토콜은 MySQL과
   같지만 read-only 세션 변수와 EXPLAIN JSON 형태가 달라 별도 type을 씁니다
 - **connect_string**: 공통 축약형 `host:port/dbname` 권장.
@@ -55,7 +64,12 @@ docker run -d -p 9797:9797 -v jamypg-data:/app/data/metadb \
   주입됩니다. PostgreSQL은 `connect_timeout=5`가 기본 추가됩니다
 - **password_ref**: `env:변수명`(권장) / `file:경로`(Secret 마운트) /
   `plain:값`(개발용, API 응답에서 `plain:****`로 마스킹). **평문 저장 금지
-  원칙(AC-012)** — 스킴 없는 값은 저장이 거부됩니다
+  원칙(AC-012)** — 스킴 없는 값은 저장이 거부되며 `production` 프로파일은
+  조회·DBA 계정 모두 `plain:`을 사용할 수 없습니다
+- **운영 컨텍스트**: `service_name`, `environment`, `criticality`, `role`,
+  `owner_team`, `location`, `maintenance_window`, `tags`는 플릿 화면의 필터와
+  위험도 산정에 사용됩니다. 자세한 응답 의미는 [플릿 운영 현황](fleet.md)을
+  참조하세요
 - **username**: SELECT 권한만 가진 전용 계정 사용 — 서버측 차단과 별개로
   DB 권한이 최종 방어선
 - **policy.plan_gate / plan_gate_risk**: 실행계획 승인 게이트.

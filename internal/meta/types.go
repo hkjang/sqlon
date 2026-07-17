@@ -73,7 +73,7 @@ type MCPKey struct {
 	UserID      string     `json:"user_id"`
 	Name        string     `json:"name"`
 	KeyHash     string     `json:"-"`
-	KeyPrefix   string     `json:"key_prefix"` // display-only, e.g. "jsk_ab12cd34"
+	KeyPrefix   string     `json:"key_prefix"` // display-only, e.g. "ssk_ab12cd34"
 	CreatedAt   time.Time  `json:"created_at"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`

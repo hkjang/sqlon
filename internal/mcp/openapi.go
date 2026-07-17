@@ -6,9 +6,9 @@ package mcp
 var openAPISpec = `{
   "openapi": "3.0.3",
   "info": {
-    "title": "JAMYPG NL2SQL MCP - Management & Query API",
+    "title": "SQLON AI Database Operations API",
     "version": "` + Version + `",
-    "description": "JAMYPG 관리·쿼리 REST API.\n\n인증 모드(meta DB 활성): 로그인 세션 쿠키, MCP 키(Authorization: Bearer jsk_... 또는 X-MCP-Key), 또는 마스터 토큰(X-Admin-Token)으로 인증합니다. admin 역할이 전체 관리 권한을 가지며, 일반 사용자는 본인 소유·grant·shared 프로파일과 본인 키만 다룹니다.\n단독 모드(meta DB 미설정): 로그인이 없고 -admin-token(또는 JAMYPG_ADMIN_TOKEN)으로 변경 API를 보호합니다.\n\n- 데이터셋 변경은 자동 백업 후 적용되고 카탈로그를 재기동 없이 핫스왑하며, 실패 시 자동 롤백됩니다.\n- 웹 콘솔: /admin (데이터셋), /admin/db (DB 연결·쿼리), /admin/dba (DBA 코파일럿), /admin/dba-console (DBA 관리 콘솔, dba/admin 전용), /admin/users (사용자), /admin/keys (MCP 키), /auth/login (로그인)"
+    "description": "SQLON 관리·운영 REST API.\n\n인증 모드(meta DB 활성): 로그인 세션 쿠키, MCP 키(Authorization: Bearer ssk_... 또는 X-MCP-Key), 또는 마스터 토큰(X-Admin-Token)으로 인증합니다. admin 역할이 전체 관리 권한을 가지며, 일반 사용자는 본인 소유·grant·shared 프로파일과 본인 키만 다룹니다.\n단독 모드(meta DB 미설정): 로그인이 없고 -admin-token(또는 SQLON_ADMIN_TOKEN)으로 변경 API를 보호합니다.\n\n- 데이터셋 변경은 자동 백업 후 적용되고 카탈로그를 재기동 없이 핫스왑하며, 실패 시 자동 롤백됩니다.\n- 웹 콘솔: / (플릿 운영 현황), /admin (데이터셋), /admin/db (DB 연결·SQL Lab), /admin/users (사용자), /admin/keys (MCP 키), /auth/login (로그인)"
   },
   "servers": [{ "url": "/" }],
   "tags": [
@@ -19,15 +19,16 @@ var openAPISpec = `{
     { "name": "settings", "description": "런타임 설정(마스터 토큰·허용 Origin·Keycloak SSO)을 메타 DB에 저장·즉시 적용 — admin 전용" },
     { "name": "datasets", "description": "데이터셋 조회/교체/제거/복원" },
     { "name": "catalog", "description": "카탈로그 상태와 리로드" },
-    { "name": "db-profiles", "description": "DB 접속 프로파일(postgres/mysql/mariadb) CRUD와 접속 테스트 (/admin/db 화면과 동일 기능)" },
-    { "name": "query", "description": "Read-Only 쿼리 실행(postgres/mysql/mariadb): 검증/실행/미리보기/실행계획/메타데이터/이력/취소" },
+    { "name": "fleet", "description": "권한 범위의 DB 플릿 인벤토리와 근거 기반 연결·구성 위험 상태" },
+    { "name": "db-profiles", "description": "DB 접속 프로파일(PostgreSQL/MySQL/MariaDB/Oracle) CRUD와 접속 테스트 (/admin/db 화면과 동일 기능)" },
+    { "name": "query", "description": "Read-Only 쿼리 실행: 검증/실행/미리보기/실행계획/메타데이터/이력/취소" },
     { "name": "activity", "description": "MCP 호출 이력·통계 (개인화): 본인 기본, admin은 all/user 필터" }
   ],
   "components": {
     "securitySchemes": {
       "AdminToken": { "type": "apiKey", "in": "header", "name": "X-Admin-Token", "description": "마스터 토큰(-admin-token). 인증 모드에서는 합성 admin으로 동작." },
-      "SessionCookie": { "type": "apiKey", "in": "cookie", "name": "jamypg_session", "description": "로그인 세션 쿠키 (POST /auth/login으로 발급)." },
-      "MCPKey": { "type": "http", "scheme": "bearer", "bearerFormat": "jsk", "description": "MCP 키(jsk_...). Authorization: Bearer 또는 X-MCP-Key 헤더." }
+      "SessionCookie": { "type": "apiKey", "in": "cookie", "name": "sqlon_session", "description": "로그인 세션 쿠키 (POST /auth/login으로 발급)." },
+      "MCPKey": { "type": "http", "scheme": "bearer", "bearerFormat": "ssk", "description": "MCP 키(ssk_...). Authorization: Bearer 또는 X-MCP-Key 헤더." }
     },
     "schemas": {
       "DatasetStatus": {
@@ -66,7 +67,7 @@ var openAPISpec = `{
     "/auth/login": {
       "post": {
         "tags": ["auth"], "summary": "로그인 (세션 쿠키 발급)",
-        "description": "로컬 계정 아이디/비밀번호로 로그인. 성공 시 HttpOnly 세션 쿠키(jamypg_session)를 설정합니다. meta DB 미설정 시 503.",
+        "description": "로컬 계정 아이디/비밀번호로 로그인. 성공 시 HttpOnly 세션 쿠키(sqlon_session)를 설정합니다. meta DB 미설정 시 503.",
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["username","password"], "properties": { "username": {"type":"string"}, "password": {"type":"string"} } } } } },
         "responses": { "200": {"description":"ok + user"}, "401": {"description":"자격 증명 오류"}, "503": {"description":"인증 비활성(단독 모드)"} }
       }
@@ -195,6 +196,83 @@ var openAPISpec = `{
         "tags": ["catalog"], "summary": "카탈로그 헬스",
         "description": "컴파일 상태, 오류/경고 목록, 커버리지 갭, PII 컬럼, 사전 크기.",
         "responses": { "200": { "description": "health report" } }
+      }
+    },
+    "/api/fleet/instances": {
+      "get": {
+        "tags": ["fleet"], "summary": "DB 플릿 인벤토리",
+        "description": "대상 DB에 연결하지 않고 현재 사용자가 접근 가능한 인스턴스의 환경, 업무서비스, 중요도, 엔진, 역할, 담당팀과 Capability를 반환합니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{status,data,summary,warnings,limitations,collected_at,trace_id}"}, "401": {"description":"인증 필요"} }
+      }
+    },
+    "/api/fleet/health": {
+      "get": {
+        "tags": ["fleet"], "summary": "DB 플릿 연결·구성 위험 상태",
+        "description": "접근 가능한 프로파일을 독립적으로 병렬 점검합니다. 부분 실패도 HTTP 200의 degraded 응답으로 반환하며 각 인스턴스에 수집 시각, 위험 점수, 근거와 구조화된 실패 원인을 포함합니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"fleet health envelope"}, "401": {"description":"인증 필요"} }
+      }
+    },
+    "/api/observability/sessions": {
+      "get": {
+        "tags": ["fleet"], "summary": "DB 세션 스냅숏",
+        "description": "고정된 엔진 시스템 뷰를 읽기 전용으로 조회합니다. SQL 실행시간과 트랜잭션 지속시간, 대기 이벤트와 보호 세션을 구분하며 SQL 본문·bind 값은 반환하지 않습니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"evidence-bearing session snapshot"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
+      }
+    },
+    "/api/observability/locks": {
+      "get": {
+        "tags": ["fleet"], "summary": "DB 블로킹 트리",
+        "description": "blocker→blocked 관계, 루트 블로커와 전체 영향 세션 수를 반환하는 관찰 전용 API입니다. 세션을 취소하거나 종료하지 않습니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"evidence-bearing lock tree"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
+      }
+    },
+    "/api/observability/workload": {
+      "get": {
+        "tags": ["fleet"], "summary": "저장된 DB 워크로드 요약",
+        "description": "누적 시스템 카운터, 이전 스냅숏 기반 QPS/TPS와 대기 이벤트를 반환합니다. fresh=true일 때만 대상 DB를 새로 조회하고 저장합니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}},{"name":"fresh","in":"query","schema":{"type":"boolean","default":false}}],
+        "responses": {"200":{"description":"workload evidence envelope"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
+      }
+    },
+    "/api/observability/top-sql": {
+      "get": {
+        "tags": ["fleet"], "summary": "원문 없는 Top SQL 통계",
+        "description": "fingerprint/SQL ID별 calls, elapsed, CPU, reads, rows와 plan hash를 반환합니다. SQL 원문과 bind 값은 저장하지 않습니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}},{"name":"fresh","in":"query","schema":{"type":"boolean","default":false}}],
+        "responses": {"200":{"description":"top SQL evidence envelope"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
+      }
+    },
+    "/api/observability/capacity": {
+      "get": {
+        "tags": ["fleet"], "summary": "DB·객체·tablespace 용량",
+        "description": "사용량, 사용률과 이전 스냅숏 대비 일간 증가량을 반환합니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}},{"name":"fresh","in":"query","schema":{"type":"boolean","default":false}}],
+        "responses": {"200":{"description":"capacity evidence envelope"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
+      }
+    },
+    "/api/observability/history": {
+      "get": {
+        "tags": ["fleet"], "summary": "운영 스냅숏 시계열",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}},{"name":"hours","in":"query","schema":{"type":"integer","default":24,"maximum":2160}},{"name":"limit","in":"query","schema":{"type":"integer","default":1000,"maximum":10000}}],
+        "responses": {"200":{"description":"stored operational snapshots"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
+      }
+    },
+    "/api/collector/run": {
+      "post": {
+        "tags": ["fleet"], "summary": "권한 범위 DB 즉시 수집",
+        "description": "각 프로파일을 격리해 고정 읽기 전용 Provider 쿼리를 실행하고 스냅숏을 저장합니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": {"200":{"description":"partial-failure-safe batch result"},"401":{"description":"인증 필요"}}
       }
     },
     "/api/datasets": {

@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -74,9 +73,6 @@ func adminSignature(p Profile) string {
 
 // adminDB returns (building if needed) the privileged pool for a profile.
 func (m *Manager) adminDB(p Profile) (*sql.DB, error) {
-	if !driverAvailable {
-		return nil, errors.New(driverNote)
-	}
 	if !p.adminEnabled() {
 		return nil, fmt.Errorf("profile %q has no DBA credentials configured (set dba.enabled + dba.username/password_ref)", p.ID)
 	}
@@ -169,6 +165,9 @@ type AdminResult struct {
 func (m *Manager) AdminExec(ctx context.Context, profileID, statement string, timeoutSeconds int) (*AdminResult, error) {
 	p, err := m.store.GetProfileByID(ctx, profileID)
 	if err != nil {
+		return nil, err
+	}
+	if err := EnforceOracleLicense(p, statement); err != nil {
 		return nil, err
 	}
 	d, err := DialectFor(p.Type)
