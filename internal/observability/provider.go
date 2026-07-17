@@ -46,6 +46,13 @@ type SecurityProvider interface {
 	Security(context.Context, SystemQueryer, dbconn.Profile) (SecurityData, error)
 }
 
+// ConfigProvider reads live server parameters as name→value (plus a
+// pending-restart set where the engine reports it) so the service can compare
+// them against the operator-declared baseline (configuration drift).
+type ConfigProvider interface {
+	Config(context.Context, SystemQueryer, dbconn.Profile) (values map[string]string, pendingRestart map[string]bool, err error)
+}
+
 // SnapshotRowLimit is a hard protection against unbounded operational views.
 // Reaching it is reported as a limitation instead of silently looking whole.
 const SnapshotRowLimit = 10_000

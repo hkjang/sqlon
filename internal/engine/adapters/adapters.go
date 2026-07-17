@@ -68,3 +68,14 @@ func SecurityProviders() map[string]observability.SecurityProvider {
 		"oracle":   oracle.Security{},
 	}
 }
+
+// ConfigProviders returns the live-parameter (configuration drift)
+// implementation for every supported engine.
+func ConfigProviders() map[string]observability.ConfigProvider {
+	return map[string]observability.ConfigProvider{
+		"postgres": postgres.Config{},
+		"mysql":    mysql.Config{},
+		"mariadb":  mariadb.Config{},
+		"oracle":   oracle.Config{},
+	}
+}

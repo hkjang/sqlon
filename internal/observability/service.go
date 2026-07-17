@@ -19,6 +19,7 @@ type Service struct {
 	ReplicationProviders map[string]ReplicationProvider
 	BackupProviders      map[string]BackupProvider
 	SecurityProviders    map[string]SecurityProvider
+	ConfigProviders      map[string]ConfigProvider
 	Engines              *engine.Registry
 	Now                  func() time.Time
 }
@@ -27,7 +28,7 @@ type Service struct {
 // adapters.ObservabilityProviders()/ReplicationProviders()/BackupProviders()
 // — injected so this package never depends on concrete engine
 // implementations.
-func New(queryer SystemQueryer, providers map[string]Provider, replication map[string]ReplicationProvider, backup map[string]BackupProvider, security map[string]SecurityProvider) *Service {
+func New(queryer SystemQueryer, providers map[string]Provider, replication map[string]ReplicationProvider, backup map[string]BackupProvider, security map[string]SecurityProvider, config map[string]ConfigProvider) *Service {
 	replicationNormalized := make(map[string]ReplicationProvider, len(replication))
 	for name, provider := range replication {
 		replicationNormalized[strings.ToLower(strings.TrimSpace(name))] = provider
@@ -40,7 +41,11 @@ func New(queryer SystemQueryer, providers map[string]Provider, replication map[s
 	for name, provider := range security {
 		securityNormalized[strings.ToLower(strings.TrimSpace(name))] = provider
 	}
-	return &Service{Queryer: queryer, Providers: NewRegistry(providers), ReplicationProviders: replicationNormalized, BackupProviders: backupNormalized, SecurityProviders: securityNormalized, Engines: engine.NewDefaultRegistry(), Now: time.Now}
+	configNormalized := make(map[string]ConfigProvider, len(config))
+	for name, provider := range config {
+		configNormalized[strings.ToLower(strings.TrimSpace(name))] = provider
+	}
+	return &Service{Queryer: queryer, Providers: NewRegistry(providers), ReplicationProviders: replicationNormalized, BackupProviders: backupNormalized, SecurityProviders: securityNormalized, ConfigProviders: configNormalized, Engines: engine.NewDefaultRegistry(), Now: time.Now}
 }
 
 func (s *Service) Sessions(ctx context.Context, raw dbconn.Profile) Response[SessionData] {
@@ -292,6 +297,99 @@ func (s *Service) Security(ctx context.Context, raw dbconn.Profile) Response[Sec
 		response.Status = "partial"
 	}
 	return response
+}
+
+// ConfigDrift compares live server parameters against the profile's declared
+// baseline. Only baseline keys are checked; an empty baseline yields an
+// explicit "not configured" response rather than a false all-clear.
+func (s *Service) ConfigDrift(ctx context.Context, raw dbconn.Profile) Response[ConfigDriftData] {
+	p := dbconn.ApplyDefaults(raw)
+	now := s.now()
+	data := ConfigDriftData{ProfileID: p.ID, Engine: p.Type, Items: []ConfigDriftItem{}}
+	response := Response[ConfigDriftData]{Status: "ok", Data: data, Evidence: []Evidence{}, Warnings: []string{}, Limitations: []string{}, CollectedAt: now, TraceID: observationTraceID()}
+	if len(p.ConfigBaseline) == 0 {
+		response.Status = "not_configured"
+		response.Limitations = append(response.Limitations, "이 프로파일에 config_baseline이 선언되지 않아 드리프트를 검사하지 않습니다.")
+		response.Evidence = append(response.Evidence, Evidence{Code: "CONFIG_BASELINE_ABSENT", Severity: "info", Summary: "설정 베이스라인 미선언", CollectedAt: now})
+		return response
+	}
+	provider, ok := s.ConfigProviders[strings.ToLower(strings.TrimSpace(p.Type))]
+	if !ok {
+		response.Status = "unsupported"
+		reason := "config Provider가 이 배포판에 등록되지 않았습니다."
+		response.Limitations = append(response.Limitations, reason)
+		response.Evidence = append(response.Evidence, Evidence{Code: "CONFIG_UNSUPPORTED", Severity: "warning", Summary: reason, CollectedAt: now})
+		return response
+	}
+	values, pending, err := provider.Config(ctx, s.Queryer, p)
+	response.CollectedAt = s.now()
+	if err != nil {
+		status, code, hint := classifyCollectionError(err)
+		response.Status = status
+		response.Warnings = append(response.Warnings, hint)
+		response.Evidence = append(response.Evidence, Evidence{Code: code, Severity: "warning", Summary: hint, CollectedAt: response.CollectedAt})
+		return response
+	}
+	// Deterministic order for stable output and testing.
+	keys := make([]string, 0, len(p.ConfigBaseline))
+	for k := range p.ConfigBaseline {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		want := strings.TrimSpace(p.ConfigBaseline[key])
+		current, present := lookupFold(values, key)
+		status := "match"
+		switch {
+		case !present:
+			status = "unknown"
+		case !configValueEqual(current, want):
+			status = "drift"
+			data.Drifted++
+		}
+		data.Checked++
+		data.Items = append(data.Items, ConfigDriftItem{Parameter: key, Baseline: want, Current: current, Status: status, PendingRestart: pending[strings.ToLower(key)], CollectedAt: response.CollectedAt})
+	}
+	response.Data = data
+	attrs := map[string]any{"checked": data.Checked, "drifted": data.Drifted}
+	if data.Drifted > 0 {
+		response.Status = "warning"
+		response.Evidence = append(response.Evidence, Evidence{Code: "CONFIG_DRIFT_DETECTED", Severity: "warning", Summary: "선언된 베이스라인과 다른 서버 파라미터가 있습니다", Attributes: attrs, CollectedAt: response.CollectedAt})
+	} else {
+		response.Evidence = append(response.Evidence, Evidence{Code: "CONFIG_IN_SYNC", Severity: "info", Summary: "서버 파라미터가 베이스라인과 일치합니다", Attributes: attrs, CollectedAt: response.CollectedAt})
+	}
+	return response
+}
+
+// configValueEqual compares parameter values tolerantly: case-insensitive and
+// with common boolean synonyms normalized (on/off ↔ true/false ↔ 1/0).
+func configValueEqual(a, b string) bool {
+	na, nb := normalizeConfigValue(a), normalizeConfigValue(b)
+	return na == nb
+}
+
+func normalizeConfigValue(v string) string {
+	s := strings.ToLower(strings.TrimSpace(v))
+	switch s {
+	case "on", "true", "yes", "1":
+		return "true"
+	case "off", "false", "no", "0":
+		return "false"
+	}
+	return s
+}
+
+func lookupFold(values map[string]string, key string) (string, bool) {
+	if v, ok := values[key]; ok {
+		return v, true
+	}
+	lk := strings.ToLower(strings.TrimSpace(key))
+	for k, v := range values {
+		if strings.ToLower(strings.TrimSpace(k)) == lk {
+			return v, true
+		}
+	}
+	return "", false
 }
 
 func (s *Service) securityProvider(engineName string) (SecurityProvider, string) {

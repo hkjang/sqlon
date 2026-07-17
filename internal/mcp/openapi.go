@@ -260,6 +260,15 @@ var openAPISpec = `{
         "responses": {"200":{"description":"evidence-bearing security posture"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
       }
     },
+    "/api/observability/config-drift": {
+      "get": {
+        "tags": ["fleet"], "summary": "DB 설정 드리프트 감지",
+        "description": "프로파일의 config_baseline(운영자 선언 기대값)과 라이브 서버 파라미터를 대조합니다. PostgreSQL pg_settings(pending_restart 포함), MySQL/MariaDB performance_schema.global_variables, Oracle V$PARAMETER(base 뷰). 선언된 키만 검사하며 on/off↔true/false↔1/0 동치. 베이스라인 미선언 시 not_configured.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"config drift report"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
+      }
+    },
     "/api/observability/workload": {
       "get": {
         "tags": ["fleet"], "summary": "저장된 DB 워크로드 요약",

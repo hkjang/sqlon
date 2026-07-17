@@ -36,6 +36,10 @@ main{max-width:1400px;margin:auto;padding:20px 26px 60px}
     <div class="card"><small>전체 발견</small><b id="kTotal">-</b></div>
   </section>
   <section class="panel">
+    <h2>설정 드리프트 <span class="muted">— 프로파일 config_baseline 대비 라이브 파라미터. on/off↔true/false 동치</span></h2>
+    <div class="scroll"><table><thead><tr><th>파라미터</th><th>베이스라인</th><th>현재값</th><th>상태</th></tr></thead><tbody id="driftRows"><tr><td colspan="4" class="empty">수집 전</td></tr></tbody></table></div>
+  </section>
+  <section class="panel">
     <h2>권한 과다 · 위험 항목 <span class="grow"></span>
       <button class="filterbtn active" data-sev="">전체</button>
       <button class="filterbtn" data-sev="critical">치명적</button>
@@ -68,9 +72,18 @@ function render(body){
   renderRows();
   return [...(body.warnings||[]),...(body.limitations||[])];
 }
+const DSTAT={drift:['드리프트','sev-critical'],match:['일치','sev-info'],unknown:['확인 불가','sev-warning']};
+function renderDrift(body){
+  const d=body.data||{},items=d.items||[];
+  if(body.status==='not_configured'){$('#driftRows').innerHTML='<tr><td colspan="4" class="empty">이 프로파일에 config_baseline이 선언되지 않았습니다. DB 프로파일 설정에 기대 파라미터를 선언하면 드리프트를 감지합니다.</td></tr>';return [];}
+  items.sort((a,b)=>({drift:0,unknown:1,match:2}[a.status]??3)-({drift:0,unknown:1,match:2}[b.status]??3));
+  $('#driftRows').innerHTML=items.length?items.map(it=>{const s=DSTAT[it.status]||[it.status,'sev-info'];return '<tr><td><b>'+esc(it.parameter)+'</b>'+(it.pending_restart?' <span class="badge sev-warning">재시작 필요</span>':'')+'</td><td>'+esc(it.baseline)+'</td><td>'+esc(it.current||'-')+'</td><td><span class="badge '+s[1]+'">'+esc(s[0])+'</span></td></tr>';}).join(''):'<tr><td colspan="4" class="empty">정상 수집되었으며 검사할 항목이 없습니다.</td></tr>';
+  return [...(body.warnings||[]),...(body.limitations||[])];
+}
 async function load(){const id=$('#profile').value;if(!id)return;$('#fresh').textContent='수집 중…';
-  try{const body=await get('/api/observability/security?profile='+encodeURIComponent(id));const profile=profiles.find(p=>p.id===id)||{};context(profile,body.collected_at);$('#fresh').textContent='최신 수집 '+when(body.collected_at)+' · '+esc(body.trace_id||'');
-    const msgs=render(body);if(body.status==='unsupported'||body.status==='permission_denied')showMessages(msgs.length?msgs:['이 프로파일에서는 권한 진단을 수집할 수 없습니다.'],body.status==='permission_denied');else showMessages(msgs,false);
+  try{const [body,drift]=await Promise.all([get('/api/observability/security?profile='+encodeURIComponent(id)),get('/api/observability/config-drift?profile='+encodeURIComponent(id))]);
+    const profile=profiles.find(p=>p.id===id)||{};context(profile,body.collected_at);$('#fresh').textContent='최신 수집 '+when(body.collected_at)+' · '+esc(body.trace_id||'');
+    const msgs=[...render(body),...renderDrift(drift)];if(body.status==='unsupported'||body.status==='permission_denied')showMessages(msgs.length?msgs:['이 프로파일에서는 권한 진단을 수집할 수 없습니다.'],body.status==='permission_denied');else showMessages(msgs,false);
   }catch(e){showMessages(['수집 실패: '+e.message+' — 데이터 없음과 수집 실패는 서로 다른 상태입니다.'],true);$('#fresh').textContent='수집 실패'}}
 document.querySelectorAll('.filterbtn').forEach(b=>b.onclick=()=>{sevFilter=b.dataset.sev;document.querySelectorAll('.filterbtn').forEach(x=>x.classList.toggle('active',x===b));renderRows()});
 $('#refresh').onclick=load;JASQL.mount({page:'security',onReady:async()=>{try{await loadProfiles();await load()}catch(e){showMessages(['프로파일 조회 실패: '+e.message],true)}}});

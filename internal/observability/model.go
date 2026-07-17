@@ -156,6 +156,27 @@ type SecurityData struct {
 	Limitations []string `json:"-"`
 }
 
+// ConfigDriftItem is one parameter compared against its declared baseline.
+// Status: drift (differs), match (equal), or unknown (not readable live).
+type ConfigDriftItem struct {
+	Parameter      string    `json:"parameter"`
+	Baseline       string    `json:"baseline"`
+	Current        string    `json:"current"`
+	Status         string    `json:"status"`
+	PendingRestart bool      `json:"pending_restart,omitempty"`
+	CollectedAt    time.Time `json:"collected_at"`
+}
+
+type ConfigDriftData struct {
+	ProfileID   string            `json:"profile_id"`
+	Engine      string            `json:"engine"`
+	Checked     int               `json:"checked"`
+	Drifted     int               `json:"drifted"`
+	Items       []ConfigDriftItem `json:"items"`
+	Warnings    []string          `json:"-"`
+	Limitations []string          `json:"-"`
+}
+
 type Response[T any] struct {
 	Status      string     `json:"status"`
 	Data        T          `json:"data"`

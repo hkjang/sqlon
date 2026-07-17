@@ -229,6 +229,50 @@ func TestHealthProfilesEscalatesBackupFailure(t *testing.T) {
 	}
 }
 
+type fakeConfigObserver struct {
+	responses map[string]observability.Response[observability.ConfigDriftData]
+}
+
+func (f fakeConfigObserver) ConfigDrift(_ context.Context, p dbconn.Profile) observability.Response[observability.ConfigDriftData] {
+	return f.responses[p.ID]
+}
+
+func TestHealthProfilesEscalatesConfigDrift(t *testing.T) {
+	now := time.Date(2026, 7, 17, 4, 0, 0, 0, time.UTC)
+	p := &fakeProber{
+		drivers: map[string]bool{"postgres": true},
+		results: map[string]dbconn.PingResult{"prod": {ProfileID: "prod", OK: true, ElapsedMs: 5}},
+	}
+	s := fixedService(p)
+	s.Config = fakeConfigObserver{responses: map[string]observability.Response[observability.ConfigDriftData]{
+		"prod": {Status: "warning", Data: observability.ConfigDriftData{Checked: 3, Drifted: 1}, CollectedAt: now},
+	}}
+	// A declared baseline is required for the fleet to run the check.
+	h := s.HealthProfiles(context.Background(), []dbconn.Profile{{ID: "prod", Type: "postgres", ConfigBaseline: map[string]string{"max_connections": "100"}}})
+	got := h.Data[0]
+	if got.Status != StatusWarning || got.RiskScore != 45 {
+		t.Fatalf("config drift did not escalate fleet risk: %+v", got)
+	}
+	found := false
+	for _, e := range got.Evidence {
+		if e.Code == "CONFIG_DRIFT_DETECTED" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("CONFIG_DRIFT_DETECTED evidence missing: %+v", got.Evidence)
+	}
+	// Without a baseline the check is intentionally silent.
+	s2 := fixedService(p)
+	s2.Config = s.Config
+	h2 := s2.HealthProfiles(context.Background(), []dbconn.Profile{{ID: "prod", Type: "postgres"}})
+	for _, e := range h2.Data[0].Evidence {
+		if e.Code == "CONFIG_DRIFT_DETECTED" || e.Code == "CONFIG_IN_SYNC" {
+			t.Fatalf("no baseline must skip drift evidence: %+v", h2.Data[0].Evidence)
+		}
+	}
+}
+
 func TestHealthProfilesReplicationCollectionFailureIsVisibleNotFatal(t *testing.T) {
 	p := &fakeProber{
 		drivers: map[string]bool{"postgres": true},

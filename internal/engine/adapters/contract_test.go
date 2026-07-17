@@ -89,6 +89,7 @@ func TestEveryDeclaredEngineHasProvidersForItsCapabilities(t *testing.T) {
 	replication := adapters.ReplicationProviders()
 	backup := adapters.BackupProviders()
 	security := adapters.SecurityProviders()
+	config := adapters.ConfigProviders()
 	for _, name := range engines.Names() {
 		adapter, _ := engines.Get(name)
 		if adapter.Capabilities.Workload {
@@ -115,6 +116,15 @@ func TestEveryDeclaredEngineHasProvidersForItsCapabilities(t *testing.T) {
 			if _, ok := security[name]; !ok {
 				t.Errorf("engine %s declares UserManagement but has no security provider", name)
 			}
+		}
+		// Every supported engine exposes live parameters for drift detection.
+		if _, ok := config[name]; !ok {
+			t.Errorf("engine %s has no config provider", name)
+		}
+	}
+	for name := range config {
+		if _, ok := engines.Get(name); !ok {
+			t.Errorf("config provider %s has no capability declaration", name)
 		}
 	}
 	for name := range backup {
@@ -438,6 +448,35 @@ func TestAllSecurityProvidersSatisfyPostureContract(t *testing.T) {
 			}
 			if sawCritical != expectCritical[engineName] {
 				t.Fatalf("severity classification: got critical=%v want %v (%+v)", sawCritical, expectCritical[engineName], data.Findings)
+			}
+			for _, query := range q.queries {
+				assertReadOnlyBaseLicense(t, query)
+			}
+		})
+	}
+}
+
+func TestAllConfigProvidersReadLiveParametersReadOnly(t *testing.T) {
+	answers := map[string]func(string) ([]map[string]any, error){
+		"postgres": func(q string) ([]map[string]any, error) {
+			return []map[string]any{{"name": "max_connections", "setting": "100", "pending_restart": "false"}}, nil
+		},
+		"mysql": func(q string) ([]map[string]any, error) {
+			return []map[string]any{{"name": "max_connections", "value": "151"}}, nil
+		},
+		"mariadb": func(q string) ([]map[string]any, error) {
+			return []map[string]any{{"name": "max_connections", "value": "151"}}, nil
+		},
+		"oracle": func(q string) ([]map[string]any, error) {
+			return []map[string]any{{"name": "processes", "value": "300"}}, nil
+		},
+	}
+	for engineName, provider := range adapters.ConfigProviders() {
+		t.Run(engineName, func(t *testing.T) {
+			q := &funcQueryer{fn: answers[engineName]}
+			values, _, err := provider.Config(context.Background(), q, dbconn.Profile{ID: "p", Type: engineName})
+			if err != nil || len(values) == 0 {
+				t.Fatalf("config contract: values=%v err=%v", values, err)
 			}
 			for _, query := range q.queries {
 				assertReadOnlyBaseLicense(t, query)

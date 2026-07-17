@@ -109,6 +109,7 @@ type Service struct {
 	Operations  operationalHistory
 	Replication replicationObserver
 	Backup      backupObserver
+	Config      configObserver
 }
 
 type operationalHistory interface {
@@ -126,6 +127,10 @@ type backupObserver interface {
 	Backup(context.Context, dbconn.Profile) observability.Response[observability.BackupData]
 }
 
+type configObserver interface {
+	ConfigDrift(context.Context, dbconn.Profile) observability.Response[observability.ConfigDriftData]
+}
+
 func New(db *dbconn.Manager) *Service {
 	return &Service{Source: db, Prober: db, Engines: engine.NewDefaultRegistry(), Now: time.Now, Concurrency: 8}
 }
@@ -136,12 +141,14 @@ func New(db *dbconn.Manager) *Service {
 func NewWithOperations(db *dbconn.Manager, operations operationalHistory, observers interface {
 	replicationObserver
 	backupObserver
+	configObserver
 }) *Service {
 	s := New(db)
 	s.Operations = operations
 	if observers != nil {
 		s.Replication = observers
 		s.Backup = observers
+		s.Config = observers
 	}
 	return s
 }
@@ -284,7 +291,30 @@ func (s *Service) probe(ctx context.Context, p dbconn.Profile) Instance {
 	s.applyOperationalEvidence(ctx, p, &i)
 	s.applyReplicationEvidence(ctx, p, adapter, &i)
 	s.applyBackupEvidence(ctx, p, adapter, &i)
+	s.applyConfigDriftEvidence(ctx, p, &i)
 	return i
+}
+
+// applyConfigDriftEvidence escalates risk when live parameters diverge from
+// the profile's declared baseline. Runs only when a baseline is declared and
+// a live observer is wired; a bare "not_configured" is silent (no baseline =
+// drift detection intentionally off).
+func (s *Service) applyConfigDriftEvidence(ctx context.Context, p dbconn.Profile, instance *Instance) {
+	if s.Config == nil || len(p.ConfigBaseline) == 0 {
+		return
+	}
+	res := s.Config.ConfigDrift(ctx, p)
+	observed := map[string]any{"checked": res.Data.Checked, "drifted": res.Data.Drifted}
+	switch res.Status {
+	case "permission_denied", "error":
+		promoteRisk(instance, StatusWarning, 35, "medium")
+		instance.Evidence = append(instance.Evidence, Evidence{Code: "CONFIG_DRIFT_UNAVAILABLE", Severity: "medium", Summary: "설정 드리프트를 확인할 수 없습니다", Observed: observed, CollectedAt: res.CollectedAt})
+	case "warning":
+		promoteRisk(instance, StatusWarning, 45, "high")
+		instance.Evidence = append(instance.Evidence, Evidence{Code: "CONFIG_DRIFT_DETECTED", Severity: "high", Summary: "서버 파라미터가 선언된 베이스라인과 다릅니다", Observed: observed, CollectedAt: res.CollectedAt})
+	case "ok":
+		instance.Evidence = append(instance.Evidence, Evidence{Code: "CONFIG_IN_SYNC", Severity: "info", Summary: "서버 파라미터가 베이스라인과 일치합니다", Observed: observed, CollectedAt: res.CollectedAt})
+	}
 }
 
 // applyBackupEvidence escalates risk when a backup/archiving component

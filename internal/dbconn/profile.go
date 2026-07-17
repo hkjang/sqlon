@@ -44,6 +44,11 @@ type Profile struct {
 	// engines and keeps Oracle-specific conditionals out of service code.
 	Oracle        *OracleConfig `json:"oracle,omitempty"`
 	LicensePolicy LicensePolicy `json:"license_policy,omitempty"`
+	// ConfigBaseline is the operator-declared expected value for selected
+	// server parameters (bare parameter name → expected value). Configuration
+	// drift detection compares the live values against it; only declared keys
+	// are checked, so an empty baseline means drift detection is off.
+	ConfigBaseline map[string]string `json:"config_baseline,omitempty"`
 	// DBA is the opt-in privileged-credentials block enabling DBA operations
 	// (user/role/database/settings/session management) on this profile via a
 	// separate write-capable pool. Nil/disabled → DBA tools refuse the profile.

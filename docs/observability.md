@@ -107,6 +107,26 @@ limitation으로 표시됩니다(권한 부족은 `permission_denied`로 구분)
 필터와 함께 조회할 수 있습니다. 발견 항목의 조치는 변경 관리의 승인
 흐름으로 수행합니다.
 
+## 설정 드리프트
+
+`compare_configuration`(MCP) / `GET /api/observability/config-drift`(REST)는
+프로파일의 `config_baseline`(운영자 선언 기대값)과 라이브 서버 파라미터를
+대조해 비인가·미기록 설정 변경을 감지합니다(GitOps 스타일 일관성).
+
+| 엔진 | 원천 | 비고 |
+| --- | --- | --- |
+| PostgreSQL | `pg_settings`(setting, pending_restart) | 재시작 필요 파라미터 표시 |
+| MySQL / MariaDB | `performance_schema.global_variables` | 재시작 플래그 없음 |
+| Oracle | `V$PARAMETER`(base 뷰) | 재시작 플래그 없음 |
+
+- **선언된 키만** 검사합니다 — 베이스라인이 비면 `not_configured`로 명시
+  하며 전건 정상으로 위장하지 않습니다.
+- 값 비교는 `on/off`↔`true/false`↔`1/0`을 동치로 보고 대소문자·공백을
+  무시합니다. 라이브에서 읽히지 않는 키는 `unknown`으로 구분합니다.
+- 드리프트는 플릿 위험도에 `CONFIG_DRIFT_DETECTED`(high) 근거로 반영되어
+  운영 현황 대시보드에서 즉시 경고로 보입니다. 원복은 변경 관리 승인
+  흐름으로 수행합니다.
+
 ## 운영 저장소와 보존
 
 단독 모드는 `<data>/operations/snapshots/YYYYMMDD.jsonl`에 append-only JSONL로
@@ -142,6 +162,7 @@ sqlon \
 | MCP `get_replication_status` | 복제 상태 |
 | MCP `get_backup_status` | 백업·아카이브 상태 |
 | `GET /api/observability/security?profile=...` · MCP `get_security_posture` | 사용자·권한 진단 |
+| `GET /api/observability/config-drift?profile=...` · MCP `compare_configuration` | 설정 드리프트 감지 |
 
 조회 기본값은 저장소 데이터이며 대상 DB를 암묵적으로 재조회하지 않습니다.
 `fresh=true`일 때만 새 시스템 조회를 수행하고 저장합니다. REST와 MCP 모두 같은

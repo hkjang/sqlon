@@ -24,7 +24,7 @@ func (f *fakeQueryer) SystemQuery(_ context.Context, _ string, query string, _ .
 }
 
 func newTestService(q observability.SystemQueryer) *observability.Service {
-	return observability.New(q, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders(), adapters.SecurityProviders())
+	return observability.New(q, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders(), adapters.SecurityProviders(), adapters.ConfigProviders())
 }
 
 func TestOracleSessionsUseRACSafeKeyAndProtectSystemSession(t *testing.T) {
@@ -113,7 +113,7 @@ func TestReplicationBrokenNodeEscalatesToCritical(t *testing.T) {
 }
 
 func TestReplicationUnsupportedEngineIsExplicit(t *testing.T) {
-	svc := observability.New(&fakeQueryer{}, adapters.ObservabilityProviders(), nil, nil, nil)
+	svc := observability.New(&fakeQueryer{}, adapters.ObservabilityProviders(), nil, nil, nil, nil)
 	res := svc.Replication(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
 	if res.Status != "unsupported" || len(res.Limitations) == 0 {
 		t.Fatalf("missing provider must be explicit, got %+v", res)
@@ -162,6 +162,53 @@ func TestSecurityCriticalFindingEscalatesResponse(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("SECURITY_EXCESS_PRIVILEGE evidence missing: %+v", res.Evidence)
+	}
+}
+
+func TestConfigDriftDetectsDivergenceAndBooleanEquivalence(t *testing.T) {
+	// pg_settings-shaped rows; provider returns them, service compares to baseline.
+	q := &fakeQueryer{rows: []map[string]any{
+		{"name": "max_connections", "setting": "200", "pending_restart": "true"},
+		{"name": "ssl", "setting": "on", "pending_restart": "false"},
+		{"name": "work_mem", "setting": "4096", "pending_restart": "false"},
+	}}
+	p := dbconn.Profile{ID: "pg", Type: "postgres", ConfigBaseline: map[string]string{
+		"max_connections": "100", // drift (200≠100), pending_restart
+		"ssl":             "true", // match via on↔true
+		"shared_buffers":  "1GB",  // unknown (not in live values)
+	}}
+	res := newTestService(q).ConfigDrift(context.Background(), p)
+	if res.Status != "warning" || res.Data.Drifted != 1 || res.Data.Checked != 3 {
+		t.Fatalf("unexpected drift summary: status=%s drifted=%d checked=%d", res.Status, res.Data.Drifted, res.Data.Checked)
+	}
+	byParam := map[string]observability.ConfigDriftItem{}
+	for _, it := range res.Data.Items {
+		byParam[it.Parameter] = it
+	}
+	if byParam["max_connections"].Status != "drift" || !byParam["max_connections"].PendingRestart {
+		t.Fatalf("max_connections should be drift+pending: %+v", byParam["max_connections"])
+	}
+	if byParam["ssl"].Status != "match" {
+		t.Fatalf("ssl on↔true should match: %+v", byParam["ssl"])
+	}
+	if byParam["shared_buffers"].Status != "unknown" {
+		t.Fatalf("absent live value should be unknown: %+v", byParam["shared_buffers"])
+	}
+	found := false
+	for _, e := range res.Evidence {
+		if e.Code == "CONFIG_DRIFT_DETECTED" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("CONFIG_DRIFT_DETECTED evidence missing: %+v", res.Evidence)
+	}
+}
+
+func TestConfigDriftAbsentBaselineIsNotConfigured(t *testing.T) {
+	res := newTestService(&fakeQueryer{}).ConfigDrift(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
+	if res.Status != "not_configured" || len(res.Data.Items) != 0 {
+		t.Fatalf("absent baseline must be explicit not_configured, got %+v", res)
 	}
 }
 
