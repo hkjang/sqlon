@@ -16,3 +16,7 @@ data/*/metasync/
 data/*/reviews/
 data/*/openmetadata.json
 data/*/profiles/
+# Local tooling / IDE / generated media — not part of the source repository.
+output/
+.gitframe/
+.claude/
