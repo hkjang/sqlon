@@ -260,6 +260,15 @@ var openAPISpec = `{
         "responses": {"200":{"description":"evidence-bearing security posture"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
       }
     },
+    "/api/observability/pool": {
+      "get": {
+        "tags": ["fleet"], "summary": "커넥션 풀 진단",
+        "description": "SQLON이 대상 DB로 유지하는 커넥션 풀의 sql.DB 통계(획득 대기·사용/유휴/전체·유휴/수명 초과 종료)를 설정된 max_open_conns/max_idle_conns와 대조해 오버·언더 프로비저닝을 평가하고 권고값을 제시합니다. 대상 DB에 쿼리하지 않는 SQLON 측 텔레메트리이며, 풀 미생성 시 not_collected.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"pool telemetry + advice"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
+      }
+    },
     "/api/observability/config-drift": {
       "get": {
         "tags": ["fleet"], "summary": "DB 설정 드리프트 감지",

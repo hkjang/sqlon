@@ -180,6 +180,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.registerAdmin(mux)
 	s.registerDBAPI(mux)
 	s.registerDBAConsole(mux)
+	s.registerPoolAPI(mux)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -484,6 +485,9 @@ func (s *Server) tools() []map[string]any {
 			"profile": str("조회할 DB 프로파일 ID"),
 		}, []string{"profile"})),
 		tool("compare_configuration", "설정 드리프트 감지: 프로파일의 config_baseline(운영자 선언 기대값)과 라이브 서버 파라미터를 대조합니다. PostgreSQL은 pg_settings(pending_restart 포함), MySQL/MariaDB는 performance_schema.global_variables, Oracle은 V$PARAMETER(base 뷰)를 읽습니다. 선언된 키만 검사하며 on/off↔true/false↔1/0을 동치로 봅니다. 읽기 전용이며 조치는 변경계획으로 수행합니다.", objectSchema(map[string]any{
+			"profile": str("조회할 DB 프로파일 ID"),
+		}, []string{"profile"})),
+		tool("diagnose_connection_pool", "SQLON이 대상 DB로 유지하는 커넥션 풀의 상태를 진단합니다. sql.DB 통계(획득 대기 횟수·대기시간, 사용 중/유휴/전체 커넥션, 유휴·수명 초과 종료)를 설정된 max_open_conns/max_idle_conns와 대조해 오버·언더 프로비저닝을 평가하고 권고값을 제시합니다. 커넥션 대기가 발생하면 풀 상한 도달 신호입니다. 이 진단은 대상 DB에 쿼리하지 않으며 SQLON 측 풀 텔레메트리만 사용합니다. 풀이 아직 생성되지 않았으면 not_collected를 반환합니다.", objectSchema(map[string]any{
 			"profile": str("조회할 DB 프로파일 ID"),
 		}, []string{"profile"})),
 		tool("route_db_profile", "Given a SQL statement, pick the DB profile that can actually serve it when many profiles are registered. Extracts the referenced tables via the dialect parser and scores each usable profile on live table inventory (does the DB really contain those tables), operator-declared routing.schemas, engine dialect, circuit-breaker health, and routing priority/default. Returns selected_profile with decisive=true when there is one clear winner, otherwise decisive=false with ranked candidates to choose from. run_sql_safely(profile=\"auto\") calls this internally.", objectSchema(map[string]any{
@@ -978,30 +982,31 @@ var internalDBAExecutors = map[string]bool{
 // open-world annotation, it ensures standalone HTTP applies the same master
 // token gate to every such tool. Calls without a profile are catalog-only.
 var dbProfileTools = map[string]bool{
-	"get_fleet_health":        true,
-	"list_sessions":           true,
-	"get_lock_tree":           true,
-	"get_replication_status":  true,
-	"get_backup_status":       true,
-	"get_security_posture":    true,
-	"compare_configuration":   true,
-	"get_workload_summary":    true,
-	"get_top_sql":             true,
-	"get_storage_status":      true,
-	"run_sql_safely":          true,
-	"execute_with_repair":     true,
-	"explain_sql":             true,
-	"run_evaluation":          true,
-	"route_db_profile":        true,
-	"discover_metadata":       true,
-	"run_metadata_sync":       true,
-	"profile_metadata_assets": true,
-	"describe_db_schema":      true,
-	"build_profile_catalog":   true,
-	"db_health_report":        true,
-	"suggest_indexes":         true,
-	"workload_report":         true,
-	"get_dba_digest":          true,
+	"get_fleet_health":         true,
+	"list_sessions":            true,
+	"get_lock_tree":            true,
+	"get_replication_status":   true,
+	"get_backup_status":        true,
+	"get_security_posture":     true,
+	"compare_configuration":    true,
+	"diagnose_connection_pool": true,
+	"get_workload_summary":     true,
+	"get_top_sql":              true,
+	"get_storage_status":       true,
+	"run_sql_safely":           true,
+	"execute_with_repair":      true,
+	"explain_sql":              true,
+	"run_evaluation":           true,
+	"route_db_profile":         true,
+	"discover_metadata":        true,
+	"run_metadata_sync":        true,
+	"profile_metadata_assets":  true,
+	"describe_db_schema":       true,
+	"build_profile_catalog":    true,
+	"db_health_report":         true,
+	"suggest_indexes":          true,
+	"workload_report":          true,
+	"get_dba_digest":           true,
 }
 
 // authorizeDBProfileTool closes token-gate gaps between DB-touching tools.
@@ -1258,7 +1263,7 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
 		}
 		return s.Observability.Locks(ctx, profile), nil
-	case "get_replication_status", "get_backup_status", "get_security_posture", "compare_configuration":
+	case "get_replication_status", "get_backup_status", "get_security_posture", "compare_configuration", "diagnose_connection_pool":
 		var a struct {
 			Profile string `json:"profile"`
 		}
@@ -1280,6 +1285,8 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return s.Observability.Security(ctx, profile), nil
 		case "compare_configuration":
 			return s.Observability.ConfigDrift(ctx, profile), nil
+		case "diagnose_connection_pool":
+			return s.connectionPoolDiagnosis(ctx, profile.ID), nil
 		}
 		return s.Observability.Replication(ctx, profile), nil
 	case "get_workload_summary", "get_top_sql", "get_storage_status":

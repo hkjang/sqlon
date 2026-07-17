@@ -1,0 +1,309 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitFrame - gitframe-u0gs76 Report</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #0b0f19;
+      color: #e2e8f0;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+  </style>
+</head>
+<body class="font-sans min-h-screen">
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 pb-6 border-b border-gray-800">
+      <div>
+        <h1 class="text-3xl font-extrabold tracking-tight text-white mb-2">GitFrame Pipeline Report</h1>
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-mono text-gray-400 bg-gray-900 px-3 py-1 rounded-md border border-gray-800">gitframe-u0gs76</span>
+          <span class="text-xs text-gray-500">7/17/2026, 10:05:10 PM</span>
+        </div>
+      </div>
+      <div class="mt-4 md:mt-0 flex items-center gap-4">
+        <div>
+          <span class="text-xs text-gray-500 block text-right font-mono">Duration</span>
+          <span class="text-lg font-bold text-gray-300 font-mono">0.00s</span>
+        </div>
+        <div>
+          <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-bold bg-red-500/10 text-red-400 border border-red-500/20">❌ Failed</span>
+        </div>
+      </div>
+    </header>
+
+    
+    <div class="bg-red-500/10 border border-red-500/20 text-red-300 rounded-xl p-4 mb-8">
+      <h3 class="font-bold text-lg mb-1">Execution Error</h3>
+      <p class="font-mono text-sm whitespace-pre-wrap break-all">browserType.launch: Target page, context or browser has been closed
+Browser logs:
+
+&lt;launching&gt; /home/gaga/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-linux64/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --user-data-dir=/tmp/playwright_chromiumdev_profile-B6ZVuD --remote-debugging-pipe --no-startup-window
+&lt;launched&gt; pid=106758
+[pid=106758][err] /home/gaga/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-linux64/chrome-headless-shell: error while loading shared libraries: libnspr4.so: cannot open shared object file: No such file or directory
+Call log:
+  - &lt;launching&gt; /home/gaga/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-linux64/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --user-data-dir=/tmp/playwright_chromiumdev_profile-B6ZVuD --remote-debugging-pipe --no-startup-window
+  - &lt;launched&gt; pid=106758
+  - [pid=106758][err] /home/gaga/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-linux64/chrome-headless-shell: error while loading shared libraries: libnspr4.so: cannot open shared object file: No such file or directory
+  - [pid=106758] &lt;gracefully close start&gt;
+  - [pid=106758] &lt;kill&gt;
+  - [pid=106758] &lt;will force kill&gt;
+  - [pid=106758] exception while trying to kill process: Error: kill ESRCH
+  - [pid=106758] &lt;process did exit: exitCode=127, signal=null&gt;
+  - [pid=106758] starting temporary directories cleanup
+  - [pid=106758] finished temporary directories cleanup
+  - [pid=106758] &lt;gracefully close end&gt;
+</p>
+    </div>
+    
+
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+      <section class="lg:col-span-2 space-y-8">
+        <div class="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden shadow-2xl">
+          <div class="bg-gray-800/50 px-4 py-3 border-b border-gray-800 flex justify-between items-center">
+            <h3 class="font-bold text-white text-sm">🎥 Final Demo Video</h3>
+            
+          </div>
+          <div class="aspect-video bg-black flex items-center justify-center">
+            
+            <div class="text-center p-6">
+              <p class="text-gray-500 italic mb-2">Video rendering was skipped or failed.</p>
+              
+            </div>
+            
+          </div>
+        </div>
+
+        <div>
+          <h2 class="text-xl font-bold text-white mb-4">📸 Screenshots Gallery</h2>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <p class="text-gray-500 italic col-span-full">No screenshots captured.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="space-y-8">
+        <div class="bg-gray-900 rounded-xl border border-gray-800 p-6 space-y-4">
+          <h3 class="font-bold text-white text-lg border-b border-gray-800 pb-3">📦 Pipeline Artifacts</h3>
+          <ul class="space-y-3 text-sm font-mono">
+            <li class="flex justify-between items-center">
+              <span class="text-gray-400">Result JSON</span>
+              <a href="result.json" target="_blank" class="text-blue-400 hover:underline">result.json</a>
+            </li>
+            <li class="flex justify-between items-center">
+              <span class="text-gray-400">Scenario JSON</span>
+              <a href="scenario.json" target="_blank" class="text-blue-400 hover:underline">scenario.json</a>
+            </li>
+            <li class="flex justify-between items-center">
+              <span class="text-gray-400">Playwright Trace</span>
+              <span class="text-gray-600">N/A</span>
+            </li>
+            <li class="flex justify-between items-center">
+              <span class="text-gray-400">Raw WebM Recording</span>
+              <span class="text-gray-600">N/A</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="bg-gray-900 rounded-xl border border-gray-800 p-6 space-y-4">
+          <h3 class="font-bold text-white text-lg border-b border-gray-800 pb-3">💬 Subtitle Timeline</h3>
+          <div class="max-h-72 overflow-y-auto pr-2 space-y-3">
+            <p class="text-gray-500 italic text-sm">No subtitle captions recorded.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <section class="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden shadow-xl mb-12">
+      <div class="flex border-b border-gray-800 bg-gray-950 font-medium">
+        <button onclick="switchTab('browser-log')" id="tab-btn-browser-log" class="tab-btn px-6 py-4 text-sm text-blue-400 border-b-2 border-blue-500 focus:outline-none">Browser Log</button>
+        <button onclick="switchTab('runtime-log')" id="tab-btn-runtime-log" class="tab-btn px-6 py-4 text-sm text-gray-400 hover:text-gray-200 border-b-2 border-transparent focus:outline-none">Runtime Server Log</button>
+        <button onclick="switchTab('install-log')" id="tab-btn-install-log" class="tab-btn px-6 py-4 text-sm text-gray-400 hover:text-gray-200 border-b-2 border-transparent focus:outline-none">Install Log</button>
+        <button onclick="switchTab('ffmpeg-log')" id="tab-btn-ffmpeg-log" class="tab-btn px-6 py-4 text-sm text-gray-400 hover:text-gray-200 border-b-2 border-transparent focus:outline-none">FFmpeg Log</button>
+      </div>
+
+      <div class="p-6">
+        <div id="tab-browser-log" class="tab-content active">
+          <pre class="bg-black/40 p-4 rounded border border-gray-800 text-xs font-mono text-gray-300 overflow-auto max-h-96 whitespace-pre-wrap"></pre>
+        </div>
+        <div id="tab-runtime-log" class="tab-content">
+          <pre class="bg-black/40 p-4 rounded border border-gray-800 text-xs font-mono text-gray-300 overflow-auto max-h-96 whitespace-pre-wrap">
+=== Running: go build -o server ./cmd/sqlon ===
+Environment: {
+  &quot;SHELL&quot;: &quot;/bin/bash&quot;,
+  &quot;ANTIGRAVITY_LS_ADDRESS&quot;: &quot;localhost:39561&quot;,
+  &quot;NVM_INC&quot;: &quot;/home/gaga/.nvm/versions/node/v24.18.0/include/node&quot;,
+  &quot;WSL2_GUI_APPS_ENABLED&quot;: &quot;1&quot;,
+  &quot;WSL_DISTRO_NAME&quot;: &quot;Ubuntu&quot;,
+  &quot;NAME&quot;: &quot;DESKTOP-SNT43LI&quot;,
+  &quot;PWD&quot;: &quot;/mnt/d/project/sqlon&quot;,
+  &quot;LOGNAME&quot;: &quot;gaga&quot;,
+  &quot;_&quot;: &quot;/home/gaga/.nvm/versions/node/v24.18.0/bin/node&quot;,
+  &quot;HOME&quot;: &quot;/home/gaga&quot;,
+  &quot;LANG&quot;: &quot;C.UTF-8&quot;,
+  &quot;WSL_INTEROP&quot;: &quot;/run/WSL/104923_interop&quot;,
+  &quot;LS_COLORS&quot;: &quot;rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=00:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.avif=01;35:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:*~=00;90:*#=00;90:*.bak=00;90:*.old=00;90:*.orig=00;90:*.part=00;90:*.rej=00;90:*.swp=00;90:*.tmp=00;90:*.dpkg-dist=00;90:*.dpkg-old=00;90:*.ucf-dist=00;90:*.ucf-new=00;90:*.ucf-old=00;90:*.rpmnew=00;90:*.rpmorig=00;90:*.rpmsave=00;90:&quot;,
+  &quot;WAYLAND_DISPLAY&quot;: &quot;wayland-0&quot;,
+  &quot;ANTIGRAVITY_CSRF_TOKEN&quot;: &quot;********&quot;,
+  &quot;NVM_DIR&quot;: &quot;/home/gaga/.nvm&quot;,
+  &quot;ANTIGRAVITY_CONVERSATION_ID&quot;: &quot;b7b2d1ed-10a2-4e77-ab7a-2aab13b25f93&quot;,
+  &quot;LESSCLOSE&quot;: &quot;/usr/bin/lesspipe %s %s&quot;,
+  &quot;TERM&quot;: &quot;dumb&quot;,
+  &quot;LESSOPEN&quot;: &quot;| /usr/bin/lesspipe %s&quot;,
+  &quot;USER&quot;: &quot;gaga&quot;,
+  &quot;GIT_PAGER&quot;: &quot;cat&quot;,
+  &quot;ANTIGRAVITY_SAFECLIS_DIR&quot;: &quot;/home/gaga/.gemini/antigravity-cli/bin/safeclis&quot;,
+  &quot;ANTIGRAVITY_SOURCE_METADATA&quot;: &quot;{\&quot;tool\&quot;:{\&quot;conversationId\&quot;:\&quot;b7b2d1ed-10a2-4e77-ab7a-2aab13b25f93\&quot;, \&quot;stepIndex\&quot;:405, \&quot;toolCall\&quot;:{\&quot;id\&quot;:\&quot;8xcnpve0\&quot;, \&quot;name\&quot;:\&quot;run_command\&quot;, \&quot;argumentsJson\&quot;:\&quot;{\\\&quot;CommandLine\\\&quot;:\\\&quot;node /mnt/d/project/GitFrame/dist/cli/index.js render --output output\\\&quot;,\\\&quot;Cwd\\\&quot;:\\\&quot;/mnt/d/project/sqlon\\\&quot;,\\\&quot;WaitMsBeforeAsync\\\&quot;:10000,\\\&quot;toolAction\\\&quot;:\\\&quot;Rendering sqlon project\\\&quot;,\\\&quot;toolSummary\\\&quot;:\\\&quot;Command execution\\\&quot;}\&quot;, \&quot;thinkingSignature\&quot;:\&quot;EosICogIARFNMg/1ehRijZ0QfXA4o2DzUu51R+KTtuKAPxR+hzbiCK18aT8/QV0b+lqH5A5eXJCNp0hdTtQ4U56c1Z90ZgrSsuCHnahhaYBvGLxQW5GPaP3VAocv/4a3ae09490T8H/zmen1IOwQO9Do6fG/bvE2425PiD4XV2N0Do8OKJLf9QllA+kX2NZGU7ubrEdwHQbNYh8OuhTN6uJb9nED3yE+W+grbAxLKc4psGmgaJJgtIWSstxVZbhWTbqIFMVFljqrs3CmbSCZbPvpFePmcaUIfR2K2vYfzTMpwVW9uptP9sLWqQsONSA7Du/DkYcsJSce+ms6FXb/gwJ2DA6BsT4bwIdNsJKgZB2fDXqWdJG94X+ABSnvxSOoMkv2AbX+U5ZSYVpkkbaygDbY9S0l0tFMNZ5ZYuRftDwrMO+lHOrhfb1vIHXRrJFTFBCZXyBQaVOkYhQOZpbU5XQNodZbYL/SR2mU9Nsm1jMqMi4zqGKfltXTG2Y1tS+ZrPfbKBFz2meqxHiS6oNyykqDnsC8tzsmMLQmWK8+OPbQv+TD2kqFzChKa0tatrgGX89aVyLr1WpzSPU1PplJbZDJqydF6W6u09xbV+nOs7N+F7SXFQcw7hVVfP3InDFE4nnXTPCLnx/VyXF0t721LLzrSSxY6LUTv9/C5tYmuz/SZzny7wIr6yDULMQY3Pd28i5GBrSkzthD0hENPj3rB8iJm/Ftkz3RQIAJD6NITZORNyJE67aP6P0dof7WYKDzl+MO1fUPX9m/HmbUk1btwy5Ym6urWEeXY4QnY43snGMyKoN2KtTnoPfwfeXt8AroaOSJKIWcWQsw/YEkvttxju75xV/NEJnJqhnRa+egaNv6nwv5GW1Kzx/w1JgAGQ9n6CwOvto5vyujB6OiflAZ8Up71PP3h6V9YJkfebkrfaxeVpcP+YPn5lCmwduSzEyP1EXQmPWEyl8OENCxdJaYwhYDyZupTCdZt5S0zfb0TQ5Zu0fqwhNehYRMJid/ossMBHRmfoehT71b0i7ZdUwq5qgErsqutBJ9lH4oT3WQWUyR9r2wubLjG3a7z8y41mCRLP19M9Fz/wpFwEznSpdq8UhuxX/kpKUZfyoZZ4Qy1FP4OhAsrzqRxlsg0DViBDTquCcGLhWcxew9KIz95lxNfKXLh4esSePabWScFqzkpQ4dWMPnHOr+xEiErYCz7eFWvLeXFaIFQVd7IPPnCcyctCsAytLad0ORp+SfQpBoPNYEHMGdqF/xYXuiGIr4F55NsuTOqSe1Myai5k1Jr5CE3FWtnj14Ctkj8C4/3ju6Tl3UTfN5RbKO894Oitd8BX1gki6C8lOSG4ZIWAZJB46HipDQ/TWO8Y91JCkF4Hq+\&quot;, \&quot;originalName\&quot;:\&quot;run_command\&quot;}}}&quot;,
+  &quot;DISPLAY&quot;: &quot;:0&quot;,
+  &quot;SHLVL&quot;: &quot;1&quot;,
+  &quot;NVM_CD_FLAGS&quot;: &quot;&quot;,
+  &quot;PAGER&quot;: &quot;cat&quot;,
+  &quot;ANTIGRAVITY_AGENT&quot;: &quot;1&quot;,
+  &quot;ANTIGRAVITY_TRAJECTORY_ID&quot;: &quot;dcabc702-fbe9-43d2-b236-9cf8e318c794&quot;,
+  &quot;XDG_RUNTIME_DIR&quot;: &quot;/run/user/1000/&quot;,
+  &quot;WSLENV&quot;: &quot;&quot;,
+  &quot;ANTIGRAVITY_PROJECT_ID&quot;: &quot;default-cli-project&quot;,
+  &quot;XDG_DATA_DIRS&quot;: &quot;/usr/local/share:/usr/share:/var/lib/snapd/desktop&quot;,
+  &quot;PATH&quot;: &quot;/home/gaga/.gemini/antigravity-cli/bin:/home/gaga/.local/bin:/home/gaga/.local/bin:/home/gaga/.local/bin:/home/gaga/.nvm/versions/node/v24.18.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/c/Program Files/WindowsApps/MicrosoftCorporationII.WindowsSubsystemForLinux_2.6.1.0_x64__8wekyb3d8bbwe:/mnt/c/Program Files/Common Files/Oracle/Java/javapath:/mnt/c/Program Files (x86)/Common Files/Oracle/Java/java8path:/mnt/c/Program Files (x86)/Common Files/Oracle/Java/javapath:/mnt/c/Users/gagag/AppData/Local/Programs/cursor/resources/app/bin:/mnt/c/Program Files (x86)/Google/Chrome/Application:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2/bin:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2/libnvvp:/mnt/c/Python27/:/mnt/c/Python27/Scripts:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files/Java/jdk1.8.0_231/bin:/mnt/c/ProgramData/chocolatey/bin:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files/Microsoft SQL Server/130/Tools/Binn/:/mnt/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/:/mnt/c/Program Files/NVIDIA Corporation/Nsight Compute 2020.3.1/:/mnt/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/c/Program Files (x86)/Pulse Secure/VC:/mnt/c/Program Files/nodejs/:/mnt/d/trivy:/mnt/c/Program Files/Docker/Docker/resources/bin:/mnt/c/Program Files/GitHub CLI/:/mnt/c/Program Files/MySQL/MySQL Shell 8.0/bin/:/mnt/c/Users/gagag/AppData/Local/Microsoft/WindowsApps:/mnt/c/Program Files/Bandizip/:/mnt/c/Users/gagag/AppData/Local/Android/Sdk/platform-tools:/mnt/c/Users/gagag/AppData/Local/GitHubDesktop/bin:/mnt/c/Users/gagag/AppData/Local/Programs/Fiddler:/mnt/c/Users/gagag/go/bin:/mnt/c/Program Files (x86)/SoftForum/XecureHSM/:/mnt/c/Users/gagag/AppData/Local/.meteor:/mnt/c/Users/gagag/AppData/Local/Microsoft/WindowsApps:/mnt/c/tools/dart-sdk/bin:/mnt/c/Users/gagag/AppData/Roaming/Pub/Cache/bin:/mnt/c/src/flutter/bin:/mnt/c/Users/gagag/AppData/Roaming/nvm:/mnt/c/Users/gagag/AppData/Local/Programs/Hyper/resources/bin:/mnt/c/Users/gagag/AppData/Local/JetBrains/Toolbox/scripts:/mnt/c/Users/gagag/AppData/Local/Programs/Ollama:/mnt/c/Users/gagag/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Program Files/JetBrains/PyCharm 2024.1.1/bin:/mnt/c/Users/gagag/.bun/bin:/mnt/c/Program Files/JetBrains/GoLand 2024.3/bin:/mnt/c/Users/gagag/go/bin:/mnt/c/Users/gagag/AppData/Local/Programs/cursor/resources/app/bin:/mnt/c/Users/gagag/.jetbrains/kubectl:/mnt/c/Users/gagag/AppData/Local/Programs/Antigravity/bin:/mnt/c/Users/gagag/AppData/Roaming/npm:/mnt/c/Users/gagag/.local/bin:/mnt/c/Program Files/GitHub CLI:/mnt/c/Program Files/Go/bin:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files (x86)/NetSarang/Xshell 8/:/mnt/c/Program Files/NVIDIA Corporation/NVIDIA App/NvDLISR:/mnt/c/Users/gagag/.cargo/bin:/mnt/c/Users/gagag/AppData/Local/com.LangflowDesktop/uv:/mnt/c/Program Files/MySQL/MySQL Shell 8.0/bin/:/mnt/c/Users/gagag/AppData/Local/Microsoft/WindowsApps:/mnt/c/Program Files/Bandizip/:/mnt/c/Program Files/Java/jdk1.8.0_231/bin:/mnt/c/Users/gagag/AppData/Local/Android/Sdk/platform-tools:/mnt/c/Users/gagag/AppData/Local/GitHubDesktop/bin:/mnt/c/Users/gagag/AppData/Local/Programs/Fiddler:/mnt/c/Users/gagag/go/bin:/mnt/c/Program Files (x86)/SoftForum/XecureHSM/:/mnt/c/Users/gagag/AppData/Local/.meteor:/mnt/c/Users/gagag/AppData/Local/Microsoft/WindowsApps:/mnt/c/tools/dart-sdk/bin:/mnt/c/Users/gagag/AppData/Roaming/Pub/Cache/bin:/mnt/c/src/flutter/bin:/mnt/c/Users/gagag/AppData/Roaming/nvm:/mnt/c/Program Files/nodejs:/mnt/c/Users/gagag/AppData/Local/Programs/Hyper/resources/bin:/mnt/c/Users/gagag/AppData/Local/JetBrains/Toolbox/scripts:/mnt/c/Users/gagag/AppData/Local/Programs/Ollama:/mnt/c/Users/gagag/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Program Files/JetBrains/PyCharm 2024.1.1/bin:/mnt/c/Users/gagag/.bun/bin:/mnt/c/Program Files/JetBrains/GoLand 2024.3/bin:/mnt/c/Users/gagag/go/bin:/mnt/c/Users/gagag/AppData/Local/Programs/cursor/resources/app/bin:/mnt/c/Users/gagag/.jetbrains/kubectl:/mnt/c/Users/gagag/AppData/Local/Programs/Antigravity/bin:/mnt/c/Users/gagag/AppData/Roaming/npm:/mnt/c/Users/gagag/.local/bin:/mnt/c/Users/gagag/AppData/Local/Python/bin:/mnt/c/Program Files/Go/bin:/mnt/c/Users/gagag/go/bin:/mnt/c/Users/gagag/AppData/Local/Programs/Antigravity IDE/bin:/snap/bin:/home/gaga/go/bin&quot;,
+  &quot;DBUS_SESSION_BUS_ADDRESS&quot;: &quot;unix:path=/run/user/1000/bus&quot;,
+  &quot;NVM_BIN&quot;: &quot;/home/gaga/.nvm/versions/node/v24.18.0/bin&quot;,
+  &quot;HOSTTYPE&quot;: &quot;x86_64&quot;,
+  &quot;PULSE_SERVER&quot;: &quot;unix:/mnt/wslg/PulseServer&quot;,
+  &quot;OLDPWD&quot;: &quot;/home/gaga&quot;,
+  &quot;GOPATH&quot;: &quot;/home/gaga/go&quot;
+}
+
+
+=== Starting Background: ./server -transport http -addr 127.0.0.1:9797 ===
+Environment: {
+  &quot;SHELL&quot;: &quot;/bin/bash&quot;,
+  &quot;ANTIGRAVITY_LS_ADDRESS&quot;: &quot;localhost:39561&quot;,
+  &quot;NVM_INC&quot;: &quot;/home/gaga/.nvm/versions/node/v24.18.0/include/node&quot;,
+  &quot;WSL2_GUI_APPS_ENABLED&quot;: &quot;1&quot;,
+  &quot;WSL_DISTRO_NAME&quot;: &quot;Ubuntu&quot;,
+  &quot;NAME&quot;: &quot;DESKTOP-SNT43LI&quot;,
+  &quot;PWD&quot;: &quot;/mnt/d/project/sqlon&quot;,
+  &quot;LOGNAME&quot;: &quot;gaga&quot;,
+  &quot;_&quot;: &quot;/home/gaga/.nvm/versions/node/v24.18.0/bin/node&quot;,
+  &quot;HOME&quot;: &quot;/home/gaga&quot;,
+  &quot;LANG&quot;: &quot;C.UTF-8&quot;,
+  &quot;WSL_INTEROP&quot;: &quot;/run/WSL/104923_interop&quot;,
+  &quot;LS_COLORS&quot;: &quot;rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=00:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.avif=01;35:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:*~=00;90:*#=00;90:*.bak=00;90:*.old=00;90:*.orig=00;90:*.part=00;90:*.rej=00;90:*.swp=00;90:*.tmp=00;90:*.dpkg-dist=00;90:*.dpkg-old=00;90:*.ucf-dist=00;90:*.ucf-new=00;90:*.ucf-old=00;90:*.rpmnew=00;90:*.rpmorig=00;90:*.rpmsave=00;90:&quot;,
+  &quot;WAYLAND_DISPLAY&quot;: &quot;wayland-0&quot;,
+  &quot;ANTIGRAVITY_CSRF_TOKEN&quot;: &quot;********&quot;,
+  &quot;NVM_DIR&quot;: &quot;/home/gaga/.nvm&quot;,
+  &quot;ANTIGRAVITY_CONVERSATION_ID&quot;: &quot;b7b2d1ed-10a2-4e77-ab7a-2aab13b25f93&quot;,
+  &quot;LESSCLOSE&quot;: &quot;/usr/bin/lesspipe %s %s&quot;,
+  &quot;TERM&quot;: &quot;dumb&quot;,
+  &quot;LESSOPEN&quot;: &quot;| /usr/bin/lesspipe %s&quot;,
+  &quot;USER&quot;: &quot;gaga&quot;,
+  &quot;GIT_PAGER&quot;: &quot;cat&quot;,
+  &quot;ANTIGRAVITY_SAFECLIS_DIR&quot;: &quot;/home/gaga/.gemini/antigravity-cli/bin/safeclis&quot;,
+  &quot;ANTIGRAVITY_SOURCE_METADATA&quot;: &quot;{\&quot;tool\&quot;:{\&quot;conversationId\&quot;:\&quot;b7b2d1ed-10a2-4e77-ab7a-2aab13b25f93\&quot;, \&quot;stepIndex\&quot;:405, \&quot;toolCall\&quot;:{\&quot;id\&quot;:\&quot;8xcnpve0\&quot;, \&quot;name\&quot;:\&quot;run_command\&quot;, \&quot;argumentsJson\&quot;:\&quot;{\\\&quot;CommandLine\\\&quot;:\\\&quot;node /mnt/d/project/GitFrame/dist/cli/index.js render --output output\\\&quot;,\\\&quot;Cwd\\\&quot;:\\\&quot;/mnt/d/project/sqlon\\\&quot;,\\\&quot;WaitMsBeforeAsync\\\&quot;:10000,\\\&quot;toolAction\\\&quot;:\\\&quot;Rendering sqlon project\\\&quot;,\\\&quot;toolSummary\\\&quot;:\\\&quot;Command execution\\\&quot;}\&quot;, \&quot;thinkingSignature\&quot;:\&quot;EosICogIARFNMg/1ehRijZ0QfXA4o2DzUu51R+KTtuKAPxR+hzbiCK18aT8/QV0b+lqH5A5eXJCNp0hdTtQ4U56c1Z90ZgrSsuCHnahhaYBvGLxQW5GPaP3VAocv/4a3ae09490T8H/zmen1IOwQO9Do6fG/bvE2425PiD4XV2N0Do8OKJLf9QllA+kX2NZGU7ubrEdwHQbNYh8OuhTN6uJb9nED3yE+W+grbAxLKc4psGmgaJJgtIWSstxVZbhWTbqIFMVFljqrs3CmbSCZbPvpFePmcaUIfR2K2vYfzTMpwVW9uptP9sLWqQsONSA7Du/DkYcsJSce+ms6FXb/gwJ2DA6BsT4bwIdNsJKgZB2fDXqWdJG94X+ABSnvxSOoMkv2AbX+U5ZSYVpkkbaygDbY9S0l0tFMNZ5ZYuRftDwrMO+lHOrhfb1vIHXRrJFTFBCZXyBQaVOkYhQOZpbU5XQNodZbYL/SR2mU9Nsm1jMqMi4zqGKfltXTG2Y1tS+ZrPfbKBFz2meqxHiS6oNyykqDnsC8tzsmMLQmWK8+OPbQv+TD2kqFzChKa0tatrgGX89aVyLr1WpzSPU1PplJbZDJqydF6W6u09xbV+nOs7N+F7SXFQcw7hVVfP3InDFE4nnXTPCLnx/VyXF0t721LLzrSSxY6LUTv9/C5tYmuz/SZzny7wIr6yDULMQY3Pd28i5GBrSkzthD0hENPj3rB8iJm/Ftkz3RQIAJD6NITZORNyJE67aP6P0dof7WYKDzl+MO1fUPX9m/HmbUk1btwy5Ym6urWEeXY4QnY43snGMyKoN2KtTnoPfwfeXt8AroaOSJKIWcWQsw/YEkvttxju75xV/NEJnJqhnRa+egaNv6nwv5GW1Kzx/w1JgAGQ9n6CwOvto5vyujB6OiflAZ8Up71PP3h6V9YJkfebkrfaxeVpcP+YPn5lCmwduSzEyP1EXQmPWEyl8OENCxdJaYwhYDyZupTCdZt5S0zfb0TQ5Zu0fqwhNehYRMJid/ossMBHRmfoehT71b0i7ZdUwq5qgErsqutBJ9lH4oT3WQWUyR9r2wubLjG3a7z8y41mCRLP19M9Fz/wpFwEznSpdq8UhuxX/kpKUZfyoZZ4Qy1FP4OhAsrzqRxlsg0DViBDTquCcGLhWcxew9KIz95lxNfKXLh4esSePabWScFqzkpQ4dWMPnHOr+xEiErYCz7eFWvLeXFaIFQVd7IPPnCcyctCsAytLad0ORp+SfQpBoPNYEHMGdqF/xYXuiGIr4F55NsuTOqSe1Myai5k1Jr5CE3FWtnj14Ctkj8C4/3ju6Tl3UTfN5RbKO894Oitd8BX1gki6C8lOSG4ZIWAZJB46HipDQ/TWO8Y91JCkF4Hq+\&quot;, \&quot;originalName\&quot;:\&quot;run_command\&quot;}}}&quot;,
+  &quot;DISPLAY&quot;: &quot;:0&quot;,
+  &quot;SHLVL&quot;: &quot;1&quot;,
+  &quot;NVM_CD_FLAGS&quot;: &quot;&quot;,
+  &quot;PAGER&quot;: &quot;cat&quot;,
+  &quot;ANTIGRAVITY_AGENT&quot;: &quot;1&quot;,
+  &quot;ANTIGRAVITY_TRAJECTORY_ID&quot;: &quot;dcabc702-fbe9-43d2-b236-9cf8e318c794&quot;,
+  &quot;XDG_RUNTIME_DIR&quot;: &quot;/run/user/1000/&quot;,
+  &quot;WSLENV&quot;: &quot;&quot;,
+  &quot;ANTIGRAVITY_PROJECT_ID&quot;: &quot;default-cli-project&quot;,
+  &quot;XDG_DATA_DIRS&quot;: &quot;/usr/local/share:/usr/share:/var/lib/snapd/desktop&quot;,
+  &quot;PATH&quot;: &quot;/home/gaga/.gemini/antigravity-cli/bin:/home/gaga/.local/bin:/home/gaga/.local/bin:/home/gaga/.local/bin:/home/gaga/.nvm/versions/node/v24.18.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/c/Program Files/WindowsApps/MicrosoftCorporationII.WindowsSubsystemForLinux_2.6.1.0_x64__8wekyb3d8bbwe:/mnt/c/Program Files/Common Files/Oracle/Java/javapath:/mnt/c/Program Files (x86)/Common Files/Oracle/Java/java8path:/mnt/c/Program Files (x86)/Common Files/Oracle/Java/javapath:/mnt/c/Users/gagag/AppData/Local/Programs/cursor/resources/app/bin:/mnt/c/Program Files (x86)/Google/Chrome/Application:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2/bin:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2/libnvvp:/mnt/c/Python27/:/mnt/c/Python27/Scripts:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files/Java/jdk1.8.0_231/bin:/mnt/c/ProgramData/chocolatey/bin:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files/Microsoft SQL Server/130/Tools/Binn/:/mnt/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/:/mnt/c/Program Files/NVIDIA Corporation/Nsight Compute 2020.3.1/:/mnt/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/c/Program Files (x86)/Pulse Secure/VC:/mnt/c/Program Files/nodejs/:/mnt/d/trivy:/mnt/c/Program Files/Docker/Docker/resources/bin:/mnt/c/Program Files/GitHub CLI/:/mnt/c/Program Files/MySQL/MySQL Shell 8.0/bin/:/mnt/c/Users/gagag/AppData/Local/Microsoft/WindowsApps:/mnt/c/Program Files/Bandizip/:/mnt/c/Users/gagag/AppData/Local/Android/Sdk/platform-tools:/mnt/c/Users/gagag/AppData/Local/GitHubDesktop/bin:/mnt/c/Users/gagag/AppData/Local/Programs/Fiddler:/mnt/c/Users/gagag/go/bin:/mnt/c/Program Files (x86)/SoftForum/XecureHSM/:/mnt/c/Users/gagag/AppData/Local/.meteor:/mnt/c/Users/gagag/AppData/Local/Microsoft/WindowsApps:/mnt/c/tools/dart-sdk/bin:/mnt/c/Users/gagag/AppData/Roaming/Pub/Cache/bin:/mnt/c/src/flutter/bin:/mnt/c/Users/gagag/AppData/Roaming/nvm:/mnt/c/Users/gagag/AppData/Local/Programs/Hyper/resources/bin:/mnt/c/Users/gagag/AppData/Local/JetBrains/Toolbox/scripts:/mnt/c/Users/gagag/AppData/Local/Programs/Ollama:/mnt/c/Users/gagag/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Program Files/JetBrains/PyCharm 2024.1.1/bin:/mnt/c/Users/gagag/.bun/bin:/mnt/c/Program Files/JetBrains/GoLand 2024.3/bin:/mnt/c/Users/gagag/go/bin:/mnt/c/Users/gagag/AppData/Local/Programs/cursor/resources/app/bin:/mnt/c/Users/gagag/.jetbrains/kubectl:/mnt/c/Users/gagag/AppData/Local/Programs/Antigravity/bin:/mnt/c/Users/gagag/AppData/Roaming/npm:/mnt/c/Users/gagag/.local/bin:/mnt/c/Program Files/GitHub CLI:/mnt/c/Program Files/Go/bin:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files (x86)/NetSarang/Xshell 8/:/mnt/c/Program Files/NVIDIA Corporation/NVIDIA App/NvDLISR:/mnt/c/Users/gagag/.cargo/bin:/mnt/c/Users/gagag/AppData/Local/com.LangflowDesktop/uv:/mnt/c/Program Files/MySQL/MySQL Shell 8.0/bin/:/mnt/c/Users/gagag/AppData/Local/Microsoft/WindowsApps:/mnt/c/Program Files/Bandizip/:/mnt/c/Program Files/Java/jdk1.8.0_231/bin:/mnt/c/Users/gagag/AppData/Local/Android/Sdk/platform-tools:/mnt/c/Users/gagag/AppData/Local/GitHubDesktop/bin:/mnt/c/Users/gagag/AppData/Local/Programs/Fiddler:/mnt/c/Users/gagag/go/bin:/mnt/c/Program Files (x86)/SoftForum/XecureHSM/:/mnt/c/Users/gagag/AppData/Local/.meteor:/mnt/c/Users/gagag/AppData/Local/Microsoft/WindowsApps:/mnt/c/tools/dart-sdk/bin:/mnt/c/Users/gagag/AppData/Roaming/Pub/Cache/bin:/mnt/c/src/flutter/bin:/mnt/c/Users/gagag/AppData/Roaming/nvm:/mnt/c/Program Files/nodejs:/mnt/c/Users/gagag/AppData/Local/Programs/Hyper/resources/bin:/mnt/c/Users/gagag/AppData/Local/JetBrains/Toolbox/scripts:/mnt/c/Users/gagag/AppData/Local/Programs/Ollama:/mnt/c/Users/gagag/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Program Files/JetBrains/PyCharm 2024.1.1/bin:/mnt/c/Users/gagag/.bun/bin:/mnt/c/Program Files/JetBrains/GoLand 2024.3/bin:/mnt/c/Users/gagag/go/bin:/mnt/c/Users/gagag/AppData/Local/Programs/cursor/resources/app/bin:/mnt/c/Users/gagag/.jetbrains/kubectl:/mnt/c/Users/gagag/AppData/Local/Programs/Antigravity/bin:/mnt/c/Users/gagag/AppData/Roaming/npm:/mnt/c/Users/gagag/.local/bin:/mnt/c/Users/gagag/AppData/Local/Python/bin:/mnt/c/Program Files/Go/bin:/mnt/c/Users/gagag/go/bin:/mnt/c/Users/gagag/AppData/Local/Programs/Antigravity IDE/bin:/snap/bin:/home/gaga/go/bin&quot;,
+  &quot;DBUS_SESSION_BUS_ADDRESS&quot;: &quot;unix:path=/run/user/1000/bus&quot;,
+  &quot;NVM_BIN&quot;: &quot;/home/gaga/.nvm/versions/node/v24.18.0/bin&quot;,
+  &quot;HOSTTYPE&quot;: &quot;x86_64&quot;,
+  &quot;PULSE_SERVER&quot;: &quot;unix:/mnt/wslg/PulseServer&quot;,
+  &quot;OLDPWD&quot;: &quot;/home/gaga&quot;,
+  &quot;GOPATH&quot;: &quot;/home/gaga/go&quot;
+}
+
+2026/07/17 22:05:10 SQLON data migrated to data/sqlon after backup at data/backups/sqlon-pre-migration-20260717T130510.397960257Z (12 files)
+2026/07/17 22:05:10 SQLON catalog loaded: 7 tables, 6 relations, 12 examples, 4 metrics, dialect=postgres
+2026/07/17 22:05:10 WARNING: admin API auth disabled; configure SQLON_ADMIN_TOKEN or -meta-db
+2026/07/17 22:05:10 SQLON observation collector: every 1m0s, retention=30 days
+2026/07/17 22:05:10 SQLON AI Database Operations Platform listening on http://127.0.0.1:9797
+2026/07/17 22:05:10 sqlon NL2SQL MCP listening on http://127.0.0.1:9797/mcp
+</pre>
+        </div>
+        <div id="tab-install-log" class="tab-content">
+          <pre class="bg-black/40 p-4 rounded border border-gray-800 text-xs font-mono text-gray-300 overflow-auto max-h-96 whitespace-pre-wrap">
+=== Running: go mod download ===
+Environment: {
+  &quot;SHELL&quot;: &quot;/bin/bash&quot;,
+  &quot;ANTIGRAVITY_LS_ADDRESS&quot;: &quot;localhost:39561&quot;,
+  &quot;NVM_INC&quot;: &quot;/home/gaga/.nvm/versions/node/v24.18.0/include/node&quot;,
+  &quot;WSL2_GUI_APPS_ENABLED&quot;: &quot;1&quot;,
+  &quot;WSL_DISTRO_NAME&quot;: &quot;Ubuntu&quot;,
+  &quot;NAME&quot;: &quot;DESKTOP-SNT43LI&quot;,
+  &quot;PWD&quot;: &quot;/mnt/d/project/sqlon&quot;,
+  &quot;LOGNAME&quot;: &quot;gaga&quot;,
+  &quot;_&quot;: &quot;/home/gaga/.nvm/versions/node/v24.18.0/bin/node&quot;,
+  &quot;HOME&quot;: &quot;/home/gaga&quot;,
+  &quot;LANG&quot;: &quot;C.UTF-8&quot;,
+  &quot;WSL_INTEROP&quot;: &quot;/run/WSL/104923_interop&quot;,
+  &quot;LS_COLORS&quot;: &quot;rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=00:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.avif=01;35:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:*~=00;90:*#=00;90:*.bak=00;90:*.old=00;90:*.orig=00;90:*.part=00;90:*.rej=00;90:*.swp=00;90:*.tmp=00;90:*.dpkg-dist=00;90:*.dpkg-old=00;90:*.ucf-dist=00;90:*.ucf-new=00;90:*.ucf-old=00;90:*.rpmnew=00;90:*.rpmorig=00;90:*.rpmsave=00;90:&quot;,
+  &quot;WAYLAND_DISPLAY&quot;: &quot;wayland-0&quot;,
+  &quot;ANTIGRAVITY_CSRF_TOKEN&quot;: &quot;********&quot;,
+  &quot;NVM_DIR&quot;: &quot;/home/gaga/.nvm&quot;,
+  &quot;ANTIGRAVITY_CONVERSATION_ID&quot;: &quot;b7b2d1ed-10a2-4e77-ab7a-2aab13b25f93&quot;,
+  &quot;LESSCLOSE&quot;: &quot;/usr/bin/lesspipe %s %s&quot;,
+  &quot;TERM&quot;: &quot;dumb&quot;,
+  &quot;LESSOPEN&quot;: &quot;| /usr/bin/lesspipe %s&quot;,
+  &quot;USER&quot;: &quot;gaga&quot;,
+  &quot;GIT_PAGER&quot;: &quot;cat&quot;,
+  &quot;ANTIGRAVITY_SAFECLIS_DIR&quot;: &quot;/home/gaga/.gemini/antigravity-cli/bin/safeclis&quot;,
+  &quot;ANTIGRAVITY_SOURCE_METADATA&quot;: &quot;{\&quot;tool\&quot;:{\&quot;conversationId\&quot;:\&quot;b7b2d1ed-10a2-4e77-ab7a-2aab13b25f93\&quot;, \&quot;stepIndex\&quot;:405, \&quot;toolCall\&quot;:{\&quot;id\&quot;:\&quot;8xcnpve0\&quot;, \&quot;name\&quot;:\&quot;run_command\&quot;, \&quot;argumentsJson\&quot;:\&quot;{\\\&quot;CommandLine\\\&quot;:\\\&quot;node /mnt/d/project/GitFrame/dist/cli/index.js render --output output\\\&quot;,\\\&quot;Cwd\\\&quot;:\\\&quot;/mnt/d/project/sqlon\\\&quot;,\\\&quot;WaitMsBeforeAsync\\\&quot;:10000,\\\&quot;toolAction\\\&quot;:\\\&quot;Rendering sqlon project\\\&quot;,\\\&quot;toolSummary\\\&quot;:\\\&quot;Command execution\\\&quot;}\&quot;, \&quot;thinkingSignature\&quot;:\&quot;EosICogIARFNMg/1ehRijZ0QfXA4o2DzUu51R+KTtuKAPxR+hzbiCK18aT8/QV0b+lqH5A5eXJCNp0hdTtQ4U56c1Z90ZgrSsuCHnahhaYBvGLxQW5GPaP3VAocv/4a3ae09490T8H/zmen1IOwQO9Do6fG/bvE2425PiD4XV2N0Do8OKJLf9QllA+kX2NZGU7ubrEdwHQbNYh8OuhTN6uJb9nED3yE+W+grbAxLKc4psGmgaJJgtIWSstxVZbhWTbqIFMVFljqrs3CmbSCZbPvpFePmcaUIfR2K2vYfzTMpwVW9uptP9sLWqQsONSA7Du/DkYcsJSce+ms6FXb/gwJ2DA6BsT4bwIdNsJKgZB2fDXqWdJG94X+ABSnvxSOoMkv2AbX+U5ZSYVpkkbaygDbY9S0l0tFMNZ5ZYuRftDwrMO+lHOrhfb1vIHXRrJFTFBCZXyBQaVOkYhQOZpbU5XQNodZbYL/SR2mU9Nsm1jMqMi4zqGKfltXTG2Y1tS+ZrPfbKBFz2meqxHiS6oNyykqDnsC8tzsmMLQmWK8+OPbQv+TD2kqFzChKa0tatrgGX89aVyLr1WpzSPU1PplJbZDJqydF6W6u09xbV+nOs7N+F7SXFQcw7hVVfP3InDFE4nnXTPCLnx/VyXF0t721LLzrSSxY6LUTv9/C5tYmuz/SZzny7wIr6yDULMQY3Pd28i5GBrSkzthD0hENPj3rB8iJm/Ftkz3RQIAJD6NITZORNyJE67aP6P0dof7WYKDzl+MO1fUPX9m/HmbUk1btwy5Ym6urWEeXY4QnY43snGMyKoN2KtTnoPfwfeXt8AroaOSJKIWcWQsw/YEkvttxju75xV/NEJnJqhnRa+egaNv6nwv5GW1Kzx/w1JgAGQ9n6CwOvto5vyujB6OiflAZ8Up71PP3h6V9YJkfebkrfaxeVpcP+YPn5lCmwduSzEyP1EXQmPWEyl8OENCxdJaYwhYDyZupTCdZt5S0zfb0TQ5Zu0fqwhNehYRMJid/ossMBHRmfoehT71b0i7ZdUwq5qgErsqutBJ9lH4oT3WQWUyR9r2wubLjG3a7z8y41mCRLP19M9Fz/wpFwEznSpdq8UhuxX/kpKUZfyoZZ4Qy1FP4OhAsrzqRxlsg0DViBDTquCcGLhWcxew9KIz95lxNfKXLh4esSePabWScFqzkpQ4dWMPnHOr+xEiErYCz7eFWvLeXFaIFQVd7IPPnCcyctCsAytLad0ORp+SfQpBoPNYEHMGdqF/xYXuiGIr4F55NsuTOqSe1Myai5k1Jr5CE3FWtnj14Ctkj8C4/3ju6Tl3UTfN5RbKO894Oitd8BX1gki6C8lOSG4ZIWAZJB46HipDQ/TWO8Y91JCkF4Hq+\&quot;, \&quot;originalName\&quot;:\&quot;run_command\&quot;}}}&quot;,
+  &quot;DISPLAY&quot;: &quot;:0&quot;,
+  &quot;SHLVL&quot;: &quot;1&quot;,
+  &quot;NVM_CD_FLAGS&quot;: &quot;&quot;,
+  &quot;PAGER&quot;: &quot;cat&quot;,
+  &quot;ANTIGRAVITY_AGENT&quot;: &quot;1&quot;,
+  &quot;ANTIGRAVITY_TRAJECTORY_ID&quot;: &quot;dcabc702-fbe9-43d2-b236-9cf8e318c794&quot;,
+  &quot;XDG_RUNTIME_DIR&quot;: &quot;/run/user/1000/&quot;,
+  &quot;WSLENV&quot;: &quot;&quot;,
+  &quot;ANTIGRAVITY_PROJECT_ID&quot;: &quot;default-cli-project&quot;,
+  &quot;XDG_DATA_DIRS&quot;: &quot;/usr/local/share:/usr/share:/var/lib/snapd/desktop&quot;,
+  &quot;PATH&quot;: &quot;/home/gaga/.gemini/antigravity-cli/bin:/home/gaga/.local/bin:/home/gaga/.local/bin:/home/gaga/.local/bin:/home/gaga/.nvm/versions/node/v24.18.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/c/Program Files/WindowsApps/MicrosoftCorporationII.WindowsSubsystemForLinux_2.6.1.0_x64__8wekyb3d8bbwe:/mnt/c/Program Files/Common Files/Oracle/Java/javapath:/mnt/c/Program Files (x86)/Common Files/Oracle/Java/java8path:/mnt/c/Program Files (x86)/Common Files/Oracle/Java/javapath:/mnt/c/Users/gagag/AppData/Local/Programs/cursor/resources/app/bin:/mnt/c/Program Files (x86)/Google/Chrome/Application:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2/bin:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.2/libnvvp:/mnt/c/Python27/:/mnt/c/Python27/Scripts:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files/Java/jdk1.8.0_231/bin:/mnt/c/ProgramData/chocolatey/bin:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files/Microsoft SQL Server/130/Tools/Binn/:/mnt/c/Program Files/Microsoft SQL Server/Client SDK/ODBC/170/Tools/Binn/:/mnt/c/Program Files/NVIDIA Corporation/Nsight Compute 2020.3.1/:/mnt/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/c/Program Files (x86)/Pulse Secure/VC:/mnt/c/Program Files/nodejs/:/mnt/d/trivy:/mnt/c/Program Files/Docker/Docker/resources/bin:/mnt/c/Program Files/GitHub CLI/:/mnt/c/Program Files/MySQL/MySQL Shell 8.0/bin/:/mnt/c/Users/gagag/AppData/Local/Microsoft/WindowsApps:/mnt/c/Program Files/Bandizip/:/mnt/c/Users/gagag/AppData/Local/Android/Sdk/platform-tools:/mnt/c/Users/gagag/AppData/Local/GitHubDesktop/bin:/mnt/c/Users/gagag/AppData/Local/Programs/Fiddler:/mnt/c/Users/gagag/go/bin:/mnt/c/Program Files (x86)/SoftForum/XecureHSM/:/mnt/c/Users/gagag/AppData/Local/.meteor:/mnt/c/Users/gagag/AppData/Local/Microsoft/WindowsApps:/mnt/c/tools/dart-sdk/bin:/mnt/c/Users/gagag/AppData/Roaming/Pub/Cache/bin:/mnt/c/src/flutter/bin:/mnt/c/Users/gagag/AppData/Roaming/nvm:/mnt/c/Users/gagag/AppData/Local/Programs/Hyper/resources/bin:/mnt/c/Users/gagag/AppData/Local/JetBrains/Toolbox/scripts:/mnt/c/Users/gagag/AppData/Local/Programs/Ollama:/mnt/c/Users/gagag/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Program Files/JetBrains/PyCharm 2024.1.1/bin:/mnt/c/Users/gagag/.bun/bin:/mnt/c/Program Files/JetBrains/GoLand 2024.3/bin:/mnt/c/Users/gagag/go/bin:/mnt/c/Users/gagag/AppData/Local/Programs/cursor/resources/app/bin:/mnt/c/Users/gagag/.jetbrains/kubectl:/mnt/c/Users/gagag/AppData/Local/Programs/Antigravity/bin:/mnt/c/Users/gagag/AppData/Roaming/npm:/mnt/c/Users/gagag/.local/bin:/mnt/c/Program Files/GitHub CLI:/mnt/c/Program Files/Go/bin:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files (x86)/NetSarang/Xshell 8/:/mnt/c/Program Files/NVIDIA Corporation/NVIDIA App/NvDLISR:/mnt/c/Users/gagag/.cargo/bin:/mnt/c/Users/gagag/AppData/Local/com.LangflowDesktop/uv:/mnt/c/Program Files/MySQL/MySQL Shell 8.0/bin/:/mnt/c/Users/gagag/AppData/Local/Microsoft/WindowsApps:/mnt/c/Program Files/Bandizip/:/mnt/c/Program Files/Java/jdk1.8.0_231/bin:/mnt/c/Users/gagag/AppData/Local/Android/Sdk/platform-tools:/mnt/c/Users/gagag/AppData/Local/GitHubDesktop/bin:/mnt/c/Users/gagag/AppData/Local/Programs/Fiddler:/mnt/c/Users/gagag/go/bin:/mnt/c/Program Files (x86)/SoftForum/XecureHSM/:/mnt/c/Users/gagag/AppData/Local/.meteor:/mnt/c/Users/gagag/AppData/Local/Microsoft/WindowsApps:/mnt/c/tools/dart-sdk/bin:/mnt/c/Users/gagag/AppData/Roaming/Pub/Cache/bin:/mnt/c/src/flutter/bin:/mnt/c/Users/gagag/AppData/Roaming/nvm:/mnt/c/Program Files/nodejs:/mnt/c/Users/gagag/AppData/Local/Programs/Hyper/resources/bin:/mnt/c/Users/gagag/AppData/Local/JetBrains/Toolbox/scripts:/mnt/c/Users/gagag/AppData/Local/Programs/Ollama:/mnt/c/Users/gagag/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Program Files/JetBrains/PyCharm 2024.1.1/bin:/mnt/c/Users/gagag/.bun/bin:/mnt/c/Program Files/JetBrains/GoLand 2024.3/bin:/mnt/c/Users/gagag/go/bin:/mnt/c/Users/gagag/AppData/Local/Programs/cursor/resources/app/bin:/mnt/c/Users/gagag/.jetbrains/kubectl:/mnt/c/Users/gagag/AppData/Local/Programs/Antigravity/bin:/mnt/c/Users/gagag/AppData/Roaming/npm:/mnt/c/Users/gagag/.local/bin:/mnt/c/Users/gagag/AppData/Local/Python/bin:/mnt/c/Program Files/Go/bin:/mnt/c/Users/gagag/go/bin:/mnt/c/Users/gagag/AppData/Local/Programs/Antigravity IDE/bin:/snap/bin:/home/gaga/go/bin&quot;,
+  &quot;DBUS_SESSION_BUS_ADDRESS&quot;: &quot;unix:path=/run/user/1000/bus&quot;,
+  &quot;NVM_BIN&quot;: &quot;/home/gaga/.nvm/versions/node/v24.18.0/bin&quot;,
+  &quot;HOSTTYPE&quot;: &quot;x86_64&quot;,
+  &quot;PULSE_SERVER&quot;: &quot;unix:/mnt/wslg/PulseServer&quot;,
+  &quot;OLDPWD&quot;: &quot;/home/gaga&quot;,
+  &quot;GOPATH&quot;: &quot;/home/gaga/go&quot;
+}
+
+</pre>
+        </div>
+        <div id="tab-ffmpeg-log" class="tab-content">
+          <pre class="bg-black/40 p-4 rounded border border-gray-800 text-xs font-mono text-gray-300 overflow-auto max-h-96 whitespace-pre-wrap">(No log file found)</pre>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.getElementById('tab-' + tabId).classList.add('active');
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('text-blue-400', 'border-blue-500');
+        btn.classList.add('text-gray-400', 'border-transparent');
+      });
+      document.getElementById('tab-btn-' + tabId).classList.remove('text-gray-400', 'border-transparent');
+      document.getElementById('tab-btn-' + tabId).classList.add('text-blue-400', 'border-blue-500');
+    }
+  </script>
+</body>
+</html>
+  

@@ -127,6 +127,23 @@ limitation으로 표시됩니다(권한 부족은 `permission_denied`로 구분)
   운영 현황 대시보드에서 즉시 경고로 보입니다. 원복은 변경 관리 승인
   흐름으로 수행합니다.
 
+## 커넥션 풀 진단
+
+`diagnose_connection_pool`(MCP) / `GET /api/observability/pool`(REST)은
+SQLON이 대상 DB로 유지하는 **자체 커넥션 풀**의 상태를 진단합니다. 대상 DB에
+쿼리하지 않고 Go `sql.DB` 통계만 사용합니다.
+
+- 신호: 커넥션 획득 대기(`wait_count`/`wait_duration`)가 발생하면 풀이
+  상한에 도달했다는 뜻입니다. 평균 대기시간으로 심각도를 나눕니다
+  (경합=warning, 큰 지연=critical/`POOL_EXHAUSTION`).
+- 대기 없이도 사용 중 커넥션이 상한의 90% 이상이면 `POOL_NEAR_SATURATION`.
+- 유휴 상한 초과 종료(`max_idle_closed`)가 잦으면 `max_idle_conns` 상향,
+  경합이 없고 여유가 크면 오버프로비저닝을 참고 노트로 제시합니다.
+- 권고 `max_open_conns` 값을 함께 반환합니다. 조치는 프로파일 풀 설정
+  변경으로 수행합니다. 풀 미생성 시 `not_collected`.
+
+워크로드 화면(`/admin/workload`)에 커넥션 풀 패널로 표시됩니다.
+
 ## 운영 저장소와 보존
 
 단독 모드는 `<data>/operations/snapshots/YYYYMMDD.jsonl`에 append-only JSONL로
@@ -163,6 +180,7 @@ sqlon \
 | MCP `get_backup_status` | 백업·아카이브 상태 |
 | `GET /api/observability/security?profile=...` · MCP `get_security_posture` | 사용자·권한 진단 |
 | `GET /api/observability/config-drift?profile=...` · MCP `compare_configuration` | 설정 드리프트 감지 |
+| `GET /api/observability/pool?profile=...` · MCP `diagnose_connection_pool` | 커넥션 풀 진단 |
 
 조회 기본값은 저장소 데이터이며 대상 DB를 암묵적으로 재조회하지 않습니다.
 `fresh=true`일 때만 새 시스템 조회를 수행하고 저장합니다. REST와 MCP 모두 같은

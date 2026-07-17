@@ -70,7 +70,7 @@ AI-generated changes were not accepted automatically. The project owner remained
 This combination allowed Codex to accelerate implementation while GPT-5.6 supported architectural reasoning and systematic review, with human judgment controlling the final result.
 
 **📚 상세 문서**: [docs/README.md](docs/README.md) — 아키텍처, MCP 도구
-레퍼런스(95종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
+레퍼런스(96종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
 가이드(18종), REST API, DB 커넥터, 운영/평가/보안/개발자 가이드.
 
 ## Quick Start
@@ -424,6 +424,7 @@ Invoke-RestMethod `
 - `get_backup_status` — DB 서버가 스스로 보고하는 백업·아카이브 상태를 반환. PostgreSQL WAL 아카이버 성공/실패, MySQL/MariaDB binlog(PITR 기반), Oracle ARCHIVELOG·RMAN 이력·FRA 사용률(base 뷰만). 외부 백업 도구 잡 상태는 limitation으로 명시
 - `get_security_posture` — 사용자·권한 진단: 로그인 가능한 비기본 SUPERUSER/DBA 역할, 위험 시스템 권한, 와일드카드 호스트 고권한 계정, 만료 비밀번호를 근거·심각도와 함께 반환. 읽기 전용 진단이며 조치는 변경계획으로만 수행
 - `compare_configuration` — 설정 드리프트 감지: 프로파일 config_baseline과 라이브 서버 파라미터(pg_settings/global_variables/V$PARAMETER) 대조. 선언된 키만 검사, on/off↔true/false↔1/0 동치, pending_restart 표시. 읽기 전용, 조치는 변경계획으로
+- `diagnose_connection_pool` — SQLON이 대상 DB로 유지하는 커넥션 풀 진단: sql.DB 통계(획득 대기·사용/유휴/전체·유휴/수명 초과 종료)를 max_open_conns/max_idle_conns와 대조해 오버·언더 프로비저닝 평가·권고. 대상 DB에 쿼리하지 않는 SQLON 측 텔레메트리, 풀 미생성 시 not_collected
 - `get_workload_summary` — 대상 DB의 저장된 누적 시스템 카운터와 이전 스냅숏 차이에서 계산한 QPS/TPS, 연결, I/O, 대기 이벤트를 근거·수집 시각과 함께 반환
 - `get_top_sql` — SQL 원문·bind 없이 fingerprint/SQL ID별 호출·elapsed·CPU·reads·rows와 Oracle plan hash를 반환하고 확장·권한 제한을 명시
 - `get_storage_status` — DB·테이블·tablespace 사용량, 사용률과 이전 스냅숏 대비 일간 증가량을 반환하고 80/90퍼센트 위험 evidence를 제공
