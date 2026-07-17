@@ -10,6 +10,11 @@ header{padding:13px 26px;background:#fff;border-bottom:1px solid var(--line);dis
 main{max-width:1600px;margin:auto;padding:20px 26px 60px}.context{padding:11px 14px;background:#17243b;color:#e9f0ff;border-radius:10px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap}.context span{padding-right:9px;border-right:1px solid #42516b}.context span:last-child{border:0}.cards{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:14px}.card,.panel{background:var(--card);border:1px solid var(--line);border-radius:11px}.card{padding:14px}.card small{display:block;color:var(--sub)}.card b{font-size:24px}.bad b{color:var(--bad)}.warn b{color:var(--warn)}
 .panel{margin-bottom:14px;overflow:hidden}.panel h2{font-size:15px;margin:0;padding:13px 15px;border-bottom:1px solid var(--line)}.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap}th{font-size:12px;color:#536176;background:#f8fafc}.muted{color:var(--sub);font-size:12px}.badge{display:inline-block;padding:2px 7px;border-radius:10px;background:#eef2f7;font-size:11px}.badge.protected{background:#fee2e2;color:#991b1b}.badge.wait{background:#fef3c7;color:#854d0e}.empty{padding:32px;text-align:center;color:var(--sub)}
 .roots{display:flex;gap:10px;flex-wrap:wrap;padding:13px}.root{border:1px solid #f2b8b8;background:#fff5f5;border-radius:9px;padding:10px 13px}.root b{color:#991b1b}.edge{display:grid;grid-template-columns:minmax(160px,1fr) 70px minmax(160px,1fr) 1fr;gap:9px;align-items:center}.arrow{text-align:center;color:var(--bad);font-weight:800}.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}
+.graphwrap{overflow:auto;padding:10px 12px;background:#fbfdff;max-height:520px}.graphwrap svg{display:block}
+.legend{display:flex;gap:16px;padding:8px 15px;font-size:12px;color:var(--sub);flex-wrap:wrap;border-bottom:1px solid var(--line)}.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:5px}
+.lk-edge{fill:none;stroke:#b91c1c;stroke-width:1.6;opacity:.72}.lk-edge.long{stroke-width:2.6;opacity:.9}.lk-elabel{font-size:10px;fill:#7a1f1f}
+svg text.nk{font-size:12px;font-weight:700;fill:#172033}svg text.nu{font-size:10.5px;fill:#5b6b7f}svg text.na{font-size:10px;fill:#991b1b;font-weight:700}
+rect.lk-root{fill:#fee2e2;stroke:#b91c1c;stroke-width:1.7}rect.lk-mid{fill:#fef3c7;stroke:#a16207;stroke-width:1.4}rect.lk-leaf{fill:#eef2f7;stroke:#94a3b8;stroke-width:1.2}
 @media(max-width:950px){.cards{grid-template-columns:repeat(2,1fr)}main{padding:15px}.edge{grid-template-columns:1fr}.arrow{text-align:left}.arrow:after{content:' 아래 세션 차단'}}
 </style>
 </head>
@@ -19,6 +24,9 @@ main{max-width:1600px;margin:auto;padding:20px 26px 60px}.context{padding:11px 1
   <div class="context" id="context"><span>환경 -</span><span>업무서비스 -</span><span>엔진 -</span><span>인스턴스 -</span><span>역할 -</span><span>수집 시각 -</span></div>
   <div id="messages"></div>
   <section class="cards"><div class="card"><small>전체 세션</small><b id="total">-</b></div><div class="card"><small>활성</small><b id="active">-</b></div><div class="card warn"><small>대기</small><b id="waiting">-</b></div><div class="card warn"><small>장기 실행</small><b id="long">-</b></div><div class="card bad"><small>차단 세션</small><b id="blocked">-</b></div><div class="card bad"><small>루트 블로커</small><b id="rootCount">-</b></div></section>
+  <section class="panel"><h2>블로킹 그래프 <span class="muted">— 화살표는 차단 방향(블로커→차단됨), 라벨은 잠금 유형·대기시간. 두꺼운 화살표는 60초 이상 대기</span></h2>
+    <div class="legend"><span><i style="background:#fee2e2;border:1px solid #b91c1c"></i>루트 블로커(원인)</span><span><i style="background:#fef3c7;border:1px solid #a16207"></i>중간(차단하며 차단됨)</span><span><i style="background:#eef2f7;border:1px solid #94a3b8"></i>차단된 세션</span></div>
+    <div class="graphwrap" id="lockGraph"><span class="muted">수집 전</span></div></section>
   <section class="panel"><h2>블로킹 트리</h2><div class="roots" id="roots"><span class="muted">수집 전</span></div><div class="scroll"><table><thead><tr><th>블로커</th><th>관계</th><th>차단된 세션</th><th>잠금·대기</th></tr></thead><tbody id="lockRows"><tr><td colspan="4" class="empty">수집 전</td></tr></tbody></table></div></section>
   <section class="panel"><h2>세션 목록 <span class="muted">— SQL 본문과 bind 값은 표시하지 않습니다</span></h2><div class="scroll"><table><thead><tr><th>세션 키</th><th>사용자·서비스</th><th>상태</th><th>SQL ID</th><th>SQL 실행시간</th><th>트랜잭션 시간</th><th>대기</th><th>클라이언트·모듈</th><th>보호</th></tr></thead><tbody id="sessionRows"><tr><td colspan="9" class="empty">수집 전</td></tr></tbody></table></div></section>
 </main>
@@ -33,7 +41,42 @@ async function loadProfiles(){const b=await get('/api/db-profiles');profiles=b.p
 function showMessages(items,error){$('#messages').innerHTML=(items||[]).map(x=>'<div class="message '+(error?'error':'')+'">'+esc(x)+'</div>').join('')}
 function context(profile,collected){$('#context').innerHTML=['환경 '+(profile.environment||'-'),'업무서비스 '+(profile.service_name||'-'),'엔진 '+(profile.type||'-'),'인스턴스 '+(profile.name||profile.id||'-'),'역할 '+(profile.role||'-'),'수집 시각 '+when(collected)].map(x=>'<span>'+esc(x)+'</span>').join('')}
 function renderSessions(body){const d=body.data||{};$('#total').textContent=d.total??0;$('#active').textContent=d.active??0;$('#waiting').textContent=d.waiting??0;$('#long').textContent=d.long_running??0;const rows=d.sessions||[];$('#sessionRows').innerHTML=rows.length?rows.map(s=>'<tr><td><b>'+esc(s.session_key)+'</b><div class="muted">'+esc(s.instance_id||'')+'</div></td><td>'+esc(s.user||'-')+'<div class="muted">'+esc(s.service||'-')+'</div></td><td><span class="badge">'+esc(s.state||'-')+'</span></td><td>'+esc(s.sql_id||'-')+'</td><td>'+duration(s.duration_seconds)+'</td><td>'+duration(s.transaction_seconds)+'</td><td>'+(s.wait_event?'<span class="badge wait">'+esc(s.wait_class)+' · '+esc(s.wait_event)+'</span>':'-')+'</td><td>'+esc(s.client||'-')+'<div class="muted">'+esc(s.application||'-')+'</div></td><td>'+(s.protected?'<span class="badge protected">보호 · '+esc(s.protection_reason)+'</span>':'일반')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">정상 수집되었으며 표시할 세션이 없습니다.</td></tr>';return [...(body.warnings||[]),...(body.limitations||[])]}
-function renderLocks(body){const d=body.data||{},roots=d.roots||[],edges=d.edges||[];$('#blocked').textContent=d.blocked_sessions??0;$('#rootCount').textContent=roots.length;$('#roots').innerHTML=roots.length?roots.map(r=>'<div class="root"><b>'+esc(r.session_key)+'</b><div>'+esc(r.user||'사용자 미확인')+' · 영향 '+esc(r.affected_sessions)+'개 세션</div></div>').join(''):'<span class="muted">정상 수집되었으며 현재 루트 블로커가 없습니다.</span>';$('#lockRows').innerHTML=edges.length?edges.map(e=>'<tr><td>'+esc(e.blocker_key)+'<div class="muted">'+esc(e.blocker_user||'-')+'</div></td><td class="arrow">→ 차단</td><td>'+esc(e.blocked_key)+'<div class="muted">'+esc(e.blocked_user||'-')+'</div></td><td>'+esc(e.lock_type||'-')+' · '+duration(e.wait_seconds)+'</td></tr>').join(''):'<tr><td colspan="4" class="empty">정상 수집되었으며 현재 블로킹 관계가 없습니다.</td></tr>';return [...(body.warnings||[]),...(body.limitations||[])]}
+function renderLocks(body){const d=body.data||{},roots=d.roots||[],edges=d.edges||[];$('#blocked').textContent=d.blocked_sessions??0;$('#rootCount').textContent=roots.length;$('#roots').innerHTML=roots.length?roots.map(r=>'<div class="root"><b>'+esc(r.session_key)+'</b><div>'+esc(r.user||'사용자 미확인')+' · 영향 '+esc(r.affected_sessions)+'개 세션</div></div>').join(''):'<span class="muted">정상 수집되었으며 현재 루트 블로커가 없습니다.</span>';$('#lockRows').innerHTML=edges.length?edges.map(e=>'<tr><td>'+esc(e.blocker_key)+'<div class="muted">'+esc(e.blocker_user||'-')+'</div></td><td class="arrow">→ 차단</td><td>'+esc(e.blocked_key)+'<div class="muted">'+esc(e.blocked_user||'-')+'</div></td><td>'+esc(e.lock_type||'-')+' · '+duration(e.wait_seconds)+'</td></tr>').join(''):'<tr><td colspan="4" class="empty">정상 수집되었으며 현재 블로킹 관계가 없습니다.</td></tr>';renderLockGraph(edges,roots);return [...(body.warnings||[]),...(body.limitations||[])]}
+function renderLockGraph(edges,roots){
+  const g=$('#lockGraph');
+  if(!edges.length){g.innerHTML='<span class="muted">정상 수집되었으며 현재 블로킹 관계가 없습니다.</span>';return;}
+  const affected={};(roots||[]).forEach(r=>{affected[r.session_key]=r.affected_sessions;});
+  const users={},children={},indeg={},nodes=new Set(),incoming={};
+  edges.forEach(e=>{const b=e.blocker_key,w=e.blocked_key;if(!b||!w)return;nodes.add(b);nodes.add(w);
+    if(e.blocker_user)users[b]=e.blocker_user;if(e.blocked_user)users[w]=e.blocked_user;
+    (children[b]=children[b]||[]).push(w);indeg[w]=(indeg[w]||0)+1;if(indeg[b]===undefined)indeg[b]=0;
+    incoming[w]={type:e.lock_type,wait:e.wait_seconds};});
+  // Longest-path layering (relaxation, capped to node count → cycle-safe).
+  const depth={};nodes.forEach(n=>depth[n]=0);
+  for(let i=0;i<nodes.size;i++){let changed=false;edges.forEach(e=>{if(!e.blocker_key||!e.blocked_key)return;const nd=depth[e.blocker_key]+1;if(nd>depth[e.blocked_key]){depth[e.blocked_key]=nd;changed=true;}});if(!changed)break;}
+  const byDepth={};[...nodes].sort().forEach(n=>{(byDepth[depth[n]]=byDepth[depth[n]]||[]).push(n);});
+  const colW=232,rowH=76,nodeW=182,nodeH=48,padX=22,padY=22;
+  const depths=Object.keys(byDepth).map(Number);const maxDepth=Math.max.apply(null,depths);
+  const maxRows=Math.max.apply(null,Object.values(byDepth).map(a=>a.length));
+  const width=padX*2+maxDepth*colW+nodeW, height=padY*2+(maxRows-1)*rowH+nodeH;
+  const pos={};Object.keys(byDepth).forEach(dep=>{byDepth[dep].forEach((n,i)=>{pos[n]={x:padX+dep*colW,y:padY+i*rowH};});});
+  const trunc=s=>{s=String(s||'');return s.length>22?s.slice(0,21)+'…':s;};
+  let svg='<svg viewBox="0 0 '+width+' '+height+'" width="'+width+'" height="'+height+'" xmlns="http://www.w3.org/2000/svg"><defs><marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#b91c1c"/></marker></defs>';
+  edges.forEach(e=>{const a=pos[e.blocker_key],b=pos[e.blocked_key];if(!a||!b)return;
+    const x1=a.x+nodeW,y1=a.y+nodeH/2,x2=b.x,y2=b.y+nodeH/2,mx=(x1+x2)/2;
+    const long=Number(e.wait_seconds||0)>=60;
+    svg+='<path d="M'+x1+' '+y1+' C '+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" class="lk-edge'+(long?' long':'')+'" marker-end="url(#arw)"/>';
+    svg+='<text x="'+mx+'" y="'+(((y1+y2)/2)-4)+'" class="lk-elabel" text-anchor="middle">'+esc((e.lock_type||'lock')+' · '+duration(e.wait_seconds))+'</text>';});
+  nodes.forEach(n=>{const p=pos[n];const isRoot=(indeg[n]||0)===0;const hasKids=(children[n]||[]).length>0;
+    const cls=isRoot?'lk-root':(hasKids?'lk-mid':'lk-leaf');
+    const title=n+(users[n]?(' · '+users[n]):'')+(incoming[n]?(' · '+incoming[n].type+' 대기 '+duration(incoming[n].wait)):'');
+    svg+='<g transform="translate('+p.x+','+p.y+')"><title>'+esc(title)+'</title>'+
+      '<rect class="'+cls+'" width="'+nodeW+'" height="'+nodeH+'" rx="9"/>'+
+      '<text class="nk" x="11" y="20">'+esc(trunc(n))+'</text>'+
+      '<text class="nu" x="11" y="36">'+esc(trunc(users[n]||'사용자 미확인'))+'</text>'+
+      (isRoot&&affected[n]!=null?'<text class="na" x="'+(nodeW-10)+'" y="20" text-anchor="end">영향 '+esc(affected[n])+'</text>':'')+
+      '</g>';});
+  svg+='</svg>';g.innerHTML=svg;}
 async function load(){const id=$('#profile').value;if(!id)return;$('#fresh').textContent='수집 중…';try{const [sessions,locks]=await Promise.all([get('/api/observability/sessions?profile='+encodeURIComponent(id)),get('/api/observability/locks?profile='+encodeURIComponent(id))]);const profile=profiles.find(p=>p.id===id)||{};context(profile,sessions.collected_at);$('#fresh').textContent='최신 수집 '+when(sessions.collected_at)+' · '+esc(sessions.trace_id||'');showMessages([...renderSessions(sessions),...renderLocks(locks)],false)}catch(e){showMessages(['수집 실패: '+e.message+' — 데이터 없음과 수집 실패는 서로 다른 상태입니다.'],true);$('#fresh').textContent='수집 실패'}}
 $('#refresh').onclick=load;JASQL.mount({page:'sessions',onReady:async()=>{try{await loadProfiles();await load()}catch(e){showMessages(['프로파일 조회 실패: '+e.message],true)}}});
 </script>
