@@ -196,19 +196,39 @@ function runIndex(){
       '<div class="kpi"><div class="n">'+(d.scanned_queries||0)+'</div><div class="l">스캔한 쿼리</div></div>'+
       '<div class="kpi"><div class="n">'+(d.slow_queries||0)+'</div><div class="l">느린 쿼리</div></div>'+
       '<div class="kpi"><div class="n">'+(d.count||0)+'</div><div class="l">인덱스 후보</div></div></div>';
-    var rows=c.map(function(x){
+    var rows=c.map(function(x,i){
       return '<tr><td class="mono">'+esc(x.table)+'.'+esc(x.column)+'</td>'+
         '<td class="num">'+x.occurrences+'</td><td class="num">'+x.avg_ms+'</td><td class="num">'+x.max_ms+'</td>'+
         '<td><div class="ddl">'+esc(x.ddl)+'</div>'+
-        '<button class="btn mini" style="margin-top:6px" onclick="copyText(this,\''+esc(x.ddl).replace(/'/g,"\\'")+'\')">DDL 복사</button>'+
+        '<button class="btn mini" style="margin-top:6px" onclick="copyText(this,\''+esc(x.ddl).replace(/'/g,"\\'")+'\')">DDL 복사</button> '+
+        '<button class="btn mini" style="margin-top:6px" data-idx-plan="'+i+'">변경 계획 등록</button>'+
         '<div class="mini" style="margin-top:4px">예: <code>'+esc(x.sample_sql||'')+'</code></div></td></tr>';
     }).join('');
     out.innerHTML=kpis+(rows?
       '<table><thead><tr><th>컬럼</th><th class="num">발생</th><th class="num">평균 ms</th><th class="num">최대 ms</th><th>제안 DDL</th></tr></thead><tbody>'+rows+'</tbody></table>':
       '<div class="mini">후보가 없습니다. 임계값을 낮추거나 기간을 늘려보세요.</div>')+
       (d.note?'<div class="note">'+esc(d.note)+'</div>':'');
+    out.querySelectorAll('[data-idx-plan]').forEach(function(b){b.onclick=function(){registerIndexPlan(c[+b.dataset.idxPlan],b);};});
     flash(true,'분석 완료');
   }).catch(function(e){out.innerHTML='';flash(false,e.message);});
+}
+// Convert an index candidate into an approval-gated ChangePlan (TUN-009):
+// never run DDL directly — generate a safely-quoted CREATE INDEX step (with a
+// DROP INDEX compensation) and file it as a draft for review/approval.
+function registerIndexPlan(cand,btn){
+  if(!cand){return;}
+  if(!prof()){flash(false,'프로파일을 선택하세요');return;}
+  btn.disabled=true;
+  var tmplArgs={profile:prof(),action:'create_index',args:{table:cand.table,columns:[cand.column]}};
+  post('/api/changes/template',tmplArgs).then(function(t){
+    if(t.status!=='ok'){throw new Error(t.error||'템플릿 생성 실패');}
+    var id='chg-idx-'+cand.table.replace(/[^a-zA-Z0-9]+/g,'_')+'-'+cand.column.replace(/[^a-zA-Z0-9]+/g,'_')+'-'+Date.now();
+    var plan={id:id,profile_id:prof(),target:cand.table,reason:'인덱스 어드바이저 제안: '+cand.table+'.'+cand.column+' (발생 '+cand.occurrences+'회, 평균 '+cand.avg_ms+'ms)',risk:'high',steps:[t.data]};
+    return fetch('/api/changes',{method:'POST',headers:Object.assign(headers(),{'Idempotency-Key':id}),body:JSON.stringify(plan)}).then(function(r){return r.json().then(function(b){if(!r.ok){throw new Error(b.error||'변경계획 생성 실패');}return b;});});
+  }).then(function(){
+    btn.textContent='등록됨 ✓';flash(true,'변경계획 초안이 생성되었습니다 — 변경 관리에서 제출·승인하세요.');
+    var out=$('idxOut');if(out&&!$('idxPlanLink')){var note=document.createElement('div');note.className='note';note.id='idxPlanLink';note.innerHTML='변경계획이 등록되었습니다. <a href="/admin/changes">변경 관리로 이동</a>하여 제출→승인→실행을 진행하세요.';out.appendChild(note);}
+  }).catch(function(e){btn.disabled=false;flash(false,e.message);});
 }
 function copyText(btn,t){navigator.clipboard.writeText(t).then(function(){var o=btn.textContent;btn.textContent='복사됨 ✓';setTimeout(function(){btn.textContent=o;},1400);});}
 

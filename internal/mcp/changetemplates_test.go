@@ -62,6 +62,77 @@ func TestBuildChangeStepReversibleActionsQuoteAndValidate(t *testing.T) {
 	}
 }
 
+func TestBuildChangeStepCreateIndexIsReversibleAndQuoted(t *testing.T) {
+	cases := []struct {
+		name, dialect      string
+		args               map[string]any
+		wantCommand        string
+		wantCompContains   string
+		wantVerifyContains string
+	}{
+		{
+			name: "postgres qualified table single column", dialect: "postgres",
+			args:               map[string]any{"table": "public.orders", "columns": []any{"created_at"}},
+			wantCommand:        `CREATE INDEX "idx_orders_created_at" ON "public"."orders" ("created_at")`,
+			wantCompContains:   `DROP INDEX IF EXISTS "public"."idx_orders_created_at"`,
+			wantVerifyContains: `pg_indexes WHERE indexname = 'idx_orders_created_at'`,
+		},
+		{
+			name: "mysql multi-column comma string with explicit name", dialect: "mysql",
+			args:               map[string]any{"table": "orders", "columns": "cust_id,created_at", "index": "ix_orders_cust_created"},
+			wantCommand:        "CREATE INDEX `ix_orders_cust_created` ON `orders` (`cust_id`, `created_at`)",
+			wantCompContains:   "DROP INDEX `ix_orders_cust_created` ON `orders`",
+			wantVerifyContains: "INDEX_NAME = 'ix_orders_cust_created' AND TABLE_NAME = 'orders'",
+		},
+		{
+			name: "oracle unique single column", dialect: "oracle",
+			args:               map[string]any{"table": "APP.ORDERS", "column": "STATUS", "unique": true, "index": "UX_ORDERS_STATUS"},
+			wantCommand:        `CREATE UNIQUE INDEX "UX_ORDERS_STATUS" ON "APP"."ORDERS" ("STATUS")`,
+			wantCompContains:   `DROP INDEX "UX_ORDERS_STATUS"`,
+			wantVerifyContains: `all_indexes WHERE index_name = 'UX_ORDERS_STATUS'`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			step, err := buildChangeStep(tc.dialect, "create_index", 1, tc.args)
+			if err != nil {
+				t.Fatalf("buildChangeStep: %v", err)
+			}
+			if step.Command != tc.wantCommand {
+				t.Fatalf("command\n got %q\nwant %q", step.Command, tc.wantCommand)
+			}
+			if !strings.Contains(step.Compensation, tc.wantCompContains) {
+				t.Fatalf("compensation %q missing %q", step.Compensation, tc.wantCompContains)
+			}
+			if !strings.Contains(step.Verification, tc.wantVerifyContains) {
+				t.Fatalf("verification %q missing %q", step.Verification, tc.wantVerifyContains)
+			}
+			p := change.Plan{ID: "t", ProfileID: "p", Target: "x", Reason: "r", Risk: change.High, Steps: []change.Step{{Order: 1, Command: step.Command, Verification: step.Verification, Compensation: step.Compensation}}}
+			if err := p.Validate(); err != nil {
+				t.Fatalf("generated index step fails plan validation: %v", err)
+			}
+		})
+	}
+}
+
+func TestBuildChangeStepCreateIndexRejectsMissingAndInjection(t *testing.T) {
+	if _, err := buildChangeStep("postgres", "create_index", 1, map[string]any{"columns": []any{"c"}}); err == nil {
+		t.Fatal("missing table must be refused")
+	}
+	if _, err := buildChangeStep("postgres", "create_index", 1, map[string]any{"table": "t"}); err == nil {
+		t.Fatal("missing columns must be refused")
+	}
+	// Injection attempt in the column is neutralized: the embedded double-quote
+	// is doubled so the payload stays inside one quoted identifier.
+	step, err := buildChangeStep("postgres", "create_index", 1, map[string]any{"table": "public.t", "columns": []any{`c") ; DROP TABLE t; --`}})
+	if err != nil {
+		t.Fatalf("quoting should neutralize, not error: %v", err)
+	}
+	if !strings.Contains(step.Command, `("c"") ; DROP TABLE t; --")`) {
+		t.Fatalf("column not safely quoted (expected doubled quote): %q", step.Command)
+	}
+}
+
 func TestBuildChangeStepRefusesPasswordAndInjection(t *testing.T) {
 	if _, err := buildChangeStep("postgres", "create_user", 1, map[string]any{"username": "x", "password": "secret"}); err == nil {
 		t.Fatal("password in a persisted plan must be refused")

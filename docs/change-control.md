@@ -48,8 +48,15 @@ draft/analyzing/review_required/approved/scheduled → cancelled
 | --- | --- | --- |
 | `create_user` | CREATE ROLE/USER (NOLOGIN·기본 호스트) | DROP ROLE/USER IF EXISTS |
 | `create_database` | CREATE DATABASE (owner·encoding) | DROP DATABASE IF EXISTS |
+| `create_index` | CREATE [UNIQUE] INDEX (방언별 DROP·검증) | DROP INDEX |
 | `grant` | GRANT … TO grantee | REVOKE … FROM grantee |
 | `revoke` | REVOKE … FROM grantee | GRANT … TO grantee |
+
+`create_index`는 `{table, columns, index?(자동 생성), unique?}`를 받아
+자격 있는 CREATE INDEX와 엔진별 DROP INDEX 보상을 만듭니다. 인덱스 어드바이저
+(`/admin/dba` 인덱스 제안)의 **[변경 계획 등록]** 버튼이 이 액션으로 제안 DDL을
+승인 흐름에 자동 적재합니다 — 운영 DB에 인덱스 DDL을 직접 실행하지 않습니다
+(요건 TUN-009).
 
 규칙:
 

@@ -173,8 +173,8 @@ function stepRow(i){
   div.innerHTML='<h3>단계 <span class="n">'+i+'</span><span class="grow"></span><button class="mini" type="button" data-del>삭제</button></h3>'+
     '<div class="steplabel">안전 템플릿 — 구조화된 권한 작업에서 안전 인용된 SQL을 자동 생성 (선택)</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'+
-      '<select data-tpl-action style="min-width:150px"><option value="">직접 작성</option><option value="create_user">사용자 생성</option><option value="create_database">데이터베이스 생성</option><option value="grant">권한 부여</option><option value="revoke">권한 회수</option></select>'+
-      '<input data-tpl-args placeholder=\'인자 JSON 예: {"username":"app_user"}\' style="flex:1;min-width:200px;font-family:var(--mono);font-size:12px">'+
+      '<select data-tpl-action style="min-width:150px"><option value="">직접 작성</option><option value="create_user">사용자 생성</option><option value="create_database">데이터베이스 생성</option><option value="create_index">인덱스 생성</option><option value="grant">권한 부여</option><option value="revoke">권한 회수</option></select>'+
+      '<input data-tpl-args placeholder=\'인자 JSON 예: {"table":"public.orders","columns":["created_at"]}\' style="flex:1;min-width:200px;font-family:var(--mono);font-size:12px">'+
       '<button class="mini" type="button" data-tpl-gen>생성</button>'+
     '</div>'+
     '<div class="steplabel">실행 문장 (command)</div><textarea data-k="command" placeholder="예: CREATE INDEX CONCURRENTLY idx_orders_created ON public.orders(created_at)"></textarea>'+
