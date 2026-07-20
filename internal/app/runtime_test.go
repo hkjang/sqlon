@@ -11,7 +11,7 @@ import (
 func TestRuntimeParsesFullSQLONCommandSurface(t *testing.T) {
 	env := map[string]string{"SQLON_ADMIN_TOKEN": "new", "JAMYPG_ADMIN_TOKEN": "old", "SQLON_META_DB": "postgres://meta"}
 	rt := Runtime{Stderr: &bytes.Buffer{}, Getenv: func(k string) string { return env[k] }}
-	cfg, err := rt.parse([]string{"-transport", "streamable-http", "-addr", "0.0.0.0:9797", "-endpoint", "/sqlon-mcp", "-stateless", "-sse-post", "-sync-interval", "5m", "-openmetadata-sync", "-dba-digest"})
+	cfg, err := rt.parse([]string{"-transport", "streamable-http", "-addr", "0.0.0.0:6767", "-endpoint", "/sqlon-mcp", "-stateless", "-sse-post", "-sync-interval", "5m", "-openmetadata-sync", "-dba-digest"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestRuntimeObservationCollectorPolicyFromSQLONAndLegacyEnvironment(t *testi
 }
 
 func TestValidateHTTPExposureUsesSQLONGuidance(t *testing.T) {
-	err := ValidateHTTPExposure("http", "0.0.0.0:9797", "", "", true)
+	err := ValidateHTTPExposure("http", "0.0.0.0:6767", "", "", true)
 	if err == nil || !strings.Contains(err.Error(), "SQLON_ADMIN_TOKEN") || strings.Contains(err.Error(), "JAMYPG_ADMIN_TOKEN") {
 		t.Fatalf("unexpected guidance: %v", err)
 	}

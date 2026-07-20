@@ -13,15 +13,15 @@ RUN CGO_ENABLED=1 go build -tags oracle -trimpath \
 
 FROM oraclelinux:9-slim
 RUN microdnf install -y oracle-instantclient-release-el9 \
- && microdnf install -y oracle-instantclient-basic libaio curl-minimal \
+ && microdnf install -y oracle-instantclient*-basiclite libaio curl \
  && microdnf clean all \
  && useradd --system --uid 10001 --home-dir /app --create-home sqlon
 COPY --from=build /out/sqlon /usr/local/bin/sqlon
 COPY --chown=sqlon:sqlon data/metadb /app/data/sqlon
 WORKDIR /app
 USER sqlon
-EXPOSE 9797
+EXPOSE 6767
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s \
-  CMD curl -fsS http://127.0.0.1:9797/healthz >/dev/null || exit 1
+  CMD curl -fsS http://127.0.0.1:6767/healthz >/dev/null || exit 1
 ENTRYPOINT ["sqlon"]
-CMD ["-transport", "http", "-addr", "0.0.0.0:9797", "-public-mcp", "-data", "/app/data/sqlon"]
+CMD ["-transport", "http", "-addr", "0.0.0.0:6767", "-public-mcp", "-data", "/app/data/sqlon"]

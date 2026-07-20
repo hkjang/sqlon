@@ -189,7 +189,7 @@ var openAPISpec = `{
         "description": "본문은 key→value 맵. 값=설정, \"\"=빈값, null=삭제(플래그/env 기본값으로 복귀). 마스터 토큰·허용 Origin·OIDC(SSO)는 재기동 없이 적용됩니다.",
         "security": [{"SessionCookie":[]},{"AdminToken":[]}],
         "requestBody": { "required": true, "content": { "application/json": { "schema": {"type":"object","additionalProperties":{"type":["string","null"]}},
-          "examples": { "oidc": { "value": { "oidc_issuer":"https://kc/realms/x","oidc_client_id":"sqlon","oidc_client_secret":"...","oidc_redirect_url":"https://host:9797/auth/sso/callback" } } } } } },
+          "examples": { "oidc": { "value": { "oidc_issuer":"https://kc/realms/x","oidc_client_id":"sqlon","oidc_client_secret":"...","oidc_redirect_url":"https://host:6767/auth/sso/callback" } } } } } },
         "responses": { "200": {"description":"{ok, settings[], note}"}, "403": {"description":"admin 아님"} } }
     },
     "/api/health": {

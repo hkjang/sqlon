@@ -170,7 +170,7 @@ func (rt Runtime) parse(args []string) (config, error) {
 	}
 	fs.StringVar(&c.dataDir, "data", defaultDir, "SQLON operation data directory")
 	fs.StringVar(&c.transport, "transport", "http", "MCP transport: http or stdio")
-	fs.StringVar(&c.addr, "addr", "127.0.0.1:9797", "HTTP listen address")
+	fs.StringVar(&c.addr, "addr", "127.0.0.1:6767", "HTTP listen address")
 	fs.StringVar(&c.endpoint, "endpoint", "/mcp", "MCP endpoint path")
 	fs.StringVar(&c.allowOrigins, "allow-origin", "", "Comma-separated allowed Origin values")
 	fs.BoolVar(&c.publicMCP, "public-mcp", false, "Explicitly allow standalone non-loopback HTTP")

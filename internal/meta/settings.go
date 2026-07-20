@@ -41,7 +41,7 @@ var SettingDefs = []SettingDef{
 	{Key: SetOIDCClientID, Label: "OIDC Client ID", Group: "Keycloak SSO", Help: ""},
 	{Key: SetOIDCSecret, Label: "OIDC Client Secret", Secret: true, Group: "Keycloak SSO", Help: ""},
 	{Key: SetOIDCRedirect, Label: "OIDC Redirect URL", Group: "Keycloak SSO",
-		Help: "예: https://host:9797/auth/sso/callback"},
+		Help: "예: https://host:6767/auth/sso/callback"},
 	{Key: SetCacheTTL, Label: "쿼리 결과 캐시 TTL(초)", Group: "성능",
 		Help: "동일 (프로파일, SQL, max_rows) 결과를 재사용하는 시간. 0=캐시 비활성. 기본 60."},
 }

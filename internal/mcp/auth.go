@@ -408,7 +408,7 @@ type OIDCProvider struct {
 	Issuer       string
 	ClientID     string
 	ClientSecret string
-	RedirectURL  string // e.g. https://host:9797/auth/sso/callback
+	RedirectURL  string // e.g. https://host:6767/auth/sso/callback
 
 	mu   sync.Mutex
 	disc *oidcDiscovery
