@@ -79,7 +79,7 @@ This combination allowed Codex to accelerate implementation while GPT-5.6 suppor
 | --- | --- |
 | 로컬 HTTP MCP + 운영 콘솔 | `go run ./cmd/sqlon -transport http -addr 127.0.0.1:9797` |
 | 로컬 stdio MCP | `go run ./cmd/sqlon -transport stdio` |
-| 표준 컨테이너 | `docker build -t sqlon/sqlon:v0.59.0 .` |
+| 표준 컨테이너 | `docker build -t sqlon/sqlon:v0.1.0 .` |
 | 통합 테스트 DB 3종 기동 | `docker compose -f deploy/test/docker-compose.yml up -d` |
 | 통합 테스트 (pg+mysql+mariadb) | `go test -tags integration ./test/integration -v` |
 
@@ -168,12 +168,12 @@ go build -o ./bin/sqlon ./cmd/sqlon
 표준판과 Oracle판 이미지를 분리해 빌드합니다:
 
 ```sh
-docker build -t sqlon/sqlon:v0.59.0 .
-docker build -f Dockerfile.oracle -t sqlon/sqlon-oracle:v0.59.0 .
+docker build -t sqlon/sqlon:v0.1.0 .
+docker build -f Dockerfile.oracle -t sqlon/sqlon-oracle:v0.1.0 .
 docker run --rm -p 9797:9797 \
   -e SQLON_ADMIN_TOKEN=change-me \
   -e PG_PROD_PW=... \
-  sqlon/sqlon:v0.59.0
+  sqlon/sqlon:v0.1.0
 ```
 
 DB 프로파일은 `/admin/db` 또는 DB profile REST/MCP API로 구성한 뒤
