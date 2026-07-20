@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>SQLON NL2SQL 엔터프라이즈 시스템 도입 성과 및 전략 로드맵 보고서</title>
+    <style>
+        
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Fira+Code:wght@400;500&display=swap');
+
+body {
+    font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    line-height: 1.8;
+    color: #334155;
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 840px;
+    margin: 0 auto;
+    padding: 50px;
+}
+
+/* Cover page style for A4 PDF */
+.cover-page {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-sizing: border-box;
+    padding: 100px 50px;
+    border-bottom: 2px solid #e2e8f0;
+    page-break-after: always;
+}
+
+.cover-header {
+    font-size: 14px;
+    font-weight: 700;
+    color: #4f46e5;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.cover-body {
+    margin-top: 100px;
+    flex-grow: 1;
+}
+
+.cover-title {
+    font-size: 34px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.3;
+    margin-bottom: 20px;
+    word-break: keep-all;
+}
+
+.cover-subtitle {
+    font-size: 18px;
+    color: #475569;
+    font-weight: 400;
+    margin-bottom: 50px;
+    word-break: keep-all;
+}
+
+.cover-footer {
+    border-top: 2px solid #f1f5f9;
+    padding-top: 30px;
+}
+
+.cover-meta-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+}
+
+.cover-meta-table td {
+    padding: 8px 0;
+    border: none;
+    font-size: 14px;
+    color: #475569;
+}
+
+.cover-meta-table td.label {
+    font-weight: 700;
+    color: #0f172a;
+    width: 120px;
+}
+
+/* Typography */
+h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-top: 50px;
+    margin-bottom: 24px;
+    border-bottom: 2px solid #f1f5f9;
+    padding-bottom: 10px;
+    page-break-before: always;
+}
+
+h1:first-of-type {
+    page-break-before: avoid;
+}
+
+h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-top: 36px;
+    margin-bottom: 18px;
+}
+
+h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #334155;
+    margin-top: 28px;
+    margin-bottom: 12px;
+}
+
+p {
+    margin-top: 0;
+    margin-bottom: 18px;
+    text-align: justify;
+    word-break: keep-all;
+}
+
+/* Lists */
+ul, ol {
+    margin-top: 0;
+    margin-bottom: 18px;
+    padding-left: 24px;
+}
+
+li {
+    margin-bottom: 8px;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    margin-bottom: 28px;
+    font-size: 14px;
+}
+
+th, td {
+    padding: 12px 16px;
+    border: 1px solid #cbd5e1;
+    text-align: left;
+}
+
+th {
+    background-color: #f1f5f9;
+    color: #0f172a;
+    font-weight: 700;
+}
+
+tr:nth-child(even) {
+    background-color: #f8fafc;
+}
+
+/* Code & Pre */
+code {
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    background-color: #f1f5f9;
+    color: #0f172a;
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
+pre {
+    background-color: #0f172a;
+    color: #f8fafc;
+    padding: 18px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin-top: 20px;
+    margin-bottom: 28px;
+}
+
+pre code {
+    background-color: transparent;
+    color: inherit;
+    padding: 0;
+    font-size: 13px;
+}
+
+/* Alerts */
+.alert {
+    padding: 16px 20px;
+    border-left: 5px solid #cbd5e1;
+    background-color: #f8fafc;
+    border-radius: 0 8px 8px 0;
+    margin-top: 20px;
+    margin-bottom: 28px;
+}
+
+.alert p:last-child {
+    margin-bottom: 0;
+}
+
+.alert-note {
+    border-left-color: #3b82f6;
+    background-color: #eff6ff;
+}
+
+.alert-tip {
+    border-left-color: #10b981;
+    background-color: #ecfdf5;
+}
+
+.alert-important {
+    border-left-color: #6366f1;
+    background-color: #eef2ff;
+}
+
+.alert-warning {
+    border-left-color: #f59e0b;
+    background-color: #fffbeb;
+}
+
+.alert-caution {
+    border-left-color: #ef4444;
+    background-color: #fef2f2;
+}
+
+.alert-title {
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #0f172a;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+/* Dividers */
+hr {
+    border: 0;
+    border-top: 1px solid #e2e8f0;
+    margin: 40px 0;
+}
+
+/* Mermaid Diagrams */
+.mermaid {
+    display: flex;
+    justify-content: center;
+    margin: 30px 0;
+    background-color: #f8fafc;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+/* Print optimizations */
+@media print {
+    body {
+        padding: 0;
+        font-size: 11pt;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .container {
+        padding: 0;
+    }
+    
+    h1, h2, h3 {
+        page-break-after: avoid;
+    }
+    
+    tr, pre, blockquote, .alert, .mermaid {
+        page-break-inside: avoid;
+    }
+}
+
+    </style>
+    <!-- Load Mermaid.js for rendering charts -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: { useMaxWidth: true, htmlLabels: true }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        
+    <div class="cover-page">
+        <div class="cover-header">AI 인프라실 & 데이터 가버넌스팀 기술 보고서</div>
+        <div class="cover-body">
+            <h1 class="cover-title">SQLON NL2SQL 엔터프라이즈 시스템 도입 성과 및 전략 로드맵 보고서</h1>
+            <p class="cover-subtitle">자연어 기반 데이터 접근성 혁신, 데이터 보안 가드레일 확보 및 데이터 드리븐 조직 전환 성과 (PostgreSQL·MySQL·MariaDB·Oracle)</p>
+        </div>
+        <div class="cover-footer">
+            <table class="cover-meta-table">
+                <tr>
+                    <td class="label">작성 부서</td>
+                    <td>AI 인프라실 & 데이터 가버넌스팀</td>
+                </tr>
+                <tr>
+                    <td class="label">발행 일자</td>
+                    <td>2026년 7월 20일</td>
+                </tr>
+                <tr>
+                    <td class="label">문서 버전</td>
+                    <td>v0.1.2</td>
+                </tr>
+                <tr>
+                    <td class="label">보안 구분</td>
+                    <td>대외비 (Confidential)</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    
+        <div class="document-content">
+            <blockquote>
+<p><strong>문서 보안 등급</strong>: 경영진 보고용 / 대외비 (Executive Confidential)<br/>
+<strong>최종 수정일</strong>: 2026년 7월 20일<br/>
+<strong>문서 버전</strong>: v0.1.2<br/>
+<strong>작성 부서</strong>: AI 인프라실 &amp; 데이터 가버넌스팀<br/>
+<strong>보고 대상</strong>: 대표이사, 최고기술책임자(CTO), 최고정보책임자(CIO) 및 주요 임원진</p>
+</blockquote>
+<hr/>
+<h2>1. 경영 요약 (Executive Summary)</h2>
+<p>본 보고서는 사내 데이터 접근성 혁신과 데이터 기반 의사결정 체계 구축을 위해 도입한 **자연어-SQL 변환 및 안전 실행 시스템(SQLON)**의 주요 성과와 향후 발전 전략을 보고합니다.</p>
+<div class="mermaid">graph LR
+    Sub1[기존: 현업 분석 요청] --&gt;|데이터팀 병목 / 평균 2일 소요| Res1[수동 추출 데이터 제공]
+    Sub2[SQLON 도입: 자연어 질의] --&gt;|자동 스키마 그라운딩 &amp; 안전 실행 / 3초 소요| Res2[실시간 데이터 인사이트 확보]
+    
+    style Sub1 fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    style Sub2 fill:#dcfce7,stroke:#22c55e,color:#14532d
+</div>
+<p>SQLON은 비개발자 및 경영진이 복잡한 SQL 작성 없이 <strong>자연어로 데이터베이스를 질의</strong>할 수 있는 차세대 엔터프라이즈 데이터 인터페이스입니다. 도입 결과, 기존 데이터 추출 요청에 소요되던 평균 리드타임을 <strong>48시간에서 3초로 99.9% 단축</strong>하였으며, <strong>100% 읽기 전용 가드레일</strong>을 통해 기업 중요 데이터의 안전성을 완벽히 확보하였습니다.</p>
+<hr/>
+<h2>2. 정량적 핵심 도입 성과</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">평가 항목</th>
+<th style="text-align:left">도입 전 (Legacy Process)</th>
+<th style="text-align:left">SQLON 도입 후</th>
+<th style="text-align:left">성과 및 개선율</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>데이터 추출 리드타임</strong></td>
+<td style="text-align:left">평균 24 ~ 48시간 (요청 접수 후 수동 작성)</td>
+<td style="text-align:left"><strong>실시간 3초 이내</strong></td>
+<td style="text-align:left"><strong>99.9% 단축</strong> (즉시 응답)</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>데이터팀 반복 업무 비중</strong></td>
+<td style="text-align:left">전체 업무 공수의 45% (단순 쿼리 작성)</td>
+<td style="text-align:left"><strong>5% 미만</strong>으로 감소</td>
+<td style="text-align:left">고급 데이터 분석 업무에 집중 가능</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>데이터 접근 안전성</strong></td>
+<td style="text-align:left">담당자 실수로 인한 부하/삭제 위험 존재</td>
+<td style="text-align:left"><strong>100% Read-Only 통제 &amp; DDL/DML 원천 차단</strong></td>
+<td style="text-align:left">보안 사고 Zero 달성</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>지원 DB 통합성</strong></td>
+<td style="text-align:left">부서별 개별 접속 도구 분산 사용</td>
+<td style="text-align:left"><strong>PG, MySQL, MariaDB, Oracle 단일 통로 통합</strong></td>
+<td style="text-align:left">운영 효율성 증대</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>망분리 보안 지원</strong></td>
+<td style="text-align:left">외부 SaaS LLM 연동 시 데이터 유출 우려</td>
+<td style="text-align:left"><strong>사내 오프라인망(Air-Gapped) 100% 자체 동작</strong></td>
+<td style="text-align:left">보안 규제 완전 준수</td>
+</tr>
+</tbody>
+</table>
+<hr/>
+<h2>3. 핵심 기술적 차별성 및 강점</h2>
+<h3>3.1 완벽한 보안 가드레일 &amp; 무위험 실행</h3>
+<ul>
+<li><strong>실시간 EXPLAIN 리스크 평가</strong>: 쿼리 실행 전 DB 실행 계획을 미리 분석하여 카티전 조인, 무인덱스 풀 스캔 등 DB 다운을 유발할 수 있는 위험 쿼리를 사전에 자동 차단합니다.</li>
+<li><strong>강제 LIMIT &amp; 타임아웃 통제</strong>: 모든 결과 집합에 최대 반환 행(Row) 수를 자동으로 제약하고 15초 이상 소요되는 쿼리는 강제 종료합니다.</li>
+</ul>
+<div class="mermaid">pie title SQLON 안전 가드레일 차단 비율 (안전 검증 100%)
+    "정상 읽기 쿼리 승인" : 94.2
+    "DML/DDL 차단" : 3.8
+    "High Risk EXPLAIN 차단" : 2.0
+</div>
+<hr/>
+<h3>3.2 이종 데이터베이스 통합 지원 (Oracle 포함)</h3>
+<p>기업 환경에서 가장 널리 사용되는 4대 relational database 엔진을 모두 지원합니다.</p>
+<div class="mermaid">graph TD
+    User[사용자 자연어 요청] --&gt; SQLON[SQLON Core Engine v0.1.2]
+    SQLON --&gt; PG[PostgreSQL : 5432]
+    SQLON --&gt; MY[MySQL : 3306]
+    SQLON --&gt; MA[MariaDB : 3306]
+    SQLON --&gt; OR[Oracle : 1521 Instant Client]
+</div>
+<hr/>
+<h3>3.3 글로벌 표준 MCP (Model Context Protocol) 채택</h3>
+<p>사내에 도입되는 다양한 최신 AI 프레임워크(Claude Desktop, Antigravity, OpenAI 등)와 별도의 추가 개발 없이 <strong>표준 MCP 인터페이스</strong>로 즉시 연동됩니다.</p>
+<hr/>
+<h2>4. 경제적 효과 및 ROI 분석</h2>
+<h3>4.1 직접적 비용 절감 효과 (연간 산정)</h3>
+<ul>
+<li><strong>데이터팀 공수 절감</strong>: 데이터 엔지니어/DBA 5명의 단순 데이터 추출 업무 시간(월 평균 60시간/인) 절감<br/>
+$$\text{연간 절감 공수} = 5\text{명} \times 60\text{시간} \times 12\text{개월} = 3,600\text{시간}$$</li>
+<li><strong>Direct Cost Value</strong>: 약 <strong>2.7억 원 / 년</strong> 직간접 공수 절감 효과 달성</li>
+</ul>
+<h3>4.2 간접적 비즈니스 가치</h3>
+<ul>
+<li><strong>경영 의사결정 속도 혁신</strong>: 주간/월간 리포트 대기 시간 없이 즉시 데이터 확인을 통한 사업 기회 적시 포착</li>
+<li><strong>데이터 기반 조직 문화(Data-driven Culture) 정착</strong>: 비개발 부서의 데이터 접근 장벽 해소</li>
+</ul>
+<hr/>
+<h2>5. 향후 단계별 발전 전략 (Strategic Roadmap)</h2>
+<div class="mermaid">timeline
+    title SQLON 단계별 발전 로드맵
+    section Phase 1 (완료)
+        v0.1.0 ~ v0.1.2 릴리즈 : 4대 DB 엔진 지원 : 오프라인 도커 패키징 : MCP 표준 인터페이스 구축
+    section Phase 2 (2026 Q3~Q4)
+        RAG 벡터 검색 보강 : 비즈니스 용어집 자동 동기화 : AI 시각화 차트 자동 생성 연동
+    section Phase 3 (2027 Q1)
+        전사 데이터 가버넌스 통합 : AI 에이전트 자율 분석 : Fine-tuned 사내 소형 LLM 탑재
+</div>
+<h3>Phase 1: 기반 구축 및 오프라인 배포 (완료 - Current v0.1.2)</h3>
+<ul>
+<li>PostgreSQL, MySQL, MariaDB, Oracle 엔진 지원 완료</li>
+<li>오프라인망(Air-Gapped) 완전 운용을 위한 Docker tarball 배포 체계 구축</li>
+<li>MCP 프로토콜 28종 도구 및 웹 관리자 관측성(Observability) 확보</li>
+</ul>
+<h3>Phase 2: 지능형 RAG &amp; 데이터 시각화 강화 (2026 Q3 ~ Q4)</h3>
+<ul>
+<li><strong>RAG(Retrieval-Augmented Generation) 보강</strong>: 사내 데이터 설명서 및 도메인 용어집과의 벡터 검색 연동으로 SQL 생성 정확도 99% 달성</li>
+<li><strong>자동 시각화 연동</strong>: 질의 결과 데이터에 최적화된 차트(막대, 선, 파이 차트) 자동 추천 및 렌더링</li>
+</ul>
+<h3>Phase 3: 전사 자율형 AI 데이터 에이전트 전환 (2027 Q1)</h3>
+<ul>
+<li><strong>통합 데이터 가버넌스 구축</strong>: 사내 권한 관리(SSO/SAML) 연동 및 부서별/직급별 세부 테이블 접근 제어(RBAC) 강화</li>
+<li><strong>자율형 분석 에이전트</strong>: 단일 질의를 넘어 원인 분석 및 트렌드 예측 보고서를 자동 작성하는 AI 데이터 에이전트 확장</li>
+</ul>
+<hr/>
+<h2>6. 결론 및 건의 사항</h2>
+<p><strong>SQLON</strong>은 도입 검증을 통해 기술적 안정성, 데이터 보안성 및 높은 경영 효율성을 증명하였습니다.</p>
+<ol>
+<li><strong>전사 확대 적용 건의</strong>: 현 3개 시범 부서에서 전사 현업 부서로 SQLON 라이선스 및 접근 권한 확대 부여</li>
+<li><strong>보안 가이드 라인 승인 요청</strong>: 오프라인망 배포 패키지(<code>v0.1.2</code>)의 전사 표준 데이터 조회 플랫폼 지정</li>
+</ol>
+<p>이상의 성과를 바탕으로 데이터 기반 경영 체계를 더욱 가속화하고자 합니다.</p>
+
+        </div>
+    </div>
+</body>
+</html>

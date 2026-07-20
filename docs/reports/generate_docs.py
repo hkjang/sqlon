@@ -454,7 +454,7 @@ def convert_md_to_html_and_pdf(filename, title, subtitle, version, date, departm
                 "right": "20mm"
             },
             display_header_footer=True,
-            header_template='<div style="font-size: 8px; color: #94a3b8; width: 100%; text-align: right; padding-right: 20mm; font-family: sans-serif;">JAMYPG NL2SQL MCP 문서 - AI 인프라실</div>',
+            header_template='<div style="font-size: 8px; color: #94a3b8; width: 100%; text-align: right; padding-right: 20mm; font-family: sans-serif;">SQLON NL2SQL & MCP 엔터프라이즈 문서 - AI 인프라실</div>',
             footer_template='<div style="font-size: 8px; color: #94a3b8; width: 100%; text-align: center; font-family: sans-serif;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>'
         )
         
@@ -466,40 +466,40 @@ if __name__ == "__main__":
     # 1. Executive Report
     convert_md_to_html_and_pdf(
         filename="executive_report",
-        title="JAMYPG NL2SQL 시스템 도입 성과 및 향후 로드맵 보고",
-        subtitle="메타데이터 그라운딩 기반 자연어 질의 안전성 확보 및 도입 효과 (PostgreSQL·MySQL·MariaDB)",
-        version="v0.1.0",
-        date="2026년 7월 10일",
-        department="AI 인프라실"
+        title="SQLON NL2SQL 엔터프라이즈 시스템 도입 성과 및 전략 로드맵 보고서",
+        subtitle="자연어 기반 데이터 접근성 혁신, 데이터 보안 가드레일 확보 및 데이터 드리븐 조직 전환 성과 (PostgreSQL·MySQL·MariaDB·Oracle)",
+        version="v0.1.2",
+        date="2026년 7월 20일",
+        department="AI 인프라실 & 데이터 가버넌스팀"
     )
     
     # 2. User Guide
     convert_md_to_html_and_pdf(
         filename="user_guide",
-        title="JAMYPG NL2SQL MCP 사용자 가이드",
-        subtitle="자연어-SQL 변환 및 안전 실행을 위한 연동 가이드라인",
-        version="v0.1.0",
-        date="2026년 7월 10일",
+        title="SQLON NL2SQL & MCP 엔터프라이즈 사용자 가이드",
+        subtitle="자연어-SQL 변환, 메타데이터 탐색 및 안전 실행 모니터링 사용자 지침서",
+        version="v0.1.2",
+        date="2026년 7월 20일",
         department="AI 인프라실"
     )
     
     # 3. Admin Guide
     convert_md_to_html_and_pdf(
         filename="admin_guide",
-        title="JAMYPG NL2SQL MCP 시스템 관리자 가이드",
-        subtitle="설치, 배포, 데이터셋 관리 및 엔터프라이즈 보안 설정 지침서",
-        version="v0.1.0",
-        date="2026년 7월 10일",
-        department="AI 인프라실"
+        title="SQLON 시스템 관리자 및 DBA 가이드",
+        subtitle="설치 배포, 오프라인 폐쇄망 운영, DB 연동, 보안 및 플릿 관측성 구축 지침서",
+        version="v0.1.2",
+        date="2026년 7월 20일",
+        department="AI 인프라실 & DBA팀"
     )
     
     # 4. MCP Analysis
     convert_md_to_html_and_pdf(
         filename="mcp_analysis",
-        title="JAMYPG NL2SQL MCP 작동 원리 및 도구 상세 분석서",
+        title="SQLON MCP (Model Context Protocol) 툴셋 및 작동 원리 분석서",
         subtitle="자연어 질의 인터페이스(MCP) 전송 계층 및 28종 도구 심층 설계 분석",
-        version="v0.1.0",
-        date="2026년 7월 10일",
+        version="v0.1.2",
+        date="2026년 7월 20일",
         department="AI 인프라실"
     )
     
