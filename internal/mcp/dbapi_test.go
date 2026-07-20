@@ -149,7 +149,7 @@ func TestDBAPITokenEnforcement(t *testing.T) {
 			t.Fatalf("%s %s should require token, got %d", c[0], c[1], rec.Code)
 		}
 	}
-	for _, path := range []string{"/api/fleet/health", "/api/observability/sessions?profile=x", "/api/observability/locks?profile=x", "/api/observability/workload?profile=x", "/api/observability/top-sql?profile=x", "/api/observability/capacity?profile=x", "/api/observability/history?profile=x"} {
+	for _, path := range []string{"/api/fleet/instances", "/api/fleet/health", "/api/observability/sessions?profile=x", "/api/observability/locks?profile=x", "/api/observability/workload?profile=x", "/api/observability/top-sql?profile=x", "/api/observability/capacity?profile=x", "/api/observability/history?profile=x"} {
 		if rec := doReq(t, mux, "GET", path, "", nil); rec.Code != http.StatusUnauthorized {
 			t.Fatalf("GET %s should require token, got %d", path, rec.Code)
 		}

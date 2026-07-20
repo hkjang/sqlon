@@ -45,6 +45,10 @@ PY
 
 docker build -q --build-arg VERSION="$VER" -t "sqlon/sqlon:$V" . >/dev/null
 docker save "sqlon/sqlon:$V" | gzip > "$P/sqlon-$V-docker.tar.gz"
-echo "saved docker image"
+echo "saved standard docker image"
+
+docker build -q -f Dockerfile.oracle --build-arg VERSION="$VER" -t "sqlon/sqlon-oracle:$V" . >/dev/null
+docker save "sqlon/sqlon-oracle:$V" | gzip > "$P/sqlon-oracle-$V-docker.tar.gz"
+echo "saved oracle docker image"
 
 ( cd "$P" && sha256sum ./*.tar.gz ./*.zip > SHA256SUMS.txt && cat SHA256SUMS.txt )

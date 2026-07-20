@@ -68,6 +68,13 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	})
 	// Fleet APIs and MCP tools share the same permission-filtered service path.
 	mux.HandleFunc("GET /api/fleet/instances", func(w http.ResponseWriter, r *http.Request) {
+		// Gate identically to /api/fleet/health: in standalone mode this applies
+		// the master-token gate (fleetProfilesForRequest only authenticates when
+		// the meta DB is active, so without this the inventory would leak to
+		// unauthenticated callers).
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
 		profiles, _, ok := s.fleetProfilesForRequest(w, r)
 		if !ok {
 			return
