@@ -177,12 +177,33 @@ function stepRow(i){
       '<input data-tpl-args placeholder=\'인자 JSON 예: {"table":"public.orders","columns":["created_at"]}\' style="flex:1;min-width:200px;font-family:var(--mono);font-size:12px">'+
       '<button class="mini" type="button" data-tpl-gen>생성</button>'+
     '</div>'+
-    '<div class="steplabel">실행 문장 (command)</div><textarea data-k="command" placeholder="예: CREATE INDEX CONCURRENTLY idx_orders_created ON public.orders(created_at)"></textarea>'+
+    '<div class="steplabel">실행 문장 (command) <button class="mini" type="button" data-predict style="margin-left:6px">⚠ 영향 예측</button></div><textarea data-k="command" placeholder="예: CREATE INDEX CONCURRENTLY idx_orders_created ON public.orders(created_at)"></textarea>'+
+    '<div data-impact class="mini" style="display:none;margin:4px 0 2px;padding:7px 9px;border-radius:7px;background:#f6f8fc;border:1px solid #dbe4f0"></div>'+
     '<div class="steplabel">사후 검증 (verification) — 읽기 전용 풀로 실행</div><textarea data-k="verification" placeholder="예: SELECT 1 FROM pg_indexes WHERE indexname=\'idx_orders_created\'"></textarea>'+
     '<div class="steplabel">보상(롤백) 문장 (compensation)</div><textarea data-k="compensation" placeholder="예: DROP INDEX IF EXISTS idx_orders_created"></textarea>';
   div.querySelector('[data-del]').onclick=()=>{div.remove();renumber()};
   div.querySelector('[data-tpl-gen]').onclick=()=>generateStep(div);
+  div.querySelector('[data-predict]').onclick=()=>predictStep(div);
   return div;
+}
+async function predictStep(div){
+  const sql=div.querySelector('[data-k=command]').value.trim();
+  const box=div.querySelector('[data-impact]');
+  if(!sql){note('먼저 실행 문장을 입력하세요.','error');return}
+  const profile=$('#fProfile').value;
+  box.style.display='';box.textContent='예측 중…';
+  try{
+    const b=await call('POST','/api/changes/predict-impact',{sql:sql,profile:profile});
+    const p=b.prediction||{};
+    const sevColor={info:'#1d3f7a',warning:'#8a5a00',critical:'#991b1b'}[p.severity]||'#334';
+    const notes=(p.notes||[]).map(esc).join(' · ');
+    box.style.borderColor=({info:'#c4d5f5',warning:'#efd486',critical:'#efb0b0'}[p.severity]||'#dbe4f0');
+    box.style.background=({info:'#eef4ff',warning:'#fff8df',critical:'#fff0f0'}[p.severity]||'#f6f8fc');
+    box.innerHTML='<b style="color:'+sevColor+'">['+esc(p.severity)+'] '+esc(p.operation)+'</b> · 잠금 '+esc(p.lock_level)+' · 차단 '+esc(p.blocking)+(p.rewrite?' · <b>전체 재작성/스캔</b>':'')+
+      (p.online_option?'<br>무중단 대안: <code>'+esc(p.online_option)+'</code>':'')+
+      (notes?'<br>'+notes:'')+
+      (p.recommendation?'<br>권고: '+esc(p.recommendation):'');
+  }catch(e){box.textContent='예측 실패: '+e.message}
 }
 async function generateStep(div){
   const action=div.querySelector('[data-tpl-action]').value;

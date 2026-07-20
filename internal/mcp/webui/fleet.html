@@ -10,7 +10,7 @@
 header{min-height:66px;padding:12px 28px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
 header h1{font-size:20px;margin:0}header p{margin:2px 0 0;color:var(--sub);font-size:12px}.fresh{font-size:12px;color:var(--sub)}
 header .grow{flex:1}header input{border:1px solid var(--line);border-radius:8px;padding:7px 10px}
-main{padding:24px 28px 56px;max-width:1600px;margin:auto}.cards{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:14px;margin-bottom:18px}
+main{padding:24px 28px 56px;max-width:1600px;margin:auto}.cards{display:grid;grid-template-columns:repeat(7,minmax(120px,1fr));gap:14px;margin-bottom:18px}
 .card,.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 10px rgba(20,35,60,.04)}.card{padding:17px}.card span{display:block;color:var(--sub);font-size:12px}.card b{font-size:27px}.card.bad b{color:var(--bad)}.card.ok b{color:var(--ok)}
 .panel{overflow:hidden}.panel-head{padding:15px 17px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.panel-head h2{font-size:15px;margin:0}.actions a{color:var(--blue);text-decoration:none;margin-left:14px}
 table{width:100%;border-collapse:collapse}th,td{padding:12px 14px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap}th{background:#f8fafc;color:#536176;font-size:12px;position:sticky;top:0}tr:last-child td{border-bottom:0}tr.failed{background:#fff7f7}
@@ -31,6 +31,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px 14px;border-bottom:
     <div class="card bad"><span>위험</span><b id="critical">-</b></div>
     <div class="card bad"><span>수집 실패</span><b id="failed">-</b></div>
     <div class="card"><span>지원 엔진</span><b id="engines">-</b></div>
+    <div class="card"><span>건강점수(평균)</span><b id="avgScore">-</b><span id="worstScore" class="muted"></span></div>
   </section>
   <section class="panel">
     <div class="panel-head"><h2>DB 플릿 위험 순위</h2><div class="actions"><a href="/admin/dba">진단</a><a href="/admin/ask">SQL Lab</a></div></div>
@@ -54,12 +55,14 @@ async function loadFleet(){
     if(!res.ok)throw new Error(body.error||res.statusText);
     const list=Array.isArray(body.data)?body.data:[];const sum=body.summary||{};
     document.getElementById('total').textContent=sum.total??list.length;document.getElementById('healthy').textContent=sum.healthy??0;document.getElementById('warning').textContent=sum.warning??0;document.getElementById('critical').textContent=sum.critical??0;document.getElementById('failed').textContent=sum.failed??0;
-    document.getElementById('engines').textContent=Object.keys(sum.engine_distribution||{}).length;document.getElementById('fresh').textContent='최신 수집 '+time(body.collected_at)+' · '+esc(body.trace_id||'trace 없음');
+    document.getElementById('engines').textContent=Object.keys(sum.engine_distribution||{}).length;
+    document.getElementById('avgScore').textContent=(sum.average_score==null?'-':sum.average_score);document.getElementById('worstScore').textContent=(sum.worst_score==null?'':' 최저 '+sum.worst_score);
+    document.getElementById('fresh').textContent='최신 수집 '+time(body.collected_at)+' · '+esc(body.trace_id||'trace 없음');
     document.getElementById('rows').innerHTML=list.length?list.map(x=>{
       const caps=Object.keys(x.capabilities||{}).filter(k=>x.capabilities[k]).map(k=>'<span class="cap">'+esc(k)+'</span>').join('');
       const evidence=(x.evidence||[]).map(e=>e.summary).filter(Boolean).join(' · ');const failure=x.failure||{};
       const detail=[failure.message,failure.hint,evidence].filter(Boolean).join(' · ')||'-';const prod=x.environment==='production';
-      return '<tr class="'+esc(x.status)+'"><td><span class="state '+esc(x.status)+'"><i class="dot"></i>'+esc(label[x.status]||x.status)+'</span><div class="risk '+esc(x.risk_level)+'">'+esc(riskLabel[x.risk_level]||x.risk_level)+' · '+esc(x.risk_score)+'</div></td><td><b>'+esc(x.service_name||'업무 미지정')+'</b><div>'+esc(x.name||x.id)+'</div><div class="muted">'+esc(x.id)+'</div></td><td><div class="context"><span class="tag '+(prod?'prod':'')+'">'+esc(x.environment)+'</span><span class="tag">'+esc(x.engine)+'</span><span class="tag">'+esc(x.role)+'</span><span class="tag">'+esc(x.criticality)+'</span></div></td><td>'+esc(x.owner_team||'-')+'<div class="muted">'+esc(x.location||'-')+'</div></td><td>'+esc(x.elapsed_ms??'-')+' ms<div class="muted">'+esc(x.collection_status)+'</div></td><td><div class="caps">'+(caps||'<span class="muted">선언 없음</span>')+'</div></td><td>'+time(x.collected_at)+'</td><td class="muted">'+esc(detail)+'</td></tr>';
+      return '<tr class="'+esc(x.status)+'"><td><span class="state '+esc(x.status)+'"><i class="dot"></i>'+esc(label[x.status]||x.status)+'</span><div class="risk '+esc(x.risk_level)+'">'+esc(riskLabel[x.risk_level]||x.risk_level)+' · '+esc(x.risk_score)+'</div><div class="muted">등급 '+esc(x.grade||'-')+' · 점수 '+esc(x.health_score==null?'-':x.health_score)+'</div></td><td><b>'+esc(x.service_name||'업무 미지정')+'</b><div>'+esc(x.name||x.id)+'</div><div class="muted">'+esc(x.id)+'</div></td><td><div class="context"><span class="tag '+(prod?'prod':'')+'">'+esc(x.environment)+'</span><span class="tag">'+esc(x.engine)+'</span><span class="tag">'+esc(x.role)+'</span><span class="tag">'+esc(x.criticality)+'</span></div></td><td>'+esc(x.owner_team||'-')+'<div class="muted">'+esc(x.location||'-')+'</div></td><td>'+esc(x.elapsed_ms??'-')+' ms<div class="muted">'+esc(x.collection_status)+'</div></td><td><div class="caps">'+(caps||'<span class="muted">선언 없음</span>')+'</div></td><td>'+time(x.collected_at)+'</td><td class="muted">'+esc(detail)+'</td></tr>';
     }).join(''):'<tr><td colspan="8" class="empty">등록된 DB 프로파일이 없습니다. DB 연결 관리에서 프로파일을 추가하세요.</td></tr>';
     const msgs=[...(body.warnings||[]),...(body.limitations||[])];
     box.innerHTML=msgs.map(m=>'<div class="warning">'+esc(m)+'</div>').join('');

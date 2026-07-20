@@ -208,6 +208,7 @@
       <span class="grow" style="flex:1"></span>
       <button class="btn" onclick="openIndexSimulator()">🔍 인덱스 시뮬레이터</button>
       <button class="btn" onclick="findUnusedIndexes()">🗑 미사용 인덱스</button>
+      <button class="btn" onclick="findRedundantIndexes()">🧬 중복·잉여 인덱스</button>
       <button class="btn" onclick="auditConfig()">⚙ 설정 튬닝 감사</button>
       <span class="mini">Ctrl/⌘+Enter=미리보기</span>
       <span class="mini" id="qStat"></span>
@@ -284,6 +285,19 @@
       <tbody id="unusedRows"><tr><td colspan="5" class="mini">조회 결겼가 여기에 표시됭니다.</td></tr></tbody>
     </table>
     <div id="unusedResult" class="result"></div>
+  </div>
+
+  <!-- 중복·잉여 인덱스 카드 -->
+  <div class="card" id="redundantIndexesCard" style="display:none">
+    <div class="toolbar" style="justify-content:space-between">
+      <h2 style="margin:0">🧬 중복·잉여 인덱스 정리 도우미</h2>
+      <button class="btn" onclick="$('#redundantIndexesCard').style.display='none'">닫기</button>
+    </div>
+    <div class="mini" style="margin-bottom:10px">같은 테이블에서 <b>컬럼이 완전히 같은 중복(duplicate)</b> 인덱스와, <b>더 넓은 인덱스의 선두 접두</b>에 해당해 이미 커버되는 <b>잉여(prefix)</b> 인덱스를 찾습니다. 쓰기·저장 오버헤드만 늘리고 읽기 이득이 없습니다. UNIQUE 인덱스는 유일성 보장 때문에 제외하며, DROP은 반드시 변경 관리 승인 흐름으로 수행하세요.</div>
+    <table class="t">
+      <thead><tr><th>테이블</th><th>인덱스</th><th>컬럼</th><th>유형</th><th>커버 인덱스</th><th>정리 SQL</th></tr></thead>
+      <tbody id="redundantRows"><tr><td colspan="6" class="mini">조회 결과가 여기에 표시됩니다.</td></tr></tbody>
+    </table>
   </div>
 
   <!-- 설정 Audit 카드 -->
@@ -764,6 +778,36 @@ async function findUnusedIndexes() {
     }).join('');
   } catch (e) {
     $('#unusedRows').innerHTML = '<tr><td colspan="5" class="mini err" style="color:var(--red)">실픨: ' + esc(e.message) + '</td></tr>';
+  }
+}
+
+async function findRedundantIndexes() {
+  const profileId = $('#qProfile').value;
+  if (!profileId) { alert('프로파일을 먼저 선택하세요.'); return; }
+  $('#redundantIndexesCard').style.display = 'block';
+  $('#redundantRows').innerHTML = '<tr><td colspan="6" class="mini">조회 중…</td></tr>';
+  window.scrollTo({ top: $('#redundantIndexesCard').offsetTop - 80, behavior: 'smooth' });
+  const KIND = { duplicate: ['중복', 'bad'], prefix: ['잉여(접두)', 'gray'] };
+  try {
+    const r = await api('GET', '/api/db/redundant-indexes?profile_id=' + encodeURIComponent(profileId));
+    const list = r.redundant_indexes || [];
+    if (list.length === 0) {
+      $('#redundantRows').innerHTML = '<tr><td colspan="6" class="mini">🎉 중복·잉여 인덱스가 없습니다.</td></tr>';
+      return;
+    }
+    $('#redundantRows').innerHTML = list.map(idx => {
+      const k = KIND[idx.kind] || [idx.kind, 'gray'];
+      return '<tr>' +
+        '<td class="mono">' + esc(idx.table_name) + '</td>' +
+        '<td class="mono">' + esc(idx.index_name) + '</td>' +
+        '<td class="mono">' + esc(idx.columns) + '</td>' +
+        '<td><span class="b ' + k[1] + '">' + esc(k[0]) + '</span></td>' +
+        '<td class="mono">' + esc(idx.covered_by) + '</td>' +
+        '<td><code style="cursor:pointer;" onclick="navigator.clipboard.writeText(this.textContent); toast(\'SQL 복사 완료\');" title="클릭 시 복사">' + esc(idx.drop_script) + '</code></td>' +
+        '</tr>';
+    }).join('');
+  } catch (e) {
+    $('#redundantRows').innerHTML = '<tr><td colspan="6" class="mini err" style="color:var(--red)">실패: ' + esc(e.message) + '</td></tr>';
   }
 }
 

@@ -177,6 +177,33 @@ type ConfigDriftData struct {
 	Limitations []string          `json:"-"`
 }
 
+// MaintenanceFinding is one proactive-maintenance risk: a table/database
+// approaching transaction-ID wraparound, a bloated table/index, or an inactive
+// replication slot retaining WAL. Read-only diagnosis — remediation (VACUUM
+// FREEZE, pg_repack, slot drop) always goes through a change plan.
+type MaintenanceFinding struct {
+	Category       string    `json:"category"` // wraparound | bloat | replication_slot
+	Object         string    `json:"object"`
+	Detail         string    `json:"detail,omitempty"`
+	Metric         string    `json:"metric,omitempty"`
+	Value          float64   `json:"value,omitempty"`
+	Threshold      float64   `json:"threshold,omitempty"`
+	Recommendation string    `json:"recommendation,omitempty"`
+	Severity       string    `json:"severity"` // info | warning | critical
+	CollectedAt    time.Time `json:"collected_at"`
+}
+
+type MaintenanceData struct {
+	ProfileID string               `json:"profile_id"`
+	Engine    string               `json:"engine"`
+	Checks    int                  `json:"checks"`
+	Findings  []MaintenanceFinding `json:"findings"`
+	// Provider-reported partial-collection notes; the service merges them
+	// into the response envelope.
+	Warnings    []string `json:"-"`
+	Limitations []string `json:"-"`
+}
+
 type Response[T any] struct {
 	Status      string     `json:"status"`
 	Data        T          `json:"data"`

@@ -51,6 +51,7 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/changes", s.guardPage(s.serveWebUI("webui/changes.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/availability", s.guardPage(s.serveWebUI("webui/availability.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/security", s.guardPage(s.serveWebUI("webui/security.html", "text/html; charset=utf-8")))
+	mux.HandleFunc("GET /admin/maintenance", s.guardPage(s.serveWebUI("webui/maintenance.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/users", s.guardAdminPage(s.serveWebUI("webui/users.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/keys", s.guardPage(s.serveWebUI("webui/keys.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/settings", s.guardAdminPage(s.serveWebUI("webui/settings.html", "text/html; charset=utf-8")))
@@ -184,6 +185,36 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, s.Observability.ConfigDrift(ctx, profile))
 	})
+	mux.HandleFunc("GET /api/observability/maintenance", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		profile, ok := allowedProfile(profiles, r.URL.Query().Get("profile"))
+		if !ok {
+			writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted"))
+			return
+		}
+		writeJSON(w, http.StatusOK, s.Observability.Maintenance(ctx, profile))
+	})
+	mux.HandleFunc("GET /api/observability/incident", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		profile, ok := allowedProfile(profiles, r.URL.Query().Get("profile"))
+		if !ok {
+			writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted"))
+			return
+		}
+		writeJSON(w, http.StatusOK, s.diagnoseIncident(ctx, profile, atoiDefault(r.URL.Query().Get("window_minutes"), 30)))
+	})
 	for path, kind := range map[string]string{
 		"/api/observability/workload": "workload",
 		"/api/observability/top-sql":  "top_sql",
@@ -258,6 +289,35 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	// Structured-action → change step template. Generates safely-quoted
 	// command/verification/compensation SQL for reversible privileged
 	// operations; changes nothing on the target DB.
+	mux.HandleFunc("POST /api/changes/predict-impact", func(w http.ResponseWriter, r *http.Request) {
+		if !s.requireDBA(w, r) {
+			return
+		}
+		var req struct {
+			SQL     string `json:"sql"`
+			Engine  string `json:"engine"`
+			Profile string `json:"profile"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		if strings.TrimSpace(req.SQL) == "" {
+			writeAPIError(w, http.StatusBadRequest, errEmpty("sql is required"))
+			return
+		}
+		engine := req.Engine
+		if req.Profile != "" {
+			if p, err := s.profileByID(r, req.Profile); err == nil {
+				engine = p.Type
+			}
+		}
+		if strings.TrimSpace(engine) == "" {
+			writeAPIError(w, http.StatusBadRequest, errEmpty("engine or profile is required"))
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "prediction": change.PredictImpact(engine, req.SQL)})
+	})
 	mux.HandleFunc("POST /api/changes/template", func(w http.ResponseWriter, r *http.Request) {
 		if !s.requireDBA(w, r) {
 			return

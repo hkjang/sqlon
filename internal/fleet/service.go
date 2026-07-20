@@ -60,6 +60,8 @@ type Instance struct {
 	Status            Status          `json:"status"`
 	RiskScore         int             `json:"risk_score"`
 	RiskLevel         string          `json:"risk_level"`
+	HealthScore       int             `json:"health_score"` // 0-100, inverse of risk (100 = perfect)
+	Grade             string          `json:"grade"`        // A|B|C|D|F
 	Evidence          []Evidence      `json:"evidence"`
 	CollectionStatus  string          `json:"collection_status"`
 	CollectedAt       time.Time       `json:"collected_at"`
@@ -79,6 +81,9 @@ type Summary struct {
 	Failed             int            `json:"failed"`
 	Unknown            int            `json:"unknown"`
 	EngineDistribution map[string]int `json:"engine_distribution"`
+	AverageScore       int            `json:"average_score"`      // mean health score across the fleet
+	WorstScore         int            `json:"worst_score"`        // lowest health score (the DB needing attention first)
+	GradeDistribution  map[string]int `json:"grade_distribution"` // A/B/C/D/F counts
 }
 
 type Health struct {
@@ -110,6 +115,7 @@ type Service struct {
 	Replication replicationObserver
 	Backup      backupObserver
 	Config      configObserver
+	Maintenance maintenanceObserver
 }
 
 type operationalHistory interface {
@@ -131,6 +137,10 @@ type configObserver interface {
 	ConfigDrift(context.Context, dbconn.Profile) observability.Response[observability.ConfigDriftData]
 }
 
+type maintenanceObserver interface {
+	Maintenance(context.Context, dbconn.Profile) observability.Response[observability.MaintenanceData]
+}
+
 func New(db *dbconn.Manager) *Service {
 	return &Service{Source: db, Prober: db, Engines: engine.NewDefaultRegistry(), Now: time.Now, Concurrency: 8}
 }
@@ -142,6 +152,7 @@ func NewWithOperations(db *dbconn.Manager, operations operationalHistory, observ
 	replicationObserver
 	backupObserver
 	configObserver
+	maintenanceObserver
 }) *Service {
 	s := New(db)
 	s.Operations = operations
@@ -149,6 +160,7 @@ func NewWithOperations(db *dbconn.Manager, operations operationalHistory, observ
 		s.Replication = observers
 		s.Backup = observers
 		s.Config = observers
+		s.Maintenance = observers
 	}
 	return s
 }
@@ -196,6 +208,7 @@ func (s *Service) HealthProfiles(ctx context.Context, profiles []dbconn.Profile)
 	wg.Wait()
 	close(results)
 	for instance := range results {
+		instance.HealthScore, instance.Grade = scoreGrade(instance.RiskScore)
 		out.Data = append(out.Data, instance)
 		addSummary(&out.Summary, instance)
 		if instance.Status != StatusHealthy {
@@ -208,6 +221,7 @@ func (s *Service) HealthProfiles(ctx context.Context, profiles []dbconn.Profile)
 		}
 		return out.Data[i].ID < out.Data[j].ID
 	})
+	finalizeScores(&out)
 	out.CollectedAt = s.now()
 	return out
 }
@@ -238,10 +252,12 @@ func (s *Service) InventoryProfiles(profiles []dbconn.Profile) Health {
 			i.RiskScore, i.RiskLevel = 90, "critical"
 			i.Evidence = append(i.Evidence, Evidence{Code: "ENGINE_UNSUPPORTED", Severity: "critical", Summary: "등록되지 않은 데이터베이스 엔진", Observed: p.Type, CollectedAt: now})
 		}
+		i.HealthScore, i.Grade = scoreGrade(i.RiskScore)
 		out.Data = append(out.Data, i)
 		addSummary(&out.Summary, i)
 	}
 	sort.Slice(out.Data, func(i, j int) bool { return out.Data[i].ID < out.Data[j].ID })
+	finalizeScores(&out)
 	return out
 }
 
@@ -292,6 +308,7 @@ func (s *Service) probe(ctx context.Context, p dbconn.Profile) Instance {
 	s.applyReplicationEvidence(ctx, p, adapter, &i)
 	s.applyBackupEvidence(ctx, p, adapter, &i)
 	s.applyConfigDriftEvidence(ctx, p, &i)
+	s.applyMaintenanceEvidence(ctx, p, adapter, &i)
 	return i
 }
 
@@ -314,6 +331,37 @@ func (s *Service) applyConfigDriftEvidence(ctx context.Context, p dbconn.Profile
 		instance.Evidence = append(instance.Evidence, Evidence{Code: "CONFIG_DRIFT_DETECTED", Severity: "high", Summary: "서버 파라미터가 선언된 베이스라인과 다릅니다", Observed: observed, CollectedAt: res.CollectedAt})
 	case "ok":
 		instance.Evidence = append(instance.Evidence, Evidence{Code: "CONFIG_IN_SYNC", Severity: "info", Summary: "서버 파라미터가 베이스라인과 일치합니다", Observed: observed, CollectedAt: res.CollectedAt})
+	}
+}
+
+// applyMaintenanceEvidence escalates risk on latent-maintenance risks that
+// otherwise surface no error until an outage: transaction-ID wraparound,
+// severe bloat, and WAL-retaining inactive replication slots. Runs only for
+// engines declaring the Maintenance capability with a live observer wired.
+func (s *Service) applyMaintenanceEvidence(ctx context.Context, p dbconn.Profile, adapter engine.Adapter, instance *Instance) {
+	if s.Maintenance == nil || !adapter.Capabilities.Maintenance {
+		return
+	}
+	res := s.Maintenance.Maintenance(ctx, p)
+	observed := map[string]any{"checks": res.Data.Checks, "findings": len(res.Data.Findings)}
+	switch res.Status {
+	case "permission_denied", "error":
+		promoteRisk(instance, StatusWarning, 35, "medium")
+		instance.Evidence = append(instance.Evidence, Evidence{Code: "MAINTENANCE_STATUS_UNAVAILABLE", Severity: "medium", Summary: "예방 점검 상태를 확인할 수 없습니다", Observed: observed, CollectedAt: res.CollectedAt})
+		return
+	case "unsupported", "policy_blocked":
+		// Silent: an engine without maintenance checks should not add noise.
+		return
+	}
+	switch res.Status {
+	case "critical":
+		promoteRisk(instance, StatusCritical, 85, "critical")
+		instance.Evidence = append(instance.Evidence, Evidence{Code: "MAINTENANCE_RISK_CRITICAL", Severity: "critical", Summary: "즉시 조치가 필요한 예방 점검 위험 (wraparound 임박 등)", Observed: observed, CollectedAt: res.CollectedAt})
+	case "warning":
+		promoteRisk(instance, StatusWarning, 45, "high")
+		instance.Evidence = append(instance.Evidence, Evidence{Code: "MAINTENANCE_RISK_WARNING", Severity: "high", Summary: "예방 점검 대상 발견 (블로트·비활성 슬롯·freeze 임박)", Observed: observed, CollectedAt: res.CollectedAt})
+	default:
+		instance.Evidence = append(instance.Evidence, Evidence{Code: "MAINTENANCE_HEALTHY", Severity: "info", Summary: "예방 점검 위험 없음", Observed: observed, CollectedAt: res.CollectedAt})
 	}
 }
 
@@ -496,11 +544,57 @@ func levelForScore(score int) string {
 	}
 }
 
-func newSummary() Summary { return Summary{EngineDistribution: map[string]int{}} }
+func newSummary() Summary {
+	return Summary{EngineDistribution: map[string]int{}, GradeDistribution: map[string]int{}}
+}
+
+// scoreGrade converts a 0-100 risk score into an inverse health score and a
+// letter grade so operators can rank the fleet "worst first" at a glance.
+func scoreGrade(risk int) (int, string) {
+	score := 100 - risk
+	if score < 0 {
+		score = 0
+	}
+	if score > 100 {
+		score = 100
+	}
+	switch {
+	case score >= 90:
+		return score, "A"
+	case score >= 75:
+		return score, "B"
+	case score >= 60:
+		return score, "C"
+	case score >= 40:
+		return score, "D"
+	default:
+		return score, "F"
+	}
+}
+
+// finalizeScores computes the fleet-level score summary from the graded
+// instances. Called once after all instances are collected.
+func finalizeScores(h *Health) {
+	if len(h.Data) == 0 {
+		return
+	}
+	sum, worst := 0, 100
+	for _, i := range h.Data {
+		sum += i.HealthScore
+		if i.HealthScore < worst {
+			worst = i.HealthScore
+		}
+	}
+	h.Summary.AverageScore = sum / len(h.Data)
+	h.Summary.WorstScore = worst
+}
 
 func addSummary(summary *Summary, i Instance) {
 	summary.Total++
 	summary.EngineDistribution[i.Engine]++
+	if i.Grade != "" {
+		summary.GradeDistribution[i.Grade]++
+	}
 	switch i.Status {
 	case StatusHealthy:
 		summary.Healthy++

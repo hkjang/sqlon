@@ -24,7 +24,7 @@ func (f *fakeQueryer) SystemQuery(_ context.Context, _ string, query string, _ .
 }
 
 func newTestService(q observability.SystemQueryer) *observability.Service {
-	return observability.New(q, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders(), adapters.SecurityProviders(), adapters.ConfigProviders())
+	return observability.New(q, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders(), adapters.SecurityProviders(), adapters.ConfigProviders(), adapters.MaintenanceProviders())
 }
 
 func TestOracleSessionsUseRACSafeKeyAndProtectSystemSession(t *testing.T) {
@@ -113,7 +113,7 @@ func TestReplicationBrokenNodeEscalatesToCritical(t *testing.T) {
 }
 
 func TestReplicationUnsupportedEngineIsExplicit(t *testing.T) {
-	svc := observability.New(&fakeQueryer{}, adapters.ObservabilityProviders(), nil, nil, nil, nil)
+	svc := observability.New(&fakeQueryer{}, adapters.ObservabilityProviders(), nil, nil, nil, nil, nil)
 	res := svc.Replication(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
 	if res.Status != "unsupported" || len(res.Limitations) == 0 {
 		t.Fatalf("missing provider must be explicit, got %+v", res)
@@ -121,6 +121,37 @@ func TestReplicationUnsupportedEngineIsExplicit(t *testing.T) {
 	backup := svc.Backup(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
 	if backup.Status != "unsupported" || len(backup.Limitations) == 0 {
 		t.Fatalf("missing backup provider must be explicit, got %+v", backup)
+	}
+}
+
+func TestMaintenanceUnsupportedEngineIsExplicit(t *testing.T) {
+	// MySQL has the Maintenance capability but no provider registered → the
+	// service must say "unsupported", never a false all-clear.
+	svc := newTestService(&fakeQueryer{})
+	res := svc.Maintenance(context.Background(), dbconn.Profile{ID: "my", Type: "mysql"})
+	if res.Status != "unsupported" || len(res.Limitations) == 0 {
+		t.Fatalf("missing maintenance provider must be explicit, got %+v", res)
+	}
+}
+
+func TestMaintenanceCriticalEscalatesEnvelope(t *testing.T) {
+	// PostgreSQL database past its freeze_max_age → the provider emits a
+	// critical wraparound finding and the service envelope must be "critical".
+	q := &fakeQueryer{rows: []map[string]any{
+		{"kind": "database", "object": "app", "xid_age": int64(2_000_000_000), "freeze_max_age": int64(200_000_000)},
+	}}
+	res := newTestService(q).Maintenance(context.Background(), dbconn.Profile{ID: "pg", Type: "postgres"})
+	if res.Status != "critical" {
+		t.Fatalf("critical wraparound must set critical envelope: %+v", res)
+	}
+	found := false
+	for _, e := range res.Evidence {
+		if e.Code == "MAINTENANCE_RISK_CRITICAL" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("MAINTENANCE_RISK_CRITICAL evidence missing: %+v", res.Evidence)
 	}
 }
 

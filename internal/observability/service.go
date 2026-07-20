@@ -20,6 +20,7 @@ type Service struct {
 	BackupProviders      map[string]BackupProvider
 	SecurityProviders    map[string]SecurityProvider
 	ConfigProviders      map[string]ConfigProvider
+	MaintenanceProviders map[string]MaintenanceProvider
 	Engines              *engine.Registry
 	Now                  func() time.Time
 }
@@ -28,7 +29,7 @@ type Service struct {
 // adapters.ObservabilityProviders()/ReplicationProviders()/BackupProviders()
 // — injected so this package never depends on concrete engine
 // implementations.
-func New(queryer SystemQueryer, providers map[string]Provider, replication map[string]ReplicationProvider, backup map[string]BackupProvider, security map[string]SecurityProvider, config map[string]ConfigProvider) *Service {
+func New(queryer SystemQueryer, providers map[string]Provider, replication map[string]ReplicationProvider, backup map[string]BackupProvider, security map[string]SecurityProvider, config map[string]ConfigProvider, maintenance map[string]MaintenanceProvider) *Service {
 	replicationNormalized := make(map[string]ReplicationProvider, len(replication))
 	for name, provider := range replication {
 		replicationNormalized[strings.ToLower(strings.TrimSpace(name))] = provider
@@ -45,7 +46,11 @@ func New(queryer SystemQueryer, providers map[string]Provider, replication map[s
 	for name, provider := range config {
 		configNormalized[strings.ToLower(strings.TrimSpace(name))] = provider
 	}
-	return &Service{Queryer: queryer, Providers: NewRegistry(providers), ReplicationProviders: replicationNormalized, BackupProviders: backupNormalized, SecurityProviders: securityNormalized, ConfigProviders: configNormalized, Engines: engine.NewDefaultRegistry(), Now: time.Now}
+	maintenanceNormalized := make(map[string]MaintenanceProvider, len(maintenance))
+	for name, provider := range maintenance {
+		maintenanceNormalized[strings.ToLower(strings.TrimSpace(name))] = provider
+	}
+	return &Service{Queryer: queryer, Providers: NewRegistry(providers), ReplicationProviders: replicationNormalized, BackupProviders: backupNormalized, SecurityProviders: securityNormalized, ConfigProviders: configNormalized, MaintenanceProviders: maintenanceNormalized, Engines: engine.NewDefaultRegistry(), Now: time.Now}
 }
 
 func (s *Service) Sessions(ctx context.Context, raw dbconn.Profile) Response[SessionData] {
@@ -297,6 +302,80 @@ func (s *Service) Security(ctx context.Context, raw dbconn.Profile) Response[Sec
 		response.Status = "partial"
 	}
 	return response
+}
+
+// Maintenance runs proactive-maintenance risk detection: transaction-ID
+// wraparound, table/index bloat, and inactive replication slots retaining WAL.
+// These are latent risks that report no error until they cause an outage, so
+// they are surfaced early with severity and a change-plan recommendation.
+func (s *Service) Maintenance(ctx context.Context, raw dbconn.Profile) Response[MaintenanceData] {
+	p := dbconn.ApplyDefaults(raw)
+	now := s.now()
+	data := MaintenanceData{ProfileID: p.ID, Engine: p.Type, Findings: []MaintenanceFinding{}}
+	response := Response[MaintenanceData]{Status: "ok", Data: data, Evidence: []Evidence{}, Warnings: []string{}, Limitations: []string{}, CollectedAt: now, TraceID: observationTraceID()}
+	provider, reason := s.maintenanceProvider(p.Type)
+	if provider == nil {
+		response.Status = "unsupported"
+		response.Limitations = append(response.Limitations, reason)
+		response.Evidence = append(response.Evidence, Evidence{Code: "MAINTENANCE_UNSUPPORTED", Severity: "warning", Summary: reason, CollectedAt: now})
+		return response
+	}
+	result, err := provider.Maintenance(ctx, s.Queryer, p)
+	response.CollectedAt = s.now()
+	if err != nil {
+		status, code, hint := classifyCollectionError(err)
+		response.Status = status
+		response.Warnings = append(response.Warnings, hint)
+		response.Evidence = append(response.Evidence, Evidence{Code: code, Severity: "warning", Summary: hint, CollectedAt: response.CollectedAt})
+		return response
+	}
+	if result.Findings == nil {
+		result.Findings = []MaintenanceFinding{}
+	}
+	response.Warnings = append(response.Warnings, result.Warnings...)
+	response.Limitations = append(response.Limitations, result.Limitations...)
+	result.Warnings, result.Limitations = nil, nil
+	response.Data = result
+
+	critical, warning := 0, 0
+	for _, finding := range result.Findings {
+		switch finding.Severity {
+		case "critical":
+			critical++
+		case "warning":
+			warning++
+		}
+	}
+	attrs := map[string]any{"checks": result.Checks, "findings": len(result.Findings), "critical": critical, "warning": warning}
+	switch {
+	case critical > 0:
+		response.Status = "critical"
+		response.Evidence = append(response.Evidence, Evidence{Code: "MAINTENANCE_RISK_CRITICAL", Severity: "critical", Summary: "즉시 조치가 필요한 예방 점검 위험이 있습니다 (wraparound 임박 등)", Attributes: attrs, CollectedAt: response.CollectedAt})
+	case warning > 0:
+		response.Status = "warning"
+		response.Evidence = append(response.Evidence, Evidence{Code: "MAINTENANCE_RISK_WARNING", Severity: "warning", Summary: "예방 점검 대상(블로트·비활성 슬롯·freeze 임박)이 발견되었습니다", Attributes: attrs, CollectedAt: response.CollectedAt})
+	default:
+		response.Evidence = append(response.Evidence, Evidence{Code: "MAINTENANCE_HEALTHY", Severity: "info", Summary: "예방 점검 위험이 발견되지 않았습니다", Attributes: attrs, CollectedAt: response.CollectedAt})
+	}
+	if len(response.Warnings) > 0 && response.Status == "ok" {
+		response.Status = "partial"
+	}
+	return response
+}
+
+func (s *Service) maintenanceProvider(engineName string) (MaintenanceProvider, string) {
+	adapter, ok := s.Engines.Get(engineName)
+	if !ok {
+		return nil, "등록되지 않은 데이터베이스 엔진입니다."
+	}
+	if !adapter.Capabilities.Maintenance {
+		return nil, "maintenance 기능을 엔진 Capability가 지원하지 않습니다."
+	}
+	provider, ok := s.MaintenanceProviders[strings.ToLower(strings.TrimSpace(engineName))]
+	if !ok {
+		return nil, "maintenance Provider가 이 배포판에 등록되지 않았습니다."
+	}
+	return provider, ""
 }
 
 // ConfigDrift compares live server parameters against the profile's declared

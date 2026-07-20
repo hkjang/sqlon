@@ -46,6 +46,14 @@ type SecurityProvider interface {
 	Security(context.Context, SystemQueryer, dbconn.Profile) (SecurityData, error)
 }
 
+// MaintenanceProvider is the proactive-maintenance observation role: latent
+// risks that surface no error until they cause an outage — transaction-ID
+// wraparound, table/index bloat, and WAL-retaining inactive replication slots.
+// Read-only diagnosis — remediation always goes through a change plan.
+type MaintenanceProvider interface {
+	Maintenance(context.Context, SystemQueryer, dbconn.Profile) (MaintenanceData, error)
+}
+
 // ConfigProvider reads live server parameters as name→value (plus a
 // pending-restart set where the engine reports it) so the service can compare
 // them against the operator-declared baseline (configuration drift).

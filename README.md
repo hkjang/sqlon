@@ -70,7 +70,7 @@ AI-generated changes were not accepted automatically. The project owner remained
 This combination allowed Codex to accelerate implementation while GPT-5.6 supported architectural reasoning and systematic review, with human judgment controlling the final result.
 
 **📚 상세 문서**: [docs/README.md](docs/README.md) — 아키텍처, MCP 도구
-레퍼런스(97종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
+레퍼런스(101종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
 가이드(18종), REST API, DB 커넥터, 운영/평가/보안/개발자 가이드.
 
 ## Quick Start
@@ -425,6 +425,9 @@ Invoke-RestMethod `
 - `get_backup_status` — DB 서버가 스스로 보고하는 백업·아카이브 상태를 반환. PostgreSQL WAL 아카이버 성공/실패, MySQL/MariaDB binlog(PITR 기반), Oracle ARCHIVELOG·RMAN 이력·FRA 사용률(base 뷰만). 외부 백업 도구 잡 상태는 limitation으로 명시
 - `get_security_posture` — 사용자·권한 진단: 로그인 가능한 비기본 SUPERUSER/DBA 역할, 위험 시스템 권한, 와일드카드 호스트 고권한 계정, 만료 비밀번호를 근거·심각도와 함께 반환. 읽기 전용 진단이며 조치는 변경계획으로만 수행
 - `compare_configuration` — 설정 드리프트 감지: 프로파일 config_baseline과 라이브 서버 파라미터(pg_settings/global_variables/V$PARAMETER) 대조. 선언된 키만 검사, on/off↔true/false↔1/0 동치, pending_restart 표시. 읽기 전용, 조치는 변경계획으로
+- `get_maintenance_health` — 예방 점검 진단: 오류 없이 잠복하다 장애를 유발하는 위험을 조기 탐지. PostgreSQL 트랜잭션 ID wraparound 임박(age(datfrozxid)/relfrozxid vs autovacuum_freeze_max_age·2^31 한계), 테이블 블로트(dead tuple 비율), WAL을 붙잡는 비활성 복제 슬롯을 근거·심각도·권고와 함께 반환. 읽기 전용이며 조치(VACUUM FREEZE·pg_repack·슬롯 제거)는 변경계획으로만 수행
+- `diagnose_incident` — 인시던트 근본원인(RCA) 번들: 지정한 시간창(기본 30분)의 읽기 전용 신호(블로킹 트리, 세션, 설정 드리프트, 예방 점검 위험, 최근 변경계획, 커넥션 풀, 저장된 워크로드 스냅숏)를 상관분석해 근본원인 가설을 순위·신뢰도·근거·권고와 함께 반환. 아무것도 실행/변경하지 않으며 모든 조치는 변경계획으로 연결. `profile`·`window_minutes`(기본 30)
+- `predict_change_impact` — 변경 전 영향 예측: DDL 문장을 정적 분석해 잠금 수준(예: PostgreSQL ACCESS EXCLUSIVE), 읽기/쓰기 차단 여부, 전체 테이블 재작성/스캔 여부, 무중단 대안(CREATE INDEX CONCURRENTLY, ADD CONSTRAINT NOT VALID, MySQL ALGORITHM=INSTANT·gh-ost/pt-osc)을 심각도·권고와 함께 반환. DB에 접속하지 않는 휴리스틱이며 실행하지 않음. `sql`·`engine`|`profile`
 - `diagnose_connection_pool` — SQLON이 대상 DB로 유지하는 커넥션 풀 진단: sql.DB 통계(획득 대기·사용/유휴/전체·유휴/수명 초과 종료)를 max_open_conns/max_idle_conns와 대조해 오버·언더 프로비저닝 평가·권고. 대상 DB에 쿼리하지 않는 SQLON 측 텔레메트리, 풀 미생성 시 not_collected
 - `get_workload_summary` — 대상 DB의 저장된 누적 시스템 카운터와 이전 스냅숏 차이에서 계산한 QPS/TPS, 연결, I/O, 대기 이벤트를 근거·수집 시각과 함께 반환
 - `get_top_sql` — SQL 원문·bind 없이 fingerprint/SQL ID별 호출·elapsed·CPU·reads·rows와 Oracle plan hash를 반환하고 확장·권한 제한을 명시
@@ -436,6 +439,7 @@ Invoke-RestMethod `
 - `discover_metadata` — 원천 DB의 비시스템 스키마 목록 조회(information_schema만 읽는 read-only). 수집 범위 지정용
 - `db_health_report` — **DBA 헬스 점검**: 연결된 프로파일 DB의 시스템 카탈로그를 읽어 PK 없는 테이블(high)·인덱스 없는 FK 컬럼(medium)·미사용 인덱스(low)·통계 오래됨/없음(medium)·대형 테이블(코멘트 여부, info)을 진단. PostgreSQL 전체, MySQL/MariaDB는 이식 가능 항목만. 읽기 전용(수정·실행 없음, 개선은 DBA 검토 후)
 - `suggest_indexes` — **인덱스 어드바이저**: 쿼리 감사 로그(query-*.jsonl)에서 느린 성공 쿼리를 분석해 인덱스가 없는 WHERE/JOIN/ORDER BY 컬럼을 집계하고, 영향도(발생 횟수 × 평균 지연) 순으로 후보 인덱스를 제안. 각 후보에 검토용 `CREATE INDEX` DDL과 대표 쿼리 포함. 읽기 전용·권고용(자동 생성하지 않으며 DBA가 카디널리티·쓰기부하 검토 후 수행). `profile`(선택)·`min_elapsed_ms`(기본 200)·`days`(기본 7)
+- `list_redundant_indexes` — 중복·잉여 인덱스 진단(PostgreSQL/MySQL/MariaDB): 같은 테이블에서 컬럼 목록이 동일한 중복(duplicate)과, 더 넓은 인덱스의 선두 접두에 해당해 이미 커버되는 잉여(prefix) 인덱스를 찾아 쓰기·저장 오버헤드를 진단. UNIQUE 인덱스는 유일성 보장 때문에 잉여로 보고하지 않고, 부분·표현식 인덱스는 제외. 읽기 전용·권고이며 DROP은 변경계획으로만 수행
 - `lint_sql` — **SQL 안티패턴 린트**: 단일 문장을 정적 분석해 고전적 성능·정합성 스멜을 진단 — `SELECT *`, 선두 와일드카드 `LIKE '%…'`, `NOT IN (서브쿼리)`, 인덱스 컬럼을 함수로 감싼 비-sargable 조건, 인덱스 컬럼 부등호, 콤마 크로스 조인, `WHERE`의 `OR`, `LIMIT` 없는 `ORDER BY`, `WHERE` 없는 DML. 각 항목에 심각도와 개선 제안 포함. 카탈로그 인덱스 커버리지 인식·권고용(자동 수정 안 함). `sql`·`profile`(선택)
 - `suggest_sql_rewrite` — **SQL 재작성 코파일럿**: 안티패턴을 탐지해 before→after 재작성 템플릿 제안. `SELECT *`는 카탈로그 실제 컬럼으로 정확 확장(단일 테이블), 그 외는 의미 동치 미보장 검토용 템플릿. `profile` 지정 시 원본 쿼리 실제 EXPLAIN 기준선(위험도·비용) 첨부. 실행·자동 수정 안 함. `sql`·`profile`(선택)
 - `explain_sql_in_words` — **SQL 자연어 설명**: SQL이 어떤 테이블(카탈로그 논리명)에서 무엇을 필터·조인·그룹·정렬하고 어떤 집계를 계산하는지 한국어로 요약. 정적 구조 분석(실행 안 함). `sql`·`profile`(선택)

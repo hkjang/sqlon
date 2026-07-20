@@ -693,6 +693,23 @@ func (s *Server) registerDBAPI(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"unused_indexes": list})
 	})
+	mux.HandleFunc("GET /api/db/redundant-indexes", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := s.requireQueryActor(w, r)
+		if !ok {
+			return
+		}
+		profileID := r.URL.Query().Get("profile_id")
+		if err := s.canUseProfileID(r.Context(), actor, profileID); err != nil {
+			writeAPIError(w, http.StatusForbidden, err)
+			return
+		}
+		list, err := s.DB.ListRedundantIndexes(r.Context(), profileID)
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"redundant_indexes": list})
+	})
 	mux.HandleFunc("POST /api/db/config-audit", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := s.requireQueryActor(w, r)
 		if !ok {

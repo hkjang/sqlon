@@ -278,6 +278,15 @@ var openAPISpec = `{
         "responses": {"200":{"description":"config drift report"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
       }
     },
+    "/api/observability/maintenance": {
+      "get": {
+        "tags": ["fleet"], "summary": "예방 점검(proactive maintenance) 진단",
+        "description": "오류 없이 잠복하다 장애를 유발하는 위험을 조기에 진단합니다. PostgreSQL: 트랜잭션 ID wraparound 임박(age(datfrozxid)/relfrozxid vs autovacuum_freeze_max_age·2^31 한계), 테이블 블로트(dead tuple 비율), WAL을 붙잡는 비활성 복제 슬롯. 읽기 전용이며 조치(VACUUM FREEZE·pg_repack·슬롯 제거)는 변경계획으로 수행합니다. 다른 엔진은 unsupported.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}}],
+        "responses": {"200":{"description":"evidence-bearing maintenance risk report"},"401":{"description":"인증 필요"},"404":{"description":"프로파일 없음 또는 접근 불가"}}
+      }
+    },
     "/api/observability/workload": {
       "get": {
         "tags": ["fleet"], "summary": "저장된 DB 워크로드 요약",

@@ -158,7 +158,7 @@ func NewServer(c *catalog.Catalog, opts Options) *Server {
 		dataDir:         c.DataDir,
 		DB:              dbManager,
 		Collector:       coll,
-		Observability:   observability.New(dbManager, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders(), adapters.SecurityProviders(), adapters.ConfigProviders()),
+		Observability:   observability.New(dbManager, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders(), adapters.SecurityProviders(), adapters.ConfigProviders(), adapters.MaintenanceProviders()),
 		Changes:         changes,
 		sessions:        map[string]time.Time{},
 		events:          map[string]uint64{},
@@ -487,6 +487,18 @@ func (s *Server) tools() []map[string]any {
 		tool("compare_configuration", "설정 드리프트 감지: 프로파일의 config_baseline(운영자 선언 기대값)과 라이브 서버 파라미터를 대조합니다. PostgreSQL은 pg_settings(pending_restart 포함), MySQL/MariaDB는 performance_schema.global_variables, Oracle은 V$PARAMETER(base 뷰)를 읽습니다. 선언된 키만 검사하며 on/off↔true/false↔1/0을 동치로 봅니다. 읽기 전용이며 조치는 변경계획으로 수행합니다.", objectSchema(map[string]any{
 			"profile": str("조회할 DB 프로파일 ID"),
 		}, []string{"profile"})),
+		tool("get_maintenance_health", "예방 점검(proactive maintenance) 진단: 오류 없이 잠복하다 장애를 유발하는 위험을 조기에 찾습니다. PostgreSQL은 트랜잭션 ID wraparound 임박(age(datfrozxid)/relfrozxid vs autovacuum_freeze_max_age 및 2^31 한계), 테이블 블로트(dead tuple 비율), WAL을 붙잡는 비활성 복제 슬롯을 근거·심각도·권고와 함께 반환합니다. 읽기 전용이며 조치(VACUUM FREEZE·pg_repack·슬롯 제거)는 반드시 변경계획으로 수행합니다.", objectSchema(map[string]any{
+			"profile": str("조회할 DB 프로파일 ID"),
+		}, []string{"profile"})),
+		tool("diagnose_incident", "인시던트 근본원인(RCA) 번들: 지정한 시간창(기본 30분) 동안 SQLON이 수집한 읽기 전용 신호(블로킹 트리, 세션, 설정 드리프트, 예방 점검 위험, 최근 변경계획, 커넥션 풀, 저장된 워크로드 스냅숏)를 상관분석해 근본원인 가설을 순위·신뢰도·근거·권고와 함께 반환합니다. 아무것도 실행/변경하지 않으며 모든 조치는 변경계획으로 연결됩니다.", objectSchema(map[string]any{
+			"profile":        str("진단할 DB 프로파일 ID"),
+			"window_minutes": integer("상관분석 시간창(분, 기본 30)"),
+		}, []string{"profile"})),
+		tool("predict_change_impact", "변경 전 영향 예측: DDL 문장을 정적 분석해 잡게 될 잠금 수준(예: PostgreSQL ACCESS EXCLUSIVE), 읽기/쓰기 차단 여부, 전체 테이블 재작성/스캔 여부, 그리고 무중단 대안(CREATE INDEX CONCURRENTLY, ADD CONSTRAINT ... NOT VALID, MySQL ALGORITHM=INSTANT·gh-ost/pt-osc)을 심각도·권고와 함께 반환합니다. DB에 접속하지 않는 휴리스틱이며 실행하지 않습니다. engine 또는 profile 중 하나로 엔진을 지정하세요.", objectSchema(map[string]any{
+			"sql":     str("분석할 DDL 문장"),
+			"engine":  str("대상 엔진(postgres|mysql|mariadb). profile을 주면 생략 가능"),
+			"profile": str("엔진을 결정할 DB 프로파일 ID(선택)"),
+		}, []string{"sql"})),
 		tool("diagnose_connection_pool", "SQLON이 대상 DB로 유지하는 커넥션 풀의 상태를 진단합니다. sql.DB 통계(획득 대기 횟수·대기시간, 사용 중/유휴/전체 커넥션, 유휴·수명 초과 종료)를 설정된 max_open_conns/max_idle_conns와 대조해 오버·언더 프로비저닝을 평가하고 권고값을 제시합니다. 커넥션 대기가 발생하면 풀 상한 도달 신호입니다. 이 진단은 대상 DB에 쿼리하지 않으며 SQLON 측 풀 텔레메트리만 사용합니다. 풀이 아직 생성되지 않았으면 not_collected를 반환합니다.", objectSchema(map[string]any{
 			"profile": str("조회할 DB 프로파일 ID"),
 		}, []string{"profile"})),
@@ -526,6 +538,9 @@ func (s *Server) tools() []map[string]any {
 			"days":           integer("How many days of audit log to scan (default 7)"),
 			"verify":         boolSchema("When true and a profile is given, run a live EXPLAIN (read-only) on each top candidate's sample query to confirm a full/seq scan on the table — trims false positives; sets plan_confirms/plan_cost"),
 		}, nil)),
+		tool("list_redundant_indexes", "중복·잉여 인덱스 진단(PostgreSQL/MySQL/MariaDB): 같은 테이블에서 컬럼 목록이 완전히 같은 중복 인덱스(duplicate)와, 컬럼 목록이 더 넓은 인덱스의 선두 접두(prefix)에 해당해 이미 커버되는 잉여 인덱스를 찾습니다. 쓰기·저장 오버헤드만 늘리고 읽기 이득이 없는 인덱스입니다. UNIQUE 인덱스는 유일성 보장 때문에 절대 잉여로 보고하지 않으며, 부분·표현식 인덱스는 컬럼만으로 동치를 판단할 수 없어 제외합니다. 읽기 전용·권고이며 DROP은 반드시 변경계획으로 수행합니다.", objectSchema(map[string]any{
+			"profile": str("조회할 DB 프로파일 ID"),
+		}, []string{"profile"})),
 		tool("suggest_sql_rewrite", "SQL 재작성 코파일럿: 안티패턴(NOT IN 서브쿼리, WHERE의 OR, 선두 와일드카드 LIKE, 인덱스 컬럼 함수 래핑, 콤마 조인, SELECT *)을 탐지해 before→after 재작성 템플릿을 제안합니다. SELECT *는 카탈로그의 실제 컬럼으로 정확히 확장(단일 테이블일 때)하며, 그 외 재작성은 의미 동치가 자동 보장되지 않는 검토용 템플릿입니다. profile을 주면 원본 쿼리의 실제 EXPLAIN 기준선(위험도·비용)을 첨부합니다. 실행하거나 SQL을 자동 수정하지 않습니다.", objectSchema(map[string]any{
 			"sql":     str("재작성 제안을 받을 SQL 문장"),
 			"profile": str("선택: EXPLAIN 기준선과 카탈로그 컬럼 확장에 사용할 DB 프로파일 ID"),
@@ -993,6 +1008,8 @@ var dbProfileTools = map[string]bool{
 	"get_backup_status":        true,
 	"get_security_posture":     true,
 	"compare_configuration":    true,
+	"get_maintenance_health":   true,
+	"diagnose_incident":        true,
 	"diagnose_connection_pool": true,
 	"get_workload_summary":     true,
 	"get_top_sql":              true,
@@ -1010,6 +1027,7 @@ var dbProfileTools = map[string]bool{
 	"build_profile_catalog":    true,
 	"db_health_report":         true,
 	"suggest_indexes":          true,
+	"list_redundant_indexes":   true,
 	"workload_report":          true,
 	"get_dba_digest":           true,
 }
@@ -1268,7 +1286,7 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
 		}
 		return s.Observability.Locks(ctx, profile), nil
-	case "get_replication_status", "get_backup_status", "get_security_posture", "compare_configuration", "diagnose_connection_pool":
+	case "get_replication_status", "get_backup_status", "get_security_posture", "compare_configuration", "get_maintenance_health", "diagnose_connection_pool":
 		var a struct {
 			Profile string `json:"profile"`
 		}
@@ -1290,6 +1308,8 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return s.Observability.Security(ctx, profile), nil
 		case "compare_configuration":
 			return s.Observability.ConfigDrift(ctx, profile), nil
+		case "get_maintenance_health":
+			return s.Observability.Maintenance(ctx, profile), nil
 		case "diagnose_connection_pool":
 			return s.connectionPoolDiagnosis(ctx, profile.ID), nil
 		}
@@ -1385,6 +1405,66 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			}
 		}
 		return s.suggestIndexesVerified(ctx, a.Profile, a.MinElapsedMs, a.Days, a.Verify), nil
+	case "list_redundant_indexes":
+		var a struct {
+			Profile string `json:"profile"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		if err := s.canUseProfileID(ctx, userFrom(ctx), a.Profile); err != nil {
+			return map[string]any{"status": "forbidden", "error": err.Error()}, nil
+		}
+		list, err := s.DB.ListRedundantIndexes(ctx, a.Profile)
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error()}, nil
+		}
+		return map[string]any{"status": "ok", "redundant_indexes": list, "count": len(list)}, nil
+	case "diagnose_incident":
+		var a struct {
+			Profile       string `json:"profile"`
+			WindowMinutes int    `json:"window_minutes"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		profiles, err := s.usableProfiles(ctx)
+		if err != nil {
+			return nil, err
+		}
+		profile, ok := allowedProfile(profiles, a.Profile)
+		if !ok {
+			return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
+		}
+		return s.diagnoseIncident(ctx, profile, a.WindowMinutes), nil
+	case "predict_change_impact":
+		var a struct {
+			SQL     string `json:"sql"`
+			Engine  string `json:"engine"`
+			Profile string `json:"profile"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(a.SQL) == "" {
+			return map[string]any{"status": "error", "error": "sql is required"}, nil
+		}
+		engine := a.Engine
+		if a.Profile != "" {
+			profiles, err := s.usableProfiles(ctx)
+			if err != nil {
+				return nil, err
+			}
+			profile, ok := allowedProfile(profiles, a.Profile)
+			if !ok {
+				return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
+			}
+			engine = profile.Type
+		}
+		if strings.TrimSpace(engine) == "" {
+			return map[string]any{"status": "error", "error": "engine or profile is required"}, nil
+		}
+		return map[string]any{"status": "ok", "prediction": change.PredictImpact(engine, a.SQL)}, nil
 	case "lint_sql":
 		var a struct {
 			SQL     string `json:"sql"`
