@@ -3,9 +3,45 @@ package mcp
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"sqlon/internal/change"
 )
+
+// assembleGeneratedPlan builds (does not create) a single-step, reversible
+// draft ChangePlan for an auto-remediation action, with the predicted
+// lock/rewrite impact attached. Shared by the REST /api/changes/generate
+// endpoint and the generate_change_plan MCP tool.
+func (s *Server) assembleGeneratedPlan(dialect, profileID, action string, args map[string]any, reason, risk, target string) (change.Plan, error) {
+	step, err := buildChangeStep(dialect, action, 1, args)
+	if err != nil {
+		return change.Plan{}, err
+	}
+	target = strings.TrimSpace(target)
+	if target == "" {
+		target = strings.TrimSpace(fmt.Sprint(argValue(args, "index")))
+	}
+	if target == "" {
+		target = strings.TrimSpace(fmt.Sprint(argValue(args, "table")))
+	}
+	if target == "" {
+		target = action
+	}
+	if strings.TrimSpace(reason) == "" {
+		reason = "자동 생성된 정리 변경계획 (" + action + ") — 진단 결과 기반, 검토 후 승인하세요."
+	}
+	impact := change.PredictImpact(dialect, step.Command)
+	return change.Plan{
+		ID:           fmt.Sprintf("chg-auto-%s-%d", sanitizeID(action), time.Now().UnixNano()),
+		ProfileID:    profileID,
+		Target:       target,
+		Reason:       reason,
+		Risk:         parseRisk(risk),
+		ExpectedLock: impact.LockLevel,
+		Impact:       impact,
+		Steps:        []change.Step{step},
+	}, nil
+}
 
 // Change-step templates turn a structured privileged operation into a fully
 // formed, immutable change.Step — command + read-only verification +
@@ -39,6 +75,8 @@ func buildChangeStep(dialect, action string, order int, args map[string]any) (ch
 		return buildGrant(dialect, action, order, args, arg)
 	case "create_index":
 		return buildCreateIndex(dialect, order, args, arg)
+	case "drop_index":
+		return buildDropIndex(dialect, order, args, arg)
 	default:
 		return change.Step{}, fmt.Errorf("지원하지 않는 변경 액션 %q — 되돌릴 수 없는 작업은 실행/검증/보상 문장을 직접 작성하세요", action)
 	}
@@ -215,6 +253,36 @@ func buildCreateIndex(dialect string, order int, args map[string]any, arg func(s
 	return step, nil
 }
 
+// buildDropIndex templates a reversible index drop — the safe realization of
+// the redundant/unused-index cleanup advisories. The compensation is the exact
+// CREATE INDEX that recreates the dropped index, so the drop is fully
+// reversible; this is why columns are required (a bare DROP with no way to
+// recreate would violate the compensation contract). It reuses buildCreateIndex
+// and swaps command/compensation so all identifier quoting stays identical.
+func buildDropIndex(dialect string, order int, args map[string]any, arg func(string) string) (change.Step, error) {
+	if strings.TrimSpace(arg("index")) == "" {
+		return change.Step{}, fmt.Errorf("drop_index: index(삭제할 인덱스 이름)가 필요합니다")
+	}
+	if strings.TrimSpace(arg("table")) == "" {
+		return change.Step{}, fmt.Errorf("drop_index: table이 필요합니다")
+	}
+	if len(columnsArg(args, arg)) == 0 {
+		return change.Step{}, fmt.Errorf("drop_index: columns가 필요합니다 (보상 문장으로 인덱스를 재생성하기 위함)")
+	}
+	create, err := buildCreateIndex(dialect, order, args, arg)
+	if err != nil {
+		return change.Step{}, err
+	}
+	// Swap: dropping is the action, recreating is the compensation. Verification
+	// stays a valid read-only existence probe (executor only checks it runs).
+	return change.Step{
+		Order:        order,
+		Command:      create.Compensation, // DROP INDEX ...
+		Verification: create.Verification,
+		Compensation: create.Command, // CREATE [UNIQUE] INDEX ...
+	}, nil
+}
+
 // columnsArg reads columns from a "columns" arg (JSON array or comma string)
 // or a single "column" arg.
 func columnsArg(args map[string]any, arg func(string) string) []string {
@@ -302,6 +370,40 @@ func granteeExistsSQL(dialect, grantee string) string {
 	default:
 		return "SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = " + quoteLiteral(grantee)
 	}
+}
+
+// parseRisk maps a free-text risk to a change.Risk, defaulting to Medium.
+func parseRisk(s string) change.Risk {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "low":
+		return change.Low
+	case "high":
+		return change.High
+	case "critical":
+		return change.Critical
+	case "emergency":
+		return change.Emergency
+	default:
+		return change.Medium
+	}
+}
+
+// sanitizeID reduces a string to id-safe characters for synthesized plan ids.
+func sanitizeID(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	out := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			return r
+		case r == '_' || r == '-':
+			return '-'
+		}
+		return '-'
+	}, s)
+	if out == "" {
+		return "change"
+	}
+	return out
 }
 
 func argValue(args map[string]any, name string) any {

@@ -256,6 +256,10 @@ hr {
     border: 1px solid #e2e8f0;
 }
 
+.mermaid, .mermaid *, svg, svg *, text, tspan, .node, .nodeLabel, .edgeLabel, .cluster label, g.label text, foreignObject, foreignObject div {
+    font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif !important;
+}
+
 /* Print optimizations */
 @media print {
     body {
@@ -285,7 +289,12 @@ hr {
         mermaid.initialize({
             startOnLoad: true,
             theme: 'default',
-            flowchart: { useMaxWidth: true, htmlLabels: true }
+            fontFamily: "'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif",
+            themeVariables: {
+                fontFamily: "'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif",
+                primaryFontFamily: "'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif"
+            },
+            flowchart: { useMaxWidth: true, htmlLabels: false }
         });
     </script>
 </head>

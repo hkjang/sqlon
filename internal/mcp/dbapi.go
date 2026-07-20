@@ -426,6 +426,21 @@ func (s *Server) registerDBAPI(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, s.mcpDBADigest(req.Profile, req.Days, req.SlowMs))
 	})
+	mux.HandleFunc("GET /api/metadata/pii-exposure", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := s.requireActor(w, r)
+		if !ok {
+			return
+		}
+		profile := r.URL.Query().Get("profile")
+		if profile != "" {
+			if err := s.canUseProfileID(r.Context(), actor, profile); err != nil {
+				writeAPIError(w, http.StatusForbidden, err)
+				return
+			}
+		}
+		cat, source := s.catalogFor(profile)
+		writeJSON(w, http.StatusOK, piiExposureReport(cat, source))
+	})
 	mux.HandleFunc("POST /api/query/lint", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := s.requireQueryActor(w, r); !ok {
 			return

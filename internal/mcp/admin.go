@@ -52,6 +52,7 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/availability", s.guardPage(s.serveWebUI("webui/availability.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/security", s.guardPage(s.serveWebUI("webui/security.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/maintenance", s.guardPage(s.serveWebUI("webui/maintenance.html", "text/html; charset=utf-8")))
+	mux.HandleFunc("GET /admin/compliance", s.guardPage(s.serveWebUI("webui/compliance.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/users", s.guardAdminPage(s.serveWebUI("webui/users.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/keys", s.guardPage(s.serveWebUI("webui/keys.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /admin/settings", s.guardAdminPage(s.serveWebUI("webui/settings.html", "text/html; charset=utf-8")))
@@ -215,6 +216,21 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, s.diagnoseIncident(ctx, profile, atoiDefault(r.URL.Query().Get("window_minutes"), 30)))
 	})
+	mux.HandleFunc("GET /api/observability/compliance", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		profile, ok := allowedProfile(profiles, r.URL.Query().Get("profile"))
+		if !ok {
+			writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted"))
+			return
+		}
+		writeJSON(w, http.StatusOK, s.compliancePosture(ctx, profile))
+	})
 	for path, kind := range map[string]string{
 		"/api/observability/workload": "workload",
 		"/api/observability/top-sql":  "top_sql",
@@ -359,6 +375,45 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{"status": "ok", "data": created, "collected_at": time.Now().UTC()})
+	})
+	// Auto-remediation: turn a diagnosis finding (redundant/unused index, …)
+	// into a single-step, fully-reversible draft ChangePlan with the predicted
+	// lock/rewrite impact attached. It only ASSEMBLES a draft — nothing executes
+	// until the normal submit→approve→execute gate is passed.
+	mux.HandleFunc("POST /api/changes/generate", func(w http.ResponseWriter, r *http.Request) {
+		if !s.requireDBA(w, r) {
+			return
+		}
+		var req struct {
+			Profile string         `json:"profile"`
+			Action  string         `json:"action"`
+			Args    map[string]any `json:"args"`
+			Reason  string         `json:"reason"`
+			Risk    string         `json:"risk"`
+			Target  string         `json:"target"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		dialect, err := s.dbaDialect(r.Context(), req.Profile)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		plan, err := s.assembleGeneratedPlan(dialect, req.Profile, req.Action, req.Args, req.Reason, req.Risk, req.Target)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		created, err := s.Changes.Create(plan, plan.ID)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		s.adminAudit(r, "change_generate", created.ID+" ("+req.Action+")", nil)
+		writeJSON(w, http.StatusCreated, map[string]any{"status": "ok", "data": created,
+			"notice": "초안(draft)이 생성되었습니다. 변경 관리에서 제출→승인→실행하세요.", "collected_at": time.Now().UTC()})
 	})
 	mux.HandleFunc("GET /api/changes/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if !s.requireDBA(w, r) {

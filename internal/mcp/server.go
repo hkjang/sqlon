@@ -487,13 +487,19 @@ func (s *Server) tools() []map[string]any {
 		tool("compare_configuration", "설정 드리프트 감지: 프로파일의 config_baseline(운영자 선언 기대값)과 라이브 서버 파라미터를 대조합니다. PostgreSQL은 pg_settings(pending_restart 포함), MySQL/MariaDB는 performance_schema.global_variables, Oracle은 V$PARAMETER(base 뷰)를 읽습니다. 선언된 키만 검사하며 on/off↔true/false↔1/0을 동치로 봅니다. 읽기 전용이며 조치는 변경계획으로 수행합니다.", objectSchema(map[string]any{
 			"profile": str("조회할 DB 프로파일 ID"),
 		}, []string{"profile"})),
-		tool("get_maintenance_health", "예방 점검(proactive maintenance) 진단: 오류 없이 잠복하다 장애를 유발하는 위험을 조기에 찾습니다. PostgreSQL은 트랜잭션 ID wraparound 임박(age(datfrozxid)/relfrozxid vs autovacuum_freeze_max_age 및 2^31 한계), 테이블 블로트(dead tuple 비율), WAL을 붙잡는 비활성 복제 슬롯을 근거·심각도·권고와 함께 반환합니다. 읽기 전용이며 조치(VACUUM FREEZE·pg_repack·슬롯 제거)는 반드시 변경계획으로 수행합니다.", objectSchema(map[string]any{
+		tool("get_maintenance_health", "예방 점검(proactive maintenance) 진단: 오류 없이 잠복하다 장애를 유발하는 위험을 조기에 찾습니다. PostgreSQL은 트랜잭션 ID wraparound 임박·테이블 블로트·WAL을 붙잡는 비활성 복제 슬롯, MySQL/MariaDB는 InnoDB history list 적체(퍼지 지연)·PK 없는 테이블, Oracle은 테이블스페이스 포화·만료 미잠금 계정을 근거·심각도·권고와 함께 반환합니다. 읽기 전용이며 조치는 반드시 변경계획으로 수행합니다.", objectSchema(map[string]any{
 			"profile": str("조회할 DB 프로파일 ID"),
 		}, []string{"profile"})),
 		tool("diagnose_incident", "인시던트 근본원인(RCA) 번들: 지정한 시간창(기본 30분) 동안 SQLON이 수집한 읽기 전용 신호(블로킹 트리, 세션, 설정 드리프트, 예방 점검 위험, 최근 변경계획, 커넥션 풀, 저장된 워크로드 스냅숏)를 상관분석해 근본원인 가설을 순위·신뢰도·근거·권고와 함께 반환합니다. 아무것도 실행/변경하지 않으며 모든 조치는 변경계획으로 연결됩니다.", objectSchema(map[string]any{
 			"profile":        str("진단할 DB 프로파일 ID"),
 			"window_minutes": integer("상관분석 시간창(분, 기본 30)"),
 		}, []string{"profile"})),
+		tool("get_compliance_posture", "컴플라이언스 포스처 리포트: 사용자·권한 진단, 설정 드리프트, 백업/아카이빙, 자격증명(평문 금지), 감사 로깅, 전송 암호화 신호를 ISMS-P·PCI-DSS·개인정보보호법(PIPA) 통제 항목에 매핑해 pass/fail/manual과 근거·권고, 준수 점수를 반환합니다. 읽기 전용 참고 리포트이며 인증/심사를 대체하지 않습니다. 수집 불가 신호는 fail이 아니라 manual로 표시합니다.", objectSchema(map[string]any{
+			"profile": str("진단할 DB 프로파일 ID"),
+		}, []string{"profile"})),
+		tool("get_pii_exposure", "PII 노출 리포트: 카탈로그 메타데이터를 한국어·영어 민감정보 휴리스틱(주민등록번호·이메일·전화·카드·계좌·성명·주소·생년월일 등)과 대조합니다. pii=true로 태그된 컬럼은 쿼리 결과에서 자동 마스킹되므로 protected로, 개인정보로 보이지만 태그되지 않아 평문 반환되는 컬럼은 exposed(위험)로 분류합니다. 값이나 DB를 조회하지 않고 카탈로그 메타데이터만 읽습니다. profile을 주면 해당 프로파일 워크스페이스 카탈로그를, 생략하면 활성 카탈로그를 검사합니다.", objectSchema(map[string]any{
+			"profile": str("검사할 프로파일 워크스페이스 카탈로그 ID(선택; 생략 시 활성 카탈로그)"),
+		}, nil)),
 		tool("predict_change_impact", "변경 전 영향 예측: DDL 문장을 정적 분석해 잡게 될 잠금 수준(예: PostgreSQL ACCESS EXCLUSIVE), 읽기/쓰기 차단 여부, 전체 테이블 재작성/스캔 여부, 그리고 무중단 대안(CREATE INDEX CONCURRENTLY, ADD CONSTRAINT ... NOT VALID, MySQL ALGORITHM=INSTANT·gh-ost/pt-osc)을 심각도·권고와 함께 반환합니다. DB에 접속하지 않는 휴리스틱이며 실행하지 않습니다. engine 또는 profile 중 하나로 엔진을 지정하세요.", objectSchema(map[string]any{
 			"sql":     str("분석할 DDL 문장"),
 			"engine":  str("대상 엔진(postgres|mysql|mariadb). profile을 주면 생략 가능"),
@@ -574,11 +580,18 @@ func (s *Server) tools() []map[string]any {
 		tool("evaluate_change_risk", "서버 정책으로 위험도와 필요한 승인 수를 평가합니다. 클라이언트가 승인 수를 낮출 수 없습니다.", objectSchema(map[string]any{
 			"risk": str("low | medium | high | critical | emergency"),
 		}, []string{"risk"})),
-		tool("build_change_step", "구조화된 권한 작업을 변경계획 단계(실행·검증·보상)로 안전하게 생성합니다. 객체명은 방언별로 인용되어 SQL 주입을 막습니다. 이 호출은 DB를 변경하지 않고 단계 초안만 반환합니다. 지원 액션: create_user, create_database, grant, revoke (되돌릴 수 있고 검증 가능한 작업). 되돌릴 수 없는 작업(DROP 등)은 실행·검증·보상을 직접 작성하세요. 비밀번호는 계획에 저장할 수 없습니다.", objectSchema(map[string]any{
+		tool("build_change_step", "구조화된 권한 작업을 변경계획 단계(실행·검증·보상)로 안전하게 생성합니다. 객체명은 방언별로 인용되어 SQL 주입을 막습니다. 이 호출은 DB를 변경하지 않고 단계 초안만 반환합니다. 지원 액션: create_user, create_database, grant, revoke, create_index, drop_index (되돌릴 수 있고 검증 가능한 작업). 되돌릴 수 없는 작업은 실행·검증·보상을 직접 작성하세요. 비밀번호는 계획에 저장할 수 없습니다.", objectSchema(map[string]any{
 			"profile": str("대상 DB 프로파일 ID (방언 결정)"),
-			"action":  str("create_user | create_database | grant | revoke"),
+			"action":  str("create_user | create_database | grant | revoke | create_index | drop_index"),
 			"order":   integer("단계 순번 (기본 1)"),
-			"args":    map[string]any{"type": "object", "description": "액션 인자: username / name·owner·encoding / privileges·object·grantee·with_grant"},
+			"args":    map[string]any{"type": "object", "description": "액션 인자: username / name·owner·encoding / privileges·object·grantee·with_grant / table·columns·index·unique"},
+		}, []string{"profile", "action"})),
+		tool("generate_change_plan", "진단 결과(중복·미사용 인덱스 등)를 한 번에 되돌릴 수 있는 draft 변경계획으로 생성합니다. buildChangeStep으로 안전 인용된 단계(실행+검증+보상)를 만들고, predict_change_impact로 예상 잠금·재작성 영향을 계획에 첨부합니다. 초안만 만들며 실행하지 않습니다 — 이후 submit_change→approve_change→execute_approved_change 승인 게이트를 거쳐야 실행됩니다. 현재 action=drop_index(인덱스 정리)를 지원합니다.", objectSchema(map[string]any{
+			"profile": str("대상 DB 프로파일 ID"),
+			"action":  str("drop_index (되돌릴 수 있는 정리 액션)"),
+			"args":    map[string]any{"type": "object", "description": "액션 인자: index·table·columns (drop_index는 보상 재생성을 위해 columns 필수)"},
+			"reason":  str("변경 사유(선택; 미지정 시 자동 생성)"),
+			"risk":    str("low | medium | high | critical | emergency (기본 medium)"),
 		}, []string{"profile", "action"})),
 		tool("submit_change", "변경계획 초안을 분석/검토 상태로 제출합니다. 중간 이상 위험은 승인 전 실행할 수 없습니다.", objectSchema(map[string]any{"id": str("Change request id")}, []string{"id"})),
 		tool("approve_change", "검토 대기 중인 변경을 현재 DBA 자격으로 승인합니다. 치명적 변경은 서로 다른 2인의 승인이 필요합니다.", objectSchema(map[string]any{"id": str("Change request id")}, []string{"id"})),
@@ -962,6 +975,7 @@ var adminOnlyTools = map[string]bool{
 // one coherent surface.
 var dbaTools = map[string]bool{
 	"create_change_plan":      true,
+	"generate_change_plan":    true,
 	"evaluate_change_risk":    true,
 	"build_change_step":       true,
 	"submit_change":           true,
@@ -1009,6 +1023,7 @@ var dbProfileTools = map[string]bool{
 	"get_security_posture":     true,
 	"compare_configuration":    true,
 	"get_maintenance_health":   true,
+	"get_compliance_posture":   true,
 	"diagnose_incident":        true,
 	"diagnose_connection_pool": true,
 	"get_workload_summary":     true,
@@ -1286,7 +1301,7 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return map[string]any{"status": "not_found", "warnings": []string{"db profile not found or not permitted"}}, nil
 		}
 		return s.Observability.Locks(ctx, profile), nil
-	case "get_replication_status", "get_backup_status", "get_security_posture", "compare_configuration", "get_maintenance_health", "diagnose_connection_pool":
+	case "get_replication_status", "get_backup_status", "get_security_posture", "compare_configuration", "get_maintenance_health", "get_compliance_posture", "diagnose_connection_pool":
 		var a struct {
 			Profile string `json:"profile"`
 		}
@@ -1310,10 +1325,26 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return s.Observability.ConfigDrift(ctx, profile), nil
 		case "get_maintenance_health":
 			return s.Observability.Maintenance(ctx, profile), nil
+		case "get_compliance_posture":
+			return s.compliancePosture(ctx, profile), nil
 		case "diagnose_connection_pool":
 			return s.connectionPoolDiagnosis(ctx, profile.ID), nil
 		}
 		return s.Observability.Replication(ctx, profile), nil
+	case "get_pii_exposure":
+		var a struct {
+			Profile string `json:"profile"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		if a.Profile != "" {
+			if err := s.canUseProfileID(ctx, userFrom(ctx), a.Profile); err != nil {
+				return map[string]any{"status": "forbidden", "error": err.Error()}, nil
+			}
+		}
+		cat, source := s.catalogFor(a.Profile)
+		return piiExposureReport(cat, source), nil
 	case "get_workload_summary", "get_top_sql", "get_storage_status":
 		var a struct {
 			Profile string `json:"profile"`
@@ -1567,6 +1598,35 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return map[string]any{"status": "error", "error": err.Error()}, nil
 		}
 		return map[string]any{"status": "ok", "data": created, "collected_at": time.Now().UTC()}, nil
+	case "generate_change_plan":
+		var a struct {
+			Profile string         `json:"profile"`
+			Action  string         `json:"action"`
+			Args    map[string]any `json:"args"`
+			Reason  string         `json:"reason"`
+			Risk    string         `json:"risk"`
+			Target  string         `json:"target"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		if err := s.canUseProfileID(ctx, userFrom(ctx), a.Profile); err != nil {
+			return map[string]any{"status": "forbidden", "error": err.Error()}, nil
+		}
+		dialect, err := s.dbaDialect(ctx, a.Profile)
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error()}, nil
+		}
+		plan, err := s.assembleGeneratedPlan(dialect, a.Profile, a.Action, a.Args, a.Reason, a.Risk, a.Target)
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error()}, nil
+		}
+		created, err := s.Changes.Create(plan, plan.ID)
+		if err != nil {
+			return map[string]any{"status": "error", "error": err.Error()}, nil
+		}
+		return map[string]any{"status": "ok", "data": created,
+			"notice": "초안(draft)이 생성되었습니다. submit_change→approve_change→execute_approved_change 로 진행하세요.", "collected_at": time.Now().UTC()}, nil
 	case "evaluate_change_risk":
 		var a struct {
 			Risk change.Risk `json:"risk"`

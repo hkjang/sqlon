@@ -124,13 +124,23 @@ func TestReplicationUnsupportedEngineIsExplicit(t *testing.T) {
 	}
 }
 
-func TestMaintenanceUnsupportedEngineIsExplicit(t *testing.T) {
-	// MySQL has the Maintenance capability but no provider registered → the
-	// service must say "unsupported", never a false all-clear.
+func TestMaintenanceUnknownEngineIsExplicit(t *testing.T) {
+	// An unregistered engine must yield an explicit "unsupported", never a
+	// false all-clear.
 	svc := newTestService(&fakeQueryer{})
-	res := svc.Maintenance(context.Background(), dbconn.Profile{ID: "my", Type: "mysql"})
+	res := svc.Maintenance(context.Background(), dbconn.Profile{ID: "x", Type: "sqlite"})
 	if res.Status != "unsupported" || len(res.Limitations) == 0 {
-		t.Fatalf("missing maintenance provider must be explicit, got %+v", res)
+		t.Fatalf("unknown engine must be explicit, got %+v", res)
+	}
+}
+
+func TestMaintenanceMySQLProviderRuns(t *testing.T) {
+	// MySQL now ships maintenance checks: with an empty result set the service
+	// reports a healthy "ok" envelope (checks ran, no findings).
+	svc := newTestService(&fakeQueryer{rows: []map[string]any{}})
+	res := svc.Maintenance(context.Background(), dbconn.Profile{ID: "my", Type: "mysql"})
+	if res.Status != "ok" || res.Data.Checks == 0 {
+		t.Fatalf("mysql maintenance should run checks and be ok on empty data, got %+v", res)
 	}
 }
 

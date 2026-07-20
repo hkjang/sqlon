@@ -70,7 +70,7 @@ AI-generated changes were not accepted automatically. The project owner remained
 This combination allowed Codex to accelerate implementation while GPT-5.6 supported architectural reasoning and systematic review, with human judgment controlling the final result.
 
 **📚 상세 문서**: [docs/README.md](docs/README.md) — 아키텍처, MCP 도구
-레퍼런스(101종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
+레퍼런스(104종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
 가이드(18종), REST API, DB 커넥터, 운영/평가/보안/개발자 가이드.
 
 ## Quick Start
@@ -425,7 +425,9 @@ Invoke-RestMethod `
 - `get_backup_status` — DB 서버가 스스로 보고하는 백업·아카이브 상태를 반환. PostgreSQL WAL 아카이버 성공/실패, MySQL/MariaDB binlog(PITR 기반), Oracle ARCHIVELOG·RMAN 이력·FRA 사용률(base 뷰만). 외부 백업 도구 잡 상태는 limitation으로 명시
 - `get_security_posture` — 사용자·권한 진단: 로그인 가능한 비기본 SUPERUSER/DBA 역할, 위험 시스템 권한, 와일드카드 호스트 고권한 계정, 만료 비밀번호를 근거·심각도와 함께 반환. 읽기 전용 진단이며 조치는 변경계획으로만 수행
 - `compare_configuration` — 설정 드리프트 감지: 프로파일 config_baseline과 라이브 서버 파라미터(pg_settings/global_variables/V$PARAMETER) 대조. 선언된 키만 검사, on/off↔true/false↔1/0 동치, pending_restart 표시. 읽기 전용, 조치는 변경계획으로
-- `get_maintenance_health` — 예방 점검 진단: 오류 없이 잠복하다 장애를 유발하는 위험을 조기 탐지. PostgreSQL 트랜잭션 ID wraparound 임박(age(datfrozxid)/relfrozxid vs autovacuum_freeze_max_age·2^31 한계), 테이블 블로트(dead tuple 비율), WAL을 붙잡는 비활성 복제 슬롯을 근거·심각도·권고와 함께 반환. 읽기 전용이며 조치(VACUUM FREEZE·pg_repack·슬롯 제거)는 변경계획으로만 수행
+- `get_maintenance_health` — 예방 점검 진단: 오류 없이 잠복하다 장애를 유발하는 위험을 조기 탐지. PostgreSQL(wraparound 임박·테이블 블로트·WAL 붙잡는 비활성 복제 슬롯), MySQL/MariaDB(InnoDB history list 적체=퍼지 지연·PK 없는 테이블), Oracle(테이블스페이스 포화·만료 미잠금 계정)을 근거·심각도·권고와 함께 반환. 읽기 전용이며 조치는 변경계획으로만 수행
+- `get_pii_exposure` — PII 노출 리포트: 카탈로그 메타데이터를 한국어·영어 민감정보 휴리스틱(주민등록번호·이메일·전화·카드·계좌·성명·주소·생년월일 등)과 대조. pii=true 태그 컬럼은 자동 마스킹되어 protected, 개인정보로 보이나 미태그되어 평문 반환되는 컬럼은 exposed(위험)로 분류. 값·DB 미조회, 카탈로그만 읽음. `profile`(선택; 생략 시 활성 카탈로그)
+- `get_compliance_posture` — 컴플라이언스 포스처 리포트: 권한 진단·설정 드리프트·백업/아카이빙·자격증명(평문 금지)·감사 로깅·전송 암호화 신호를 ISMS-P·PCI-DSS·개인정보보호법(PIPA) 통제 항목에 매핑해 pass/fail/manual·근거·권고·준수 점수를 반환. 읽기 전용 참고 리포트(인증/심사 대체 아님), 수집 불가 신호는 fail이 아닌 manual. `profile`
 - `diagnose_incident` — 인시던트 근본원인(RCA) 번들: 지정한 시간창(기본 30분)의 읽기 전용 신호(블로킹 트리, 세션, 설정 드리프트, 예방 점검 위험, 최근 변경계획, 커넥션 풀, 저장된 워크로드 스냅숏)를 상관분석해 근본원인 가설을 순위·신뢰도·근거·권고와 함께 반환. 아무것도 실행/변경하지 않으며 모든 조치는 변경계획으로 연결. `profile`·`window_minutes`(기본 30)
 - `predict_change_impact` — 변경 전 영향 예측: DDL 문장을 정적 분석해 잠금 수준(예: PostgreSQL ACCESS EXCLUSIVE), 읽기/쓰기 차단 여부, 전체 테이블 재작성/스캔 여부, 무중단 대안(CREATE INDEX CONCURRENTLY, ADD CONSTRAINT NOT VALID, MySQL ALGORITHM=INSTANT·gh-ost/pt-osc)을 심각도·권고와 함께 반환. DB에 접속하지 않는 휴리스틱이며 실행하지 않음. `sql`·`engine`|`profile`
 - `diagnose_connection_pool` — SQLON이 대상 DB로 유지하는 커넥션 풀 진단: sql.DB 통계(획득 대기·사용/유휴/전체·유휴/수명 초과 종료)를 max_open_conns/max_idle_conns와 대조해 오버·언더 프로비저닝 평가·권고. 대상 DB에 쿼리하지 않는 SQLON 측 텔레메트리, 풀 미생성 시 not_collected
@@ -451,6 +453,7 @@ Invoke-RestMethod `
 쓰기 작업은 모두 ChangePlan을 먼저 만들고 서버가 정한 위험도별 승인 정책을 거칩니다. 프로파일의 **DBA 자격증명**은 승인된 계획의 내부 실행기에서만 사용됩니다. 기존 쓰기형 `dba_*` MCP 도구와 직접 변경 REST 경로는 공개 목록에서 제거되었습니다.
 
 - `create_change_plan` — 대상·사유·사전 상태·영향·잠금·선행조건과 실행/검증/보상 단계를 포함한 변경 초안 생성
+- `generate_change_plan` — 진단 결과(중복·미사용 인덱스 등)를 한 번에 되돌릴 수 있는 draft 변경계획으로 생성. buildChangeStep으로 안전 인용된 단계를 만들고 predict_change_impact로 예상 잠금·재작성 영향을 첨부. 초안만 생성하며 submit→approve→execute 승인 게이트를 거쳐야 실행됨. 현재 `drop_index` 지원
 - `evaluate_change_risk` — 서버 정책 기준 위험도와 필수 승인 수 평가
 - `build_change_step` — 구조화된 권한 작업(create_user·create_database·grant·revoke)을 방언별 안전 인용으로 변경계획 단계(실행·검증·보상)로 생성. DB를 변경하지 않으며 되돌릴 수 없는 작업은 직접 작성, 비밀번호는 계획에 저장 불가
 - `submit_change` — 초안을 분석 및 검토 대기 상태로 제출

@@ -69,13 +69,16 @@ func SecurityProviders() map[string]observability.SecurityProvider {
 	}
 }
 
-// MaintenanceProviders returns the proactive-maintenance (wraparound, bloat,
-// inactive replication slots) implementation. Only PostgreSQL ships checks
-// today; other engines report "unsupported" through the service rather than a
-// false all-clear.
+// MaintenanceProviders returns the proactive-maintenance implementation per
+// engine: PostgreSQL (wraparound, bloat, inactive replication slots),
+// MySQL/MariaDB (InnoDB history-list lag, PK-less tables), Oracle (tablespace
+// saturation, expired-unlocked accounts).
 func MaintenanceProviders() map[string]observability.MaintenanceProvider {
 	return map[string]observability.MaintenanceProvider{
 		"postgres": postgres.Maintenance{},
+		"mysql":    mysql.Maintenance{},
+		"mariadb":  mariadb.Maintenance{},
+		"oracle":   oracle.Maintenance{},
 	}
 }
 

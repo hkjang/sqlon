@@ -170,3 +170,36 @@ func TestBuildChangeStepGrantRejectsMetaCharacters(t *testing.T) {
 		t.Fatal("privileges with statement separator must be refused")
 	}
 }
+
+func TestBuildChangeStepDropIndexIsReversible(t *testing.T) {
+	// A redundant-index cleanup: DROP is the command, the exact CREATE INDEX is
+	// the compensation so the drop is fully reversible.
+	step, err := buildChangeStep("postgres", "drop_index", 1, map[string]any{
+		"index": "idx_orders_cust", "table": "public.orders", "columns": []any{"cust_id"},
+	})
+	if err != nil {
+		t.Fatalf("buildChangeStep drop_index: %v", err)
+	}
+	if !strings.Contains(step.Command, `DROP INDEX IF EXISTS "public"."idx_orders_cust"`) {
+		t.Fatalf("command must DROP the index: %q", step.Command)
+	}
+	if !strings.Contains(step.Compensation, `CREATE INDEX "idx_orders_cust" ON "public"."orders" ("cust_id")`) {
+		t.Fatalf("compensation must recreate the index: %q", step.Compensation)
+	}
+	p := change.Plan{ID: "t", ProfileID: "p", Target: "x", Reason: "r", Risk: change.Medium,
+		Steps: []change.Step{{Order: 1, Command: step.Command, Verification: step.Verification, Compensation: step.Compensation}}}
+	if err := p.Validate(); err != nil {
+		t.Fatalf("generated drop-index step fails plan validation: %v", err)
+	}
+}
+
+func TestBuildChangeStepDropIndexRequiresColumnsForReversibility(t *testing.T) {
+	// Without columns there is no way to build the recreate compensation, so the
+	// template must refuse rather than emit an irreversible drop.
+	if _, err := buildChangeStep("postgres", "drop_index", 1, map[string]any{"index": "i", "table": "t"}); err == nil {
+		t.Fatal("drop_index without columns must be refused")
+	}
+	if _, err := buildChangeStep("postgres", "drop_index", 1, map[string]any{"table": "t", "columns": []any{"c"}}); err == nil {
+		t.Fatal("drop_index without index name must be refused")
+	}
+}

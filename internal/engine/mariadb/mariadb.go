@@ -76,3 +76,11 @@ type Security struct{}
 func (Security) Security(ctx context.Context, q observability.SystemQueryer, p dbconn.Profile) (observability.SecurityData, error) {
 	return mysql.CollectSecurity(ctx, q, p, "mariadb")
 }
+
+// Maintenance implements observability.MaintenanceProvider via the shared
+// MySQL-family proactive-maintenance checks (InnoDB history list, PK-less tables).
+type Maintenance struct{}
+
+func (Maintenance) Maintenance(ctx context.Context, q observability.SystemQueryer, p dbconn.Profile) (observability.MaintenanceData, error) {
+	return mysql.CollectMaintenance(ctx, q, p, "mariadb")
+}

@@ -8,6 +8,7 @@ import (
 type UnusedIndex struct {
 	TableName  string `json:"table_name"`
 	IndexName  string `json:"index_name"`
+	Columns    string `json:"columns,omitempty"` // ordered CSV; enables a reversible drop ChangePlan
 	SizeBytes  int64  `json:"size_bytes"`
 	ScanCount  int64  `json:"scan_count"`
 	DropScript string `json:"drop_script"`
@@ -35,11 +36,16 @@ func (m *Manager) ListUnusedIndexes(ctx context.Context, profileID string) ([]Un
 			schemaname || '.' || relname AS table_name,
 			indexrelname AS index_name,
 			pg_relation_size(i.indexrelid)::bigint AS size_bytes,
-			idx_scan::bigint AS scan_count
+			idx_scan::bigint AS scan_count,
+			COALESCE((SELECT string_agg(a.attname, ',' ORDER BY k.ord)
+			          FROM unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
+			          JOIN pg_catalog.pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum), '') AS columns
 		FROM pg_catalog.pg_stat_user_indexes ui
 		JOIN pg_catalog.pg_index i ON ui.indexrelid = i.indexrelid
 		WHERE NOT indisunique
 		  AND idx_scan = 0
+		  AND i.indpred IS NULL
+		  AND i.indexprs IS NULL
 		ORDER BY size_bytes DESC LIMIT 100`
 
 		rows, err := db.QueryContext(ctx, query)
@@ -50,7 +56,7 @@ func (m *Manager) ListUnusedIndexes(ctx context.Context, profileID string) ([]Un
 
 		for rows.Next() {
 			var ui UnusedIndex
-			if err := rows.Scan(&ui.TableName, &ui.IndexName, &ui.SizeBytes, &ui.ScanCount); err != nil {
+			if err := rows.Scan(&ui.TableName, &ui.IndexName, &ui.SizeBytes, &ui.ScanCount, &ui.Columns); err != nil {
 				return nil, err
 			}
 			ui.DropScript = fmt.Sprintf("DROP INDEX %s;", ui.IndexName)

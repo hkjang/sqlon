@@ -1,0 +1,37 @@
+{
+  "id": "chg-auto-drop-index-1784526520514040447",
+  "profile_id": "pgx",
+  "target": "idx_cust",
+  "state": "completed",
+  "risk": "medium",
+  "reason": "자동 생성된 정리 변경계획 (drop_index) — 진단 결과 기반, 검토 후 승인하세요.",
+  "impact": {
+    "engine": "postgres",
+    "operation": "DROP INDEX",
+    "lock_level": "ACCESS EXCLUSIVE",
+    "blocking": "reads+writes",
+    "rewrite": false,
+    "online_option": "DROP INDEX CONCURRENTLY ...",
+    "severity": "warning"
+  },
+  "expected_lock": "ACCESS EXCLUSIVE",
+  "steps": [
+    {
+      "order": 1,
+      "command": "DROP INDEX IF EXISTS \"public\".\"idx_cust\"",
+      "verification": "SELECT 1 FROM pg_indexes WHERE indexname = 'idx_cust'",
+      "compensation": "CREATE INDEX \"idx_cust\" ON \"public\".\"orders\" (\"cust_id\")"
+    }
+  ],
+  "required_approvals": 1,
+  "approvals": [
+    {
+      "id": "chg-auto-drop-index-1784526520514040447-a1-1784526520593900632",
+      "actor": "dba",
+      "at": "2026-07-20T05:48:40.593900632Z",
+      "decision": "approved"
+    }
+  ],
+  "created_at": "2026-07-20T05:48:40.514045508Z",
+  "updated_at": "2026-07-20T14:48:58.665093758+09:00"
+}

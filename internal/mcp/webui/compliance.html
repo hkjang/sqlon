@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<title>SQLON 컴플라이언스</title>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--line:#dce4ee;--ink:#172033;--sub:#607086;--blue:#2563eb;--ok:#15803d;--warn:#a16207;--bad:#b91c1c;--mono:ui-monospace,'Cascadia Code',Consolas,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif}
+header{padding:13px 26px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}
+select,input,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff}button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}
+main{max-width:1200px;margin:auto;padding:20px 26px 60px}
+.context{padding:11px 14px;background:#17243b;color:#e9f0ff;border-radius:10px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap}.context span{padding-right:9px;border-right:1px solid #42516b}.context span:last-child{border:0}
+.notice{padding:11px 14px;background:#eef4ff;border:1px solid #c4d5f5;border-radius:10px;margin-bottom:14px;font-size:13px;color:#1d3f7a}
+.scorewrap{display:flex;gap:14px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.scorebig{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 22px;text-align:center}.scorebig b{font-size:38px;display:block;line-height:1}.scorebig small{color:var(--sub)}
+.pills{display:flex;gap:8px;flex-wrap:wrap}.pill{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}.pill b{font-size:20px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:11px;overflow:hidden}
+table{width:100%;border-collapse:collapse}th,td{padding:11px 13px;border-bottom:1px solid #edf1f5;text-align:left;vertical-align:top}th{font-size:12px;color:#536176;background:#f8fafc}
+td.wrap{white-space:normal}
+.badge{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11.5px;font-weight:700}
+.st-pass{background:#dcfce7;color:#166534}.st-fail{background:#fee2e2;color:#991b1b}.st-manual{background:#e5e7eb;color:#374151}.st-unknown{background:#fef3c7;color:#854d0e}
+.fw{display:inline-block;font-size:11px;color:#475569;background:#eef2f7;border-radius:8px;padding:1px 7px;margin:1px 3px 1px 0}
+.muted{color:var(--sub);font-size:12px}.empty{padding:32px;text-align:center;color:var(--sub)}
+.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}
+@media print{header .grow~*,select,button,.notice{display:none!important}header{position:static}body{background:#fff}}
+</style>
+</head>
+<body>
+<header><h1>컴플라이언스 포스처</h1><select id="profile" aria-label="DB 프로파일"></select><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><button class="primary" id="refresh">진단</button><button id="print">리포트 저장/인쇄</button><span class="grow"></span><span class="muted" id="fresh">수집 전</span></header>
+<main>
+  <div class="context" id="context"><span>환경 -</span><span>업무서비스 -</span><span>엔진 -</span><span>인스턴스 -</span><span>수집 시각 -</span></div>
+  <div class="notice">읽기 전용 진단을 ISMS-P · PCI-DSS · 개인정보보호법(PIPA) 통제 항목에 매핑한 <b>참고 리포트</b>입니다. 공식 인증/심사를 대체하지 않으며, 수집 불가 항목은 fail이 아닌 <b>manual(수동 확인)</b>로 표시합니다. 조치는 반드시 변경 관리로 수행하세요.</div>
+  <div id="messages"></div>
+  <div class="scorewrap">
+    <div class="scorebig"><b id="score">-</b><small>준수 점수</small></div>
+    <div class="pills">
+      <div class="pill st-pass"><b id="kPass">-</b><div class="muted">통과</div></div>
+      <div class="pill st-fail"><b id="kFail">-</b><div class="muted">미준수</div></div>
+      <div class="pill st-manual"><b id="kManual">-</b><div class="muted">수동 확인</div></div>
+    </div>
+  </div>
+  <section class="panel">
+    <table><thead><tr><th>통제 항목</th><th>상태</th><th>프레임워크</th><th>근거 · 권고</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="4" class="empty">수집 전</td></tr></tbody></table>
+  </section>
+
+  <h2 style="font-size:16px;margin:22px 0 8px">🔎 PII 노출 진단</h2>
+  <div class="pills" style="margin-bottom:10px">
+    <div class="pill st-pass"><b id="pProtected">-</b><div class="muted">마스킹됨(태그)</div></div>
+    <div class="pill st-fail"><b id="pExposed">-</b><div class="muted">노출 후보(미태그)</div></div>
+    <div class="pill"><b id="pTables">-</b><div class="muted">PII 포함 테이블</div></div>
+  </div>
+  <section class="panel">
+    <table><thead><tr><th>테이블</th><th>컬럼</th><th>분류</th><th>마스킹</th></tr></thead>
+    <tbody id="piiRows"><tr><td colspan="4" class="empty">수집 전</td></tr></tbody></table>
+  </section>
+</main>
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let profiles=[];
+const token=$('#adminToken');token.value=localStorage.getItem('sqlonAdminToken')||localStorage.getItem('jasqlAdminToken')||'';token.onchange=()=>localStorage.setItem('sqlonAdminToken',token.value);
+function headers(){const h={Accept:'application/json'};if(token.value)h['X-Admin-Token']=token.value;return h}
+function when(v){if(!v)return '-';const d=new Date(v);return isNaN(d)?esc(v):d.toLocaleString('ko-KR')}
+const ST_KO={pass:'통과',fail:'미준수',manual:'수동 확인',unknown:'미확인'};
+async function get(path){const r=await fetch(path,{headers:headers()});const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.error||r.statusText);return b}
+async function loadProfiles(){const b=await get('/api/db-profiles');profiles=b.profiles||[];const last=localStorage.getItem('sqlonObserveProfile');$('#profile').innerHTML=profiles.map(p=>'<option value="'+esc(p.id)+'"'+(p.id===last?' selected':'')+'>'+esc(p.service_name||p.name||p.id)+' · '+esc(p.type)+'</option>').join('')||'<option value="">프로파일 없음</option>';$('#profile').onchange=()=>{localStorage.setItem('sqlonObserveProfile',$('#profile').value);load()}}
+function showMessages(items,error){$('#messages').innerHTML=(items||[]).map(x=>'<div class="message '+(error?'error':'')+'">'+esc(x)+'</div>').join('')}
+function context(p,collected){$('#context').innerHTML=['환경 '+(p.environment||'-'),'업무서비스 '+(p.service_name||'-'),'엔진 '+(p.type||'-'),'인스턴스 '+(p.name||p.id||'-'),'수집 시각 '+when(collected)].map(x=>'<span>'+esc(x)+'</span>').join('')}
+function fwBadges(fw){return Object.keys(fw||{}).map(k=>'<span class="fw">'+esc(k)+' '+esc(fw[k])+'</span>').join('')}
+async function load(){const id=$('#profile').value;if(!id)return;$('#fresh').textContent='수집 중…';
+  try{const b=await get('/api/observability/compliance?profile='+encodeURIComponent(id));
+    const p=profiles.find(x=>x.id===id)||{};context(p,b.collected_at);$('#fresh').textContent='최신 수집 '+when(b.collected_at);
+    const sum=b.summary||{};$('#score').textContent=(b.score==null?'-':b.score);$('#score').style.color=b.status==='compliant'?'var(--ok)':'var(--bad)';
+    $('#kPass').textContent=sum.pass??0;$('#kFail').textContent=sum.fail??0;$('#kManual').textContent=sum.manual??0;
+    const cs=b.controls||[];
+    $('#rows').innerHTML=cs.length?cs.map(c=>{
+      const ev=(c.evidence||[]).map(esc).join(' · ');
+      const rem=c.remediation?'<div class="muted" style="margin-top:4px">권고: '+esc(c.remediation)+'</div>':'';
+      return '<tr><td class="wrap"><b>'+esc(c.title)+'</b><div class="muted">'+esc(c.id)+'</div></td>'+
+        '<td><span class="badge st-'+esc(c.status)+'">'+esc(ST_KO[c.status]||c.status)+'</span></td>'+
+        '<td class="wrap">'+fwBadges(c.frameworks)+'</td>'+
+        '<td class="wrap">'+ev+rem+'</td></tr>';
+    }).join(''):'<tr><td colspan="4" class="empty">통제 항목이 없습니다.</td></tr>';
+    showMessages(b.notice?[b.notice]:[],false);
+    await loadPII(id);
+  }catch(e){showMessages(['수집 실패: '+e.message],true);$('#fresh').textContent='수집 실패'}}
+async function loadPII(id){
+  try{const b=await get('/api/metadata/pii-exposure?profile='+encodeURIComponent(id));
+    const sum=b.summary||{};$('#pProtected').textContent=sum.tagged_pii??0;$('#pExposed').textContent=sum.exposed_candidates??0;$('#pTables').textContent=sum.tables_with_pii??0;
+    const prot=(b.protected||[]).map(c=>({c:c,m:true})),exp=(b.exposed||[]).map(c=>({c:c,m:false}));
+    const all=exp.concat(prot); // 노출(위험) 먼저
+    $('#piiRows').innerHTML=all.length?all.map(x=>{const c=x.c;
+      return '<tr><td class="mono">'+esc(c.table)+'</td><td class="mono">'+esc(c.column)+(c.logical_name?' <span class="muted">('+esc(c.logical_name)+')</span>':'')+'</td>'+
+        '<td>'+esc(c.category||'-')+'</td>'+
+        '<td><span class="badge '+(x.m?'st-pass':'st-fail')+'">'+(x.m?'자동 마스킹':'평문 노출')+'</span></td></tr>';
+    }).join(''):'<tr><td colspan="4" class="empty">카탈로그에서 PII로 분류된 컬럼이 없습니다.</td></tr>';
+  }catch(e){$('#piiRows').innerHTML='<tr><td colspan="4" class="empty">PII 진단 실패: '+esc(e.message)+'</td></tr>';}
+}
+$('#refresh').onclick=load;$('#print').onclick=()=>window.print();
+JASQL.mount({page:'compliance',onReady:async()=>{try{await loadProfiles();await load()}catch(e){showMessages(['프로파일 조회 실패: '+e.message],true)}}});
+</script>
+</body></html>

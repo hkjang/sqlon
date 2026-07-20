@@ -773,7 +773,7 @@ async function findUnusedIndexes() {
         '<td class="mono">' + esc(idx.index_name) + '</td>' +
         '<td>' + sizeMB + '</td>' +
         '<td>' + idx.scan_count + '</td>' +
-        '<td><code style="cursor: pointer;" onclick="navigator.clipboard.writeText(this.textContent); toast(\'SQL 복사 완료\');" title="크릭 시 복사">' + esc(idx.drop_script) + '</code></td>' +
+        '<td><code style="cursor: pointer;" onclick="navigator.clipboard.writeText(this.textContent); toast(\'SQL 복사 완료\');" title="크릭 시 복사">' + esc(idx.drop_script) + '</code> ' + dropPlanBtn(idx.table_name, idx.index_name, idx.columns) + '</td>' +
         '</tr>';
     }).join('');
   } catch (e) {
@@ -781,6 +781,24 @@ async function findUnusedIndexes() {
   }
 }
 
+async function generateDropPlan(table, index, columns) {
+  const profileId = $('#qProfile').value;
+  if (!profileId) { alert('프로파일을 먼저 선택하세요.'); return; }
+  if (!columns) { toast('컬럼 정보가 없어 되돌릴 수 있는 계획을 만들 수 없습니다.'); return; }
+  if (!confirm('인덱스 ' + index + ' 를 삭제하는 변경계획 초안을 생성할까요?\n(즉시 실행되지 않으며, 승인 후 실행됩니다. 보상 문장으로 원복 가능합니다.)')) return;
+  try {
+    const r = await api('POST', '/api/changes/generate', JSON.stringify({
+      profile: profileId, action: 'drop_index', risk: 'medium',
+      args: { index: index, table: table, columns: columns }
+    }));
+    toast('변경계획 초안 생성됨: ' + ((r.data && r.data.id) || '') + ' — 변경 관리에서 검토·승인하세요.');
+  } catch (e) { toast('변경계획 생성 실패: ' + e.message); }
+}
+function dropPlanBtn(table, index, columns) {
+  if (!columns) return '';
+  const enc = s => encodeURIComponent(String(s == null ? '' : s));
+  return '<button class="btn" onclick="generateDropPlan(decodeURIComponent(\'' + enc(table) + '\'),decodeURIComponent(\'' + enc(index) + '\'),decodeURIComponent(\'' + enc(columns) + '\'))">변경계획 생성</button>';
+}
 async function findRedundantIndexes() {
   const profileId = $('#qProfile').value;
   if (!profileId) { alert('프로파일을 먼저 선택하세요.'); return; }
@@ -803,7 +821,7 @@ async function findRedundantIndexes() {
         '<td class="mono">' + esc(idx.columns) + '</td>' +
         '<td><span class="b ' + k[1] + '">' + esc(k[0]) + '</span></td>' +
         '<td class="mono">' + esc(idx.covered_by) + '</td>' +
-        '<td><code style="cursor:pointer;" onclick="navigator.clipboard.writeText(this.textContent); toast(\'SQL 복사 완료\');" title="클릭 시 복사">' + esc(idx.drop_script) + '</code></td>' +
+        '<td><code style="cursor:pointer;" onclick="navigator.clipboard.writeText(this.textContent); toast(\'SQL 복사 완료\');" title="클릭 시 복사">' + esc(idx.drop_script) + '</code> ' + dropPlanBtn(idx.table_name, idx.index_name, idx.columns) + '</td>' +
         '</tr>';
     }).join('');
   } catch (e) {

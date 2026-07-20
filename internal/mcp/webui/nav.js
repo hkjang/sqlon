@@ -25,6 +25,7 @@
       { key: 'capacity', href: '/admin/workload#capacity', icon: '💾', label: '객체 · 용량', show: 'always' },
       { key: 'availability', href: '/admin/availability', icon: '🔁', label: '복제 · 백업', show: 'always' },
       { key: 'security', href: '/admin/security', icon: '🔐', label: '보안 · 권한', show: 'always' },
+      { key: 'compliance', href: '/admin/compliance', icon: '📋', label: '컴플라이언스', show: 'always' },
       { key: 'maintenance', href: '/admin/maintenance', icon: '🛡️', label: '예방 점검', show: 'always' },
       { key: 'dba',      href: '/admin/dba',     icon: '🩺', label: '인시던트 · 진단', show: 'always' },
       { key: 'alerts',   href: '/admin/alerts',  icon: '🚨', label: '장애 · 경고 알림', show: 'always' },

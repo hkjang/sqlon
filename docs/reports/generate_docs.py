@@ -260,6 +260,10 @@ hr {
     border: 1px solid #e2e8f0;
 }
 
+.mermaid, .mermaid *, svg, svg *, text, tspan, .node, .nodeLabel, .edgeLabel, .cluster label, g.label text, foreignObject, foreignObject div {
+    font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif !important;
+}
+
 /* Print optimizations */
 @media print {
     body {
@@ -374,7 +378,12 @@ def wrap_html(body_html, title, subtitle, version, date, department):
         mermaid.initialize({{
             startOnLoad: true,
             theme: 'default',
-            flowchart: {{ useMaxWidth: true, htmlLabels: true }}
+            fontFamily: "'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif",
+            themeVariables: {{
+                fontFamily: "'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif",
+                primaryFontFamily: "'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif"
+            }},
+            flowchart: {{ useMaxWidth: true, htmlLabels: false }}
         }});
     </script>
 </head>
@@ -435,12 +444,13 @@ def convert_md_to_html_and_pdf(filename, title, subtitle, version, date, departm
         page = browser.new_page()
         
         # Load local HTML file
-        page.goto(f"file:///{html_path.replace(os.sep, '/')}")
+        page.goto(f"file:///{html_path.replace(os.sep, '/')}", wait_until="networkidle")
+        page.evaluate("document.fonts.ready")
         
         # Wait for mermaid rendering if any .mermaid elements exist
         if "<div class=\"mermaid\"" in full_html:
             print("Mermaid diagram detected. Waiting for render...")
-            page.wait_for_timeout(2000) # Give mermaid 2 seconds to fetch library and render SVG
+            page.wait_for_timeout(3500) # Give mermaid 3.5 seconds to fetch library and render SVG
         
         # Export to PDF with premium format
         page.pdf(
