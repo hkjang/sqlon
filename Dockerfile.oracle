@@ -13,7 +13,7 @@ RUN CGO_ENABLED=1 go build -tags oracle -trimpath \
 
 FROM oraclelinux:9-slim
 RUN microdnf install -y oracle-instantclient-release-el9 \
- && microdnf install -y oracle-instantclient-basiclite libaio curl-minimal \
+ && microdnf install -y oracle-instantclient-basic libaio curl-minimal \
  && microdnf clean all \
  && useradd --system --uid 10001 --home-dir /app --create-home sqlon
 COPY --from=build /out/sqlon /usr/local/bin/sqlon
