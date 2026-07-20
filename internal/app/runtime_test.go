@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func TestRuntimeParsesFullSQLONCommandSurface(t *testing.T) {
 	if cfg.transport != "streamable-http" || cfg.endpoint != "/sqlon-mcp" || !cfg.stateless || !cfg.ssePost || cfg.syncInterval.String() != "5m0s" || !cfg.omSync || !cfg.dbaDigest {
 		t.Fatalf("flags not preserved: %+v", cfg)
 	}
-	if cfg.dataDir != "data/sqlon" || !cfg.autoMigrate {
+	if filepath.ToSlash(cfg.dataDir) != "data/sqlon" || !cfg.autoMigrate {
 		t.Fatalf("default migration settings not applied: %+v", cfg)
 	}
 }

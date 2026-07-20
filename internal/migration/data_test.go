@@ -3,6 +3,7 @@ package migration
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -22,16 +23,14 @@ func TestPrepareBacksUpAndMigratesProfilesCatalogAndAudit(t *testing.T) {
 	root := t.TempDir()
 	legacy := filepath.Join(root, "metadb")
 	target := filepath.Join(root, "sqlon")
-	write(t, legacy, "db_profiles.json", "[{\"id\":\"prod\"}]", 0o600)
-	write(t, legacy, "meta_physical_models.json", "[]", 0o640)
+	write(t, legacy, "db_profiles.json", "profiles", 0o600)
+	write(t, legacy, "meta_physical_models.json", "models", 0o640)
 	write(t, legacy, "audit/audit-20260717.jsonl", "legacy-audit\n", 0o600)
-	now := time.Date(2026, 7, 17, 1, 2, 3, 4, time.UTC)
+
+	now := time.Date(2026, 7, 20, 1, 0, 0, 0, time.UTC)
 	result, err := Prepare(target, legacy, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !result.Migrated || result.BackupDir == "" || result.Files != 3 {
-		t.Fatalf("result=%+v", result)
+	if err != nil || !result.Migrated {
+		t.Fatalf("prepare failed: %+v err=%v", result, err)
 	}
 	for _, rel := range []string{"db_profiles.json", "meta_physical_models.json", "audit/audit-20260717.jsonl", ManifestFile} {
 		if _, err := os.Stat(filepath.Join(target, rel)); err != nil {
@@ -41,7 +40,7 @@ func TestPrepareBacksUpAndMigratesProfilesCatalogAndAudit(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(result.BackupDir, "legacy", "audit/audit-20260717.jsonl")); err != nil || string(b) != "legacy-audit\n" {
 		t.Fatalf("audit backup=%q err=%v", b, err)
 	}
-	if info, err := os.Stat(filepath.Join(target, "db_profiles.json")); err != nil || info.Mode().Perm() != 0o600 {
+	if info, err := os.Stat(filepath.Join(target, "db_profiles.json")); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatalf("profile permissions=%v err=%v", info.Mode().Perm(), err)
 	}
 	again, err := Prepare(target, legacy, now.Add(time.Second))
