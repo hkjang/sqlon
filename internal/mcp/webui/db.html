@@ -661,7 +661,7 @@ async function qExplain() {
       const el = $("#qResult"); el.className = "result info"; el.innerHTML = msg; return;
     }
     const lp = r.live_plan;
-    msg += "<br><b>실측 EXPLAIN PLAN:</b> risk=<span class="b " + (lp.risk === "high" ? "bad" : (lp.risk === "medium" ? "warn" : "ok")) + "\">" + esc(lp.risk) + "</span> (score " + lp.risk_score + ") · cost " + lp.total_cost + " · 최대 예상행 " + lp.max_cardinality;
+    msg += "<br><b>실측 EXPLAIN PLAN:</b> risk=<span class=\"b " + (lp.risk === "high" ? "bad" : (lp.risk === "medium" ? "warn" : "ok")) + "\">" + esc(lp.risk) + "</span> (score " + lp.risk_score + ") · cost " + lp.total_cost + " · 최대 예상행 " + lp.max_cardinality;
     
     if (lp.risk_factors && lp.risk_factors.length) {
       msg += "<br><br><b>⚠️ 위험 요인:</b><br>" + lp.risk_factors.map(f => "  ⚠ " + esc(f)).join("<br>");
