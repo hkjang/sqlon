@@ -1,0 +1,21 @@
+# SQLON AI Database Operations Platform
+
+> SQLON is an evidence-driven AI database operations platform for DBAs and SREs. It exposes 104+ Model Context Protocol (MCP) tools, compiles in-memory catalog join graphs to eliminate LLM schema hallucinations, and enforces 33 fail-closed static SQL guardrails.
+
+## Core Value Propositions
+- **Zero Schema Hallucination**: SQLON loads dataset JSON metadata into memory, building candidate column indexes and join graphs before any SQL is generated.
+- **104+ MCP Tools & Resources**: Implements Anthropic's Model Context Protocol over stdio and HTTP transports for integration with Claude Desktop, Cursor IDE, VS Code, and custom AI agents.
+- **Multi-DBMS Compatibility**: Pure-Go native execution engine supporting PostgreSQL (v12-v16), MySQL (v8.x), MariaDB (v10.x/v11.x), and Oracle DB (via `sqlon-oracle`).
+- **Fail-Closed Security**: AST-level SQL validation against 33 security guardrails, mandatory read-only transaction locks (`tx_read_only=1`), and approval-gated change control workflows.
+- **Fleet Observation & SRE Intelligence**: Active session profiling, index advisors, deadlock diagnostics, and OpenMetadata lineage synchronization.
+
+## Quick References & Links
+- [User Guide (PDF)](https://hkjang.github.io/sqlon/user_guide.pdf)
+- [Administrator Guide (PDF)](https://hkjang.github.io/sqlon/admin_guide.pdf)
+- [Executive Summary Report (PDF)](https://hkjang.github.io/sqlon/executive_report.pdf)
+- [MCP Tools Reference Spec](https://hkjang.github.io/sqlon/mcp-tools-reference.md)
+- [REST API Specification](https://hkjang.github.io/sqlon/rest-api.md)
+
+## Contact & Inquiries
+- Business & Technical Contact: `gagagiga@naver.com`
+- GitHub Repository: [hkjang/sqlon](https://github.com/hkjang/sqlon)

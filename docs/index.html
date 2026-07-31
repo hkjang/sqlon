@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Primary SEO Meta Tags -->
+  <title>SQLON - AI Database Operations & Evidence-Driven NL2SQL Platform</title>
+  <meta name="title" content="SQLON - AI Database Operations & Evidence-Driven NL2SQL Platform">
+  <meta name="description" content="SQLON is an evidence-driven AI database operations platform for DBAs & SREs. Features 104+ MCP tools, zero-hallucination join graphs, fail-closed SQL guardrails, and pure-Go multi-DB support (PostgreSQL, MySQL, MariaDB, Oracle).">
+  <meta name="keywords" content="SQLON, NL2SQL, MCP, Model Context Protocol, Database Operations, DBA AI, SRE AI, PostgreSQL, MySQL, MariaDB, Oracle, Text to SQL, AI Guardrails, OpenMetadata">
+  <meta name="author" content="SQLON Team">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://hkjang.github.io/sqlon/">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://hkjang.github.io/sqlon/">
+  <meta property="og:title" content="SQLON - AI Database Operations & Evidence-Driven NL2SQL Platform">
+  <meta property="og:description" content="Next-Gen AI Database Operations Engine for DBAs & SREs. MCP native with 104+ tools, zero-hallucination schema graphs, and fail-closed SQL policy enforcement.">
+  <meta property="og:image" content="https://hkjang.github.io/sqlon/assets/logo.png">
+
+  <!-- Twitter Card -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="https://hkjang.github.io/sqlon/">
+  <meta property="twitter:title" content="SQLON - AI Database Operations & Evidence-Driven NL2SQL Platform">
+  <meta property="twitter:description" content="Next-Gen AI Database Operations Engine for DBAs & SREs. MCP native with 104+ tools, zero-hallucination schema graphs, and fail-closed SQL policy enforcement.">
+  <meta property="twitter:image" content="https://hkjang.github.io/sqlon/assets/logo.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- AEO & SEO JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "SQLON",
+    "operatingSystem": "Linux, Windows, macOS, Docker",
+    "applicationCategory": "DeveloperApplication",
+    "license": "https://opensource.org/licenses/Apache-2.0",
+    "description": "SQLON is an evidence-driven AI database operations platform for DBAs and SREs, providing 104+ MCP tools, zero-hallucination schema grounding, and fail-closed SQL guardrails across PostgreSQL, MySQL, MariaDB, and Oracle.",
+    "url": "https://hkjang.github.io/sqlon/",
+    "author": {
+      "@type": "Organization",
+      "name": "SQLON Open Source Community",
+      "email": "gagagiga@naver.com"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is SQLON?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "SQLON is an evidence-driven AI database operations platform designed for DBAs, SREs, and Enterprise AI applications. It exposes 104+ MCP (Model Context Protocol) tools, compiles in-memory schema catalogs and join graphs to eliminate LLM hallucinations, and enforces fail-closed SQL security guardrails."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does SQLON prevent LLM schema hallucinations in NL2SQL?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "SQLON compiles dataset JSON metadata into an in-memory catalog, candidate column index, and join graph. When a natural language prompt arrives, `prepare_sql_context` constructs exact schema skeletons with pre-validated join paths. If ambiguous columns or filter criteria exist, SQLON enforces a clarification state before any SQL is generated."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Which database engines are supported by SQLON?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "SQLON natively supports PostgreSQL (via pgx pure-Go driver), MySQL 8.x and MariaDB 10.x/11.x (via go-sql-driver), and Oracle (via the specialized sqlon-oracle runtime module)."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is Model Context Protocol (MCP) support in SQLON?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "SQLON implements standard MCP specification over stdio and HTTP transports. It provides 104+ registered tools, resources, and prompts, allowing seamless integration with Claude Desktop, Cursor IDE, VS Code, and custom AI agents."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is SQLON safe for production database operations?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. SQLON implements fail-closed security policy rules, mandatory read-only transaction locks (e.g. default_transaction_read_only=on), AST-level query validation against 33 static guardrails, and approval-gated change control workflows for state-modifying operations."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    :root {
+      --bg-main: #0b0f19;
+      --bg-card: rgba(18, 26, 44, 0.7);
+      --bg-card-hover: rgba(26, 38, 64, 0.85);
+      --bg-glass: rgba(255, 255, 255, 0.03);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(56, 189, 248, 0.3);
+      
+      --accent-cyan: #38bdf8;
+      --accent-blue: #3b82f6;
+      --accent-purple: #8b5cf6;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 60%, rgba(139, 92, 246, 0.08) 0%, transparent 40%);
+    }
+
+    /* Container */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    /* Navigation */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: rgba(11, 15, 25, 0.8);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .nav-wrapper {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 72px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--text-main);
+      font-weight: 800;
+      font-size: 1.35rem;
+      letter-spacing: -0.02em;
+    }
+
+    .brand img {
+      height: 36px;
+      width: auto;
+    }
+
+    .badge-v {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.15rem 0.5rem;
+      border-radius: 9999px;
+      font-family: var(--font-mono);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--accent-cyan);
+    }
+
+    .btn-github {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-github:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: var(--accent-cyan);
+      transform: translateY(-1px);
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 5rem 0 3rem 0;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: linear-gradient(90deg, rgba(56, 189, 248, 0.1), rgba(139, 92, 246, 0.1));
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      color: var(--accent-cyan);
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-title {
+      font-size: 3.25rem;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.5rem;
+      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-title span {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-desc {
+      font-size: 1.2rem;
+      color: var(--text-muted);
+      max-width: 800px;
+      margin: 0 auto 2.5rem auto;
+      font-weight: 400;
+    }
+
+    .hero-ctas {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 3.5rem;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      color: #fff;
+      padding: 0.85rem 1.75rem;
+      border-radius: 10px;
+      font-weight: 600;
+      text-decoration: none;
+      font-size: 1rem;
+      box-shadow: 0 4px 20px rgba(59, 130, 246, 0.35);
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(59, 130, 246, 0.5);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 0.85rem 1.75rem;
+      border-radius: 10px;
+      font-weight: 600;
+      text-decoration: none;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    /* Terminal Code Box */
+    .terminal-container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #070a12;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      text-align: left;
+    }
+
+    .terminal-header {
+      background: #0f1422;
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .terminal-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #f59e0b; }
+    .dot-green { background: #10b981; }
+
+    .terminal-tabs {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 0.825rem;
+      font-family: var(--font-mono);
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    .terminal-body {
+      padding: 1.25rem 1.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      color: #e2e8f0;
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+
+    .terminal-body pre {
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .token-keyword { color: #f472b6; }
+    .token-string { color: #34d399; }
+    .token-comment { color: #64748b; font-style: italic; }
+    .token-fn { color: #60a5fa; }
+    .token-num { color: #fbbf24; }
+
+    /* Stats Banner */
+    .stats-section {
+      padding: 3rem 0;
+      border-top: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(15, 23, 42, 0.4);
+      margin: 4rem 0;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 2rem;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 2.75rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-family: var(--font-mono);
+    }
+
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      font-weight: 500;
+      margin-top: 0.25rem;
+    }
+
+    /* Feature Grid */
+    .section-header {
+      text-align: center;
+      margin-bottom: 3.5rem;
+    }
+
+    .section-title {
+      font-size: 2.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.75rem;
+    }
+
+    .section-subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 1.75rem;
+      margin-bottom: 5rem;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 2rem;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-accent);
+      transform: translateY(-4px);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-cyan);
+      margin-bottom: 1.25rem;
+    }
+
+    .feature-card h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+      color: var(--text-main);
+    }
+
+    .feature-card p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    /* Workflow Pipeline Section */
+    .workflow-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 3rem 2rem;
+      margin-bottom: 5rem;
+    }
+
+    .pipeline-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2.5rem;
+      position: relative;
+    }
+
+    .step-box {
+      background: rgba(11, 15, 25, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.5rem;
+      position: relative;
+    }
+
+    .step-num {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      background: rgba(56, 189, 248, 0.1);
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      display: inline-block;
+      margin-bottom: 0.75rem;
+    }
+
+    .step-box h4 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .step-box p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    /* Databases Matrix */
+    .db-matrix {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 5rem;
+    }
+
+    .db-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 1.75rem;
+    }
+
+    .db-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .db-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    .tag-purego {
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-emerald);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 0.15rem 0.5rem;
+      border-radius: 6px;
+    }
+
+    .db-card ul {
+      list-style: none;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    .db-card li {
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .db-card li::before {
+      content: "✓";
+      color: var(--accent-cyan);
+      font-weight: bold;
+    }
+
+    /* Docs & Downloads Hub */
+    .docs-hub {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 5rem;
+    }
+
+    .doc-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 1.75rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: border-color 0.2s ease;
+    }
+
+    .doc-card:hover {
+      border-color: var(--accent-cyan);
+    }
+
+    .doc-meta h3 {
+      font-size: 1.15rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .doc-meta p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 1.25rem;
+    }
+
+    .doc-links {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .btn-doc-link {
+      font-size: 0.825rem;
+      font-weight: 600;
+      color: var(--accent-cyan);
+      text-decoration: none;
+      background: rgba(56, 189, 248, 0.1);
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      transition: all 0.2s;
+    }
+
+    .btn-doc-link:hover {
+      background: rgba(56, 189, 248, 0.25);
+    }
+
+    /* FAQ Section */
+    .faq-section {
+      max-width: 850px;
+      margin: 0 auto 5rem auto;
+    }
+
+    .faq-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+
+    .faq-question {
+      width: 100%;
+      text-align: left;
+      padding: 1.25rem 1.5rem;
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .faq-question::after {
+      content: "+";
+      font-size: 1.3rem;
+      color: var(--accent-cyan);
+      transition: transform 0.2s;
+    }
+
+    .faq-item.active .faq-question::after {
+      content: "-";
+    }
+
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+      padding: 0 1.5rem;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .faq-item.active .faq-answer {
+      padding: 0 1.5rem 1.25rem 1.5rem;
+      max-height: 300px;
+    }
+
+    /* Footer & Inquiry */
+    footer {
+      border-top: 1px solid var(--border-color);
+      background: #070a12;
+      padding: 4rem 0 2rem 0;
+    }
+
+    .footer-content {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 2rem;
+      margin-bottom: 3rem;
+    }
+
+    .footer-brand {
+      max-width: 380px;
+    }
+
+    .footer-brand p {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      margin-top: 0.75rem;
+    }
+
+    .inquiry-box {
+      background: rgba(18, 26, 44, 0.8);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .inquiry-icon {
+      color: var(--accent-cyan);
+      font-size: 1.5rem;
+    }
+
+    .inquiry-text {
+      font-size: 0.875rem;
+    }
+
+    .inquiry-text label {
+      color: var(--text-dim);
+      display: block;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.15rem;
+    }
+
+    .inquiry-email {
+      color: var(--accent-cyan);
+      font-family: var(--font-mono);
+      font-weight: 600;
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+
+    .inquiry-email:hover {
+      text-decoration: underline;
+    }
+
+    .footer-bottom {
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 1.5rem;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .hero-title { font-size: 2.25rem; }
+      .hero-desc { font-size: 1rem; }
+      .nav-links { display: none; }
+      .footer-content { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <header>
+    <div class="container nav-wrapper">
+      <a href="#" class="brand">
+        <img src="assets/logo.png" alt="SQLON Logo">
+        SQLON
+        <span class="badge-v">v0.1.4</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#workflow">Architecture</a></li>
+        <li><a href="#databases">Databases</a></li>
+        <li><a href="#docs">Documentation</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+      <a href="https://github.com/hkjang/sqlon" target="_blank" rel="noopener" class="btn-github">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero container">
+    <div class="hero-badge">
+      <span>🚀 Evidence-Driven Database Operations & MCP Platform</span>
+    </div>
+    <h1 class="hero-title">
+      Transform Natural Language into<br>
+      <span>Production-Safe SQL</span> & DBA Intelligence
+    </h1>
+    <p class="hero-desc">
+      SQLON empowers SREs, DBAs, and AI Agents with 104+ MCP tools, zero-hallucination join graphs, AST static policy guardrails, and native support for PostgreSQL, MySQL, MariaDB, and Oracle.
+    </p>
+
+    <div class="hero-ctas">
+      <a href="#docs" class="btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+        Explore Documentation
+      </a>
+      <a href="https://github.com/hkjang/sqlon" target="_blank" rel="noopener" class="btn-secondary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+        Star on GitHub
+      </a>
+    </div>
+
+    <!-- Terminal Showcase -->
+    <div class="terminal-container">
+      <div class="terminal-header">
+        <div class="terminal-dots">
+          <div class="dot dot-red"></div>
+          <div class="dot dot-yellow"></div>
+          <div class="dot dot-green"></div>
+        </div>
+        <div class="terminal-tabs">
+          <button class="tab-btn active" onclick="switchTab(0)">1. MCP Workflow</button>
+          <button class="tab-btn" onclick="switchTab(1)">2. Claude Config</button>
+          <button class="tab-btn" onclick="switchTab(2)">3. Docker Start</button>
+        </div>
+      </div>
+      <div class="terminal-body" id="tab-content-0">
+<pre><span class="token-comment">// Step 1: Request grounded SQL context & schema join-graph</span>
+<span class="token-fn">prepare_sql_context</span>({
+  question: <span class="token-string">"Show top 5 active customer orders with total spent"</span>
+});
+<span class="token-comment">// Output: status="ready", skeleton="SELECT c.name, SUM(o.total) ...", joins verified</span>
+
+<span class="token-comment">// Step 2: Enforce 33 static AST guardrails & read-only safety</span>
+<span class="token-fn">validate_sql</span>({ sql: <span class="token-string">"SELECT c.name, SUM(o.amount) FROM customers c JOIN orders o..."</span> });
+
+<span class="token-comment">// Step 3: Check execution plan & index cost</span>
+<span class="token-fn">explain_sql</span>({ sql: <span class="token-string">"SELECT c.name..."</span> });
+
+<span class="token-comment">// Step 4: Execute inside read-only sandbox</span>
+<span class="token-fn">run_sql_safely</span>({ sql: <span class="token-string">"SELECT c.name..."</span> });</pre>
+      </div>
+      <div class="terminal-body" id="tab-content-1" style="display:none;">
+<pre><span class="token-comment">// Claude Desktop / Cursor mcpServers config</span>
+{
+  <span class="token-string">"mcpServers"</span>: {
+    <span class="token-string">"sqlon"</span>: {
+      <span class="token-string">"command"</span>: <span class="token-string">"sqlon"</span>,
+      <span class="token-string">"args"</span>: [<span class="token-string">"-transport"</span>, <span class="token-string">"stdio"</span>],
+      <span class="token-string">"env"</span>: {
+        <span class="token-string">"DATASET_DIR"</span>: <span class="token-string">"./data/metadb"</span>
+      }
+    }
+  }
+}</pre>
+      </div>
+      <div class="terminal-body" id="tab-content-2" style="display:none;">
+<pre><span class="token-comment"># Build & Run pure-Go standard container (PostgreSQL + MySQL + MariaDB)</span>
+$ docker build -t sqlon/sqlon:v0.1.4 .
+$ docker run -p 6767:6767 sqlon/sqlon:v0.1.4
+
+<span class="token-comment"># Access Services</span>
+MCP Endpoint: <span class="token-string">http://127.0.0.1:6767/mcp</span>
+Web Admin:    <span class="token-string">http://127.0.0.1:6767/admin</span>
+Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Key Metrics -->
+  <section class="stats-section">
+    <div class="container stats-grid">
+      <div>
+        <div class="stat-number">104+</div>
+        <div class="stat-label">MCP Tools & Resources</div>
+      </div>
+      <div>
+        <div class="stat-number">0%</div>
+        <div class="stat-label">Schema Hallucination Rate</div>
+      </div>
+      <div>
+        <div class="stat-number">4 Engines</div>
+        <div class="stat-label">Postgres, MySQL, MariaDB, Oracle</div>
+      </div>
+      <div>
+        <div class="stat-number">33 Guardrails</div>
+        <div class="stat-label">Fail-Closed Static Policy Rules</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Grid -->
+  <section id="features" class="container">
+    <div class="section-header">
+      <h2 class="section-title">Engineered for Enterprise DBA & SRE Workflows</h2>
+      <p class="section-subtitle">SQLON bridges LLM intelligence with rigid database security, deterministic schema compilation, and operational change control.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+        </div>
+        <h3>MCP Native Ecosystem</h3>
+        <p>104+ tools, resources, and prompt templates exposed via stdio & HTTP transports. Plugs directly into Claude Desktop, Cursor IDE, VS Code, and custom AI agents.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        </div>
+        <h3>Zero Schema Hallucination</h3>
+        <p>Compiles dataset JSON metadata into in-memory catalog graphs. Evaluates join paths, candidate column matches, and candidate ambiguity before any query is written.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        </div>
+        <h3>Fail-Closed Guardrails</h3>
+        <p>Enforces 33 AST-level SQL validation rules, forced read-only transaction locks (`tx_read_only=1`), query cost evaluation (`EXPLAIN`), and PII data masking.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M21 19c0 1.66-4 3-9 3s-9-1.34-9-3"></path></svg>
+        </div>
+        <h3>Multi-DBMS Native Drivers</h3>
+        <p>Pure-Go execution engine for PostgreSQL, MySQL, and MariaDB without CGO. Specialized OCI driver module (`sqlon-oracle`) for enterprise Oracle databases.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
+        </div>
+        <h3>Approval-Gated Change Control</h3>
+        <p>Provides SREs with governed DDL/DML change request workflows, dry-run reviews, sign-off execution, and audit logging to satisfy compliance standards.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        </div>
+        <h3>Fleet Observability & SRE</h3>
+        <p>Deep cluster inspection, active session diagnostics, deadlocks detection, index recommendation advisor, and OpenMetadata lineage synchronization.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Workflow Pipeline -->
+  <section id="workflow" class="container">
+    <div class="workflow-section">
+      <div class="section-header" style="margin-bottom:1.5rem;">
+        <h2 class="section-title">The Evidence-Driven NL2SQL Pipeline</h2>
+        <p class="section-subtitle">How SQLON guarantees safe, accurate SQL generation from user questions.</p>
+      </div>
+
+      <div class="pipeline-steps">
+        <div class="step-box">
+          <span class="step-num">STAGE 1</span>
+          <h4>Context Compilation</h4>
+          <p>Scans dataset schema graphs, resolves candidate table joins, and verifies filter parameters against catalog metadata.</p>
+        </div>
+
+        <div class="step-box">
+          <span class="step-num">STAGE 2</span>
+          <h4>Clarification Check</h4>
+          <p>If columns or filters are ambiguous, halts execution and presents specific questions back to the human operator.</p>
+        </div>
+
+        <div class="step-box">
+          <span class="step-num">STAGE 3</span>
+          <h4>Skeleton Filling</h4>
+          <p>Generates target SQL dialect strictly within pre-validated slot skeletons — eliminating invented table names.</p>
+        </div>
+
+        <div class="step-box">
+          <span class="step-num">STAGE 4</span>
+          <h4>AST Guardrail Check</h4>
+          <p>Validates SQL syntax against 33 security rules (rejecting unauthorized DDL/DML, cross-schema leaks, unsafe joins).</p>
+        </div>
+
+        <div class="step-box">
+          <span class="step-num">STAGE 5</span>
+          <h4>Sandbox Execution</h4>
+          <p>Executes query under explicit read-only transaction locks and streams clean JSON data with audit tracking.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Databases Matrix -->
+  <section id="databases" class="container">
+    <div class="section-header">
+      <h2 class="section-title">Supported Target Databases</h2>
+      <p class="section-subtitle">Pure-Go drivers, zero CGO, zero external binary dependencies.</p>
+    </div>
+
+    <div class="db-matrix">
+      <div class="db-card">
+        <div class="db-card-header">
+          <h3 class="db-title">PostgreSQL</h3>
+          <span class="tag-purego">Pure Go</span>
+        </div>
+        <ul>
+          <li>Driver: `pgx/v5`</li>
+          <li>Lock: `default_transaction_read_only=on`</li>
+          <li>Dialect: PostgreSQL (v12-v16)</li>
+          <li>Full DSN & Connection String support</li>
+        </ul>
+      </div>
+
+      <div class="db-card">
+        <div class="db-card-header">
+          <h3 class="db-title">MySQL 8.x</h3>
+          <span class="tag-purego">Pure Go</span>
+        </div>
+        <ul>
+          <li>Driver: `go-sql-driver/mysql`</li>
+          <li>Lock: `transaction_read_only=1`</li>
+          <li>Dialect: MySQL 8.x</li>
+          <li>Pure Go connection pooling</li>
+        </ul>
+      </div>
+
+      <div class="db-card">
+        <div class="db-card-header">
+          <h3 class="db-title">MariaDB 10.x / 11.x</h3>
+          <span class="tag-purego">Pure Go</span>
+        </div>
+        <ul>
+          <li>Driver: `go-sql-driver/mysql`</li>
+          <li>Lock: `tx_read_only=1`</li>
+          <li>Dialect: MariaDB</li>
+          <li>Zero CGO compilation</li>
+        </ul>
+      </div>
+
+      <div class="db-card">
+        <div class="db-card-header">
+          <h3 class="db-title">Oracle DB</h3>
+          <span class="tag-purego">OCI Plugin</span>
+        </div>
+        <ul>
+          <li>Driver: `godror` / OCI SDK</li>
+          <li>Runtime: `sqlon-oracle` build</li>
+          <li>Dialect: Oracle 19c / 21c</li>
+          <li>Enterprise capability contracts</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Docs Hub -->
+  <section id="docs" class="container">
+    <div class="section-header">
+      <h2 class="section-title">Comprehensive Documentation & Guides</h2>
+      <p class="section-subtitle">Download executive reports, developer guides, and administrator reference manuals.</p>
+    </div>
+
+    <div class="docs-hub">
+      <div class="doc-card">
+        <div class="doc-meta">
+          <h3>📖 User Guide</h3>
+          <p>Step-by-step instructions for NL2SQL workflows, MCP client integration, and query optimization.</p>
+        </div>
+        <div class="doc-links">
+          <a href="user_guide.pdf" target="_blank" class="btn-doc-link">PDF Manual</a>
+          <a href="user_guide.md" class="btn-doc-link">Markdown</a>
+        </div>
+      </div>
+
+      <div class="doc-card">
+        <div class="doc-meta">
+          <h3>🛡️ Administrator Guide</h3>
+          <p>Deployment topologies, security guardrails, dataset compilation, and multi-tenant access control.</p>
+        </div>
+        <div class="doc-links">
+          <a href="admin_guide.pdf" target="_blank" class="btn-doc-link">PDF Manual</a>
+          <a href="admin_guide.md" class="btn-doc-link">Markdown</a>
+        </div>
+      </div>
+
+      <div class="doc-card">
+        <div class="doc-meta">
+          <h3>📊 Executive Report</h3>
+          <p>Business architecture summary, ROI analysis, reliability guarantees, and compliance audit frameworks.</p>
+        </div>
+        <div class="doc-links">
+          <a href="executive_report.pdf" target="_blank" class="btn-doc-link">PDF Report</a>
+          <a href="executive_report.md" class="btn-doc-link">Markdown</a>
+        </div>
+      </div>
+
+      <div class="doc-card">
+        <div class="doc-meta">
+          <h3>⚡ MCP Tools Reference</h3>
+          <p>Full technical specification of all 104+ MCP tools, input schemas, resources, and prompt templates.</p>
+        </div>
+        <div class="doc-links">
+          <a href="mcp-tools-reference.md" class="btn-doc-link">Tools Reference</a>
+          <a href="rest-api.md" class="btn-doc-link">REST API Spec</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section (AEO & SEO optimized) -->
+  <section id="faq" class="container">
+    <div class="section-header">
+      <h2 class="section-title">Frequently Asked Questions</h2>
+      <p class="section-subtitle">Direct answers for SRE teams, DBAs, and Answer Engine AI crawlers.</p>
+    </div>
+
+    <div class="faq-section">
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">What is SQLON and who is it built for?</button>
+        <div class="faq-answer">
+          SQLON is an evidence-driven AI database operations platform built for Database Administrators (DBAs), Site Reliability Engineers (SREs), and Enterprise AI application developers. It transforms natural language instructions into validated, secure SQL queries while providing fleet observation, performance profiling, and governed change control workflows.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">How does SQLON prevent LLM schema hallucinations?</button>
+        <div class="faq-answer">
+          SQLON loads JSON dataset metadata into memory and compiles an explicit catalog, join-graph, and candidate column index. Before generating SQL, the `prepare_sql_context` engine creates a rigid SQL skeleton with pre-validated table joins. If a query contains ambiguous terms, SQLON enters a mandatory clarification state to prompt the user rather than guessing schema elements.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">What is Model Context Protocol (MCP) and how does SQLON support it?</button>
+        <div class="faq-answer">
+          Model Context Protocol (MCP) is an open standard introduced by Anthropic that allows AI models to safely interact with external tools and datasets. SQLON implements standard MCP over both stdio (for local subprocesses) and HTTP (for microservices/gateways), providing 104+ tools, resources, and prompts for Claude Desktop, Cursor IDE, VS Code, and custom AI agents.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">Is SQLON safe to run against production databases?</button>
+        <div class="faq-answer">
+          Yes. SQLON strictly enforces fail-closed guardrails. Read-only queries run under explicit engine transaction locks (`default_transaction_read_only=on` for Postgres, `transaction_read_only=1` for MySQL). State-modifying operations (DDL/DML) are protected by multi-step approval workflows, AST security validation against 33 rules, and audit logging.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">What databases are supported out of the box?</button>
+        <div class="faq-answer">
+          SQLON standard binary supports PostgreSQL (v12-v16), MySQL (v8.x), and MariaDB (v10.x/v11.x) using pure-Go drivers with zero CGO dependencies. Oracle DB is supported through the specialized `sqlon-oracle` build which includes Oracle Call Interface (OCI) bindings.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <a href="#" class="brand">
+            <img src="assets/logo.png" alt="SQLON Logo">
+            SQLON
+          </a>
+          <p>The Evidence-Driven AI Database Operations Platform for DBAs, SREs, and Enterprise Systems.</p>
+        </div>
+
+        <div class="inquiry-box">
+          <div class="inquiry-icon">✉️</div>
+          <div class="inquiry-text">
+            <label>Business & Technical Inquiries</label>
+            <a href="mailto:gagagiga@naver.com" class="inquiry-email">gagagiga@naver.com</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>&copy; 2026 SQLON Project (hkjang/sqlon). Released under Apache-2.0 License. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Vanilla JS Interactive Logic -->
+  <script>
+    function switchTab(index) {
+      document.querySelectorAll('.tab-btn').forEach((btn, idx) => {
+        if (idx === index) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+      document.querySelectorAll('.terminal-body').forEach((el, idx) => {
+        if (idx === index) el.style.display = 'block';
+        else el.style.display = 'none';
+      });
+    }
+
+    function toggleFaq(button) {
+      const faqItem = button.parentElement;
+      faqItem.classList.toggle('active');
+    }
+  </script>
+</body>
+</html>
