@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- Primary SEO Meta Tags -->
-  <title>SQLON - AI Database Operations & Evidence-Driven NL2SQL Platform</title>
+  <title>SQLON — DB &amp; SRE를 위한 증거 기반 AI 데이터베이스 운용 &amp; NL2SQL 플랫폼</title>
   <meta name="title" content="SQLON - AI Database Operations & Evidence-Driven NL2SQL Platform">
-  <meta name="description" content="SQLON is an evidence-driven AI database operations platform for DBAs & SREs. Features 104+ MCP tools, zero-hallucination join graphs, fail-closed SQL guardrails, and pure-Go multi-DB support (PostgreSQL, MySQL, MariaDB, Oracle).">
+  <meta name="description" content="SQLON은 DB 및 SRE 팀을 위한 증거 기반 AI 데이터베이스 운용 플랫폼입니다. 104개 이상의 MCP 도구, 33개 AST 가드레일 검증, 읽기 전용 샌드박스 실행 및 실시간 스키마 추론을 통해 SQL 환각 및 서비스 장애를 차단합니다.">
   <meta name="keywords" content="SQLON, NL2SQL, MCP, Model Context Protocol, Database Operations, DBA AI, SRE AI, PostgreSQL, MySQL, MariaDB, Oracle, Text to SQL, AI Guardrails, OpenMetadata">
   <meta name="author" content="SQLON Team">
   <meta name="robots" content="index, follow">
@@ -939,10 +939,10 @@
         <span class="badge-v">v0.1.4</span>
       </a>
       <ul class="nav-links">
-        <li><a href="#features">Features</a></li>
-        <li><a href="#workflow">Architecture</a></li>
-        <li><a href="#databases">Databases</a></li>
-        <li><a href="#docs">Documentation</a></li>
+        <li><a href="#features">주요 기능</a></li>
+        <li><a href="#workflow">아키텍처</a></li>
+        <li><a href="#databases">지원 DB</a></li>
+        <li><a href="#docs">문서 가이드</a></li>
         <li><a href="#faq">FAQ</a></li>
       </ul>
       <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="메뉴 열기/닫기">
@@ -964,7 +964,7 @@
   <!-- Hero Section -->
   <section class="hero container">
     <div class="hero-badge">
-      <span>🚀 Evidence-Driven Database Operations & MCP Platform</span>
+      <span>🚀 증거 기반 AI 데이터베이스 운용 & MCP 플랫폼</span>
     </div>
     <h1 class="hero-title">
       Transform Natural Language into<br>
@@ -1067,8 +1067,8 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
   <!-- Features Grid -->
   <section id="features" class="container">
     <div class="section-header">
-      <h2 class="section-title">Engineered for Enterprise DBA & SRE Workflows</h2>
-      <p class="section-subtitle">SQLON bridges LLM intelligence with rigid database security, deterministic schema compilation, and operational change control.</p>
+      <h2 class="section-title">엔터프라이즈 DBA & SRE 워크플로우를 위한 설계</h2>
+      <p class="section-subtitle">SQLON은 LLM 인공지능과 데이터베이스 보안, 정밀한 스키마 분석 및 엔터프라이즈 SRE 관측 가능성을 결합한 통합 DB AI 플랫폼입니다., deterministic schema compilation, and operational change control.</p>
     </div>
 
     <div class="features-grid">
@@ -1077,47 +1077,47 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
         </div>
         <h3>MCP Native Ecosystem</h3>
-        <p>104+ tools, resources, and prompt templates exposed via stdio & HTTP transports. Plugs directly into Claude Desktop, Cursor IDE, VS Code, and custom AI agents.</p>
+        <p>stdio 및 HTTP 전송을 통해 104개 이상의 MCP 도구, 리소스 및 프롬프트 템플릿을 제공하며 Claude, Cursor, Roo Code와 즉시 연동됩니다.. Plugs directly into Claude Desktop, Cursor IDE, VS Code, and custom AI agents.</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
         </div>
-        <h3>Zero Schema Hallucination</h3>
-        <p>Compiles dataset JSON metadata into in-memory catalog graphs. Evaluates join paths, candidate column matches, and candidate ambiguity before any query is written.</p>
+        <h3>스키마 환각 제로(Zero Hallucination)</h3>
+        <p>JSON 스키마 메타데이터를 메모리 카탈로그 그래프로 컴파일하여 SQL 생성 전 테이블 조인 경로, 후보 컬럼 타입 및 외래키 연관 관계를 정밀 분석합니다.. Evaluates join paths, candidate column matches, and candidate ambiguity before any query is written.</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
         </div>
-        <h3>Fail-Closed Guardrails</h3>
-        <p>Enforces 33 AST-level SQL validation rules, forced read-only transaction locks (`tx_read_only=1`), query cost evaluation (`EXPLAIN`), and PII data masking.</p>
+        <h3>안전 우선(Fail-Closed) 가드레일</h3>
+        <p>33가지 AST 수평 SQL 검증 규칙, 읽기 전용 트랜잭션 잠금(`tx_read_only=1`), EXPLAIN 실행 계획 검사 및 행 출력 제한 서킷 브레이커를 적용합니다., forced read-only transaction locks (`tx_read_only=1`), query cost evaluation (`EXPLAIN`), and PII data masking.</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M21 19c0 1.66-4 3-9 3s-9-1.34-9-3"></path></svg>
         </div>
-        <h3>Multi-DBMS Native Drivers</h3>
-        <p>Pure-Go execution engine for PostgreSQL, MySQL, and MariaDB without CGO. Specialized OCI driver module (`sqlon-oracle`) for enterprise Oracle databases.</p>
+        <h3>다중 DBMS 네이티브 드라이버</h3>
+        <p>PostgreSQL, MySQL, MariaDB를 CGO 의존성 없이 순수 Go 언어로 지원하며, Oracle Database 19c/21c 엔터프라이즈 전용 OCI 드라이버 모듈을 포함합니다.. Specialized OCI driver module (`sqlon-oracle`) for enterprise Oracle databases.</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
         </div>
-        <h3>Approval-Gated Change Control</h3>
-        <p>Provides SREs with governed DDL/DML change request workflows, dry-run reviews, sign-off execution, and audit logging to satisfy compliance standards.</p>
+        <h3>승인 기반 변경 통제 워크플로우</h3>
+        <p>운영 DB 스키마 변경을 위해 SRE 팀에 검증된 DDL/DML 승인 워크플로우, 드라이런 사전 검토, 서명 기반 실행 및 롤백 감사 로그를 제공합니다., dry-run reviews, sign-off execution, and audit logging to satisfy compliance standards.</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
         </div>
-        <h3>Fleet Observability & SRE</h3>
-        <p>Deep cluster inspection, active session diagnostics, deadlocks detection, index recommendation advisor, and OpenMetadata lineage synchronization.</p>
+        <h3>DB 클러스터 관측성 & SRE 진단</h3>
+        <p>클러스터 심층 점검, 활성 세션 진단, 데드락 탐지, 인덱스 추천 어드바이저 및 완만 쿼리 프로파일링 기능이 MCP 리소스에 기본 내장되어 있습니다., index recommendation advisor, and OpenMetadata lineage synchronization.</p>
       </div>
     </div>
   </section>
@@ -1126,39 +1126,39 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
   <section id="workflow" class="container">
     <div class="workflow-section">
       <div class="section-header" style="margin-bottom:1.5rem;">
-        <h2 class="section-title">The Evidence-Driven NL2SQL Pipeline</h2>
-        <p class="section-subtitle">How SQLON guarantees safe, accurate SQL generation from user questions.</p>
+        <h2 class="section-title">증거 기반 NL2SQL 파이프라인 메커니즘</h2>
+        <p class="section-subtitle">사용자의 자연어 질문으로부터 SQLON이 안전하고 정확한 SQL 생성을 보장하는 방식입니다.</p>
       </div>
 
       <div class="pipeline-steps">
         <div class="step-box">
           <span class="step-num">STAGE 1</span>
           <h4>Context Compilation</h4>
-          <p>Scans dataset schema graphs, resolves candidate table joins, and verifies filter parameters against catalog metadata.</p>
+          <p>스키마 메타데이터 그래프를 스캔하여 대상 테이블 조인 경로를 확인하고 필터 파라미터를 실시간 검증합니다., and verifies filter parameters against catalog metadata.</p>
         </div>
 
         <div class="step-box">
           <span class="step-num">STAGE 2</span>
           <h4>Clarification Check</h4>
-          <p>If columns or filters are ambiguous, halts execution and presents specific questions back to the human operator.</p>
+          <p>컬럼이나 검색 조건이 모호할 경우 쿼리 생성을 즉시 중단하고 사용자에게 구체적인 확인 질문을 제시합니다. back to the human operator.</p>
         </div>
 
         <div class="step-box">
           <span class="step-num">STAGE 3</span>
           <h4>Skeleton Filling</h4>
-          <p>Generates target SQL dialect strictly within pre-validated slot skeletons — eliminating invented table names.</p>
+          <p>사전에 검증된 템플릿 구조 내에서만 타겟 DB 방언 SQL을 생성하여 존재하지 않는 테이블명이나 잘못된 조인을 원천 차단합니다. — eliminating invented table names.</p>
         </div>
 
         <div class="step-box">
           <span class="step-num">STAGE 4</span>
           <h4>AST Guardrail Check</h4>
-          <p>Validates SQL syntax against 33 security rules (rejecting unauthorized DDL/DML, cross-schema leaks, unsafe joins).</p>
+          <p>생성된 SQL 문법을 33가지 보안 가드레일(DML/DDL 차단, 교차 스키마 유출 방지, 미인덱스 풀 스캔 차단)을 통해 검증합니다. (rejecting unauthorized DDL/DML, cross-schema leaks, unsafe joins).</p>
         </div>
 
         <div class="step-box">
           <span class="step-num">STAGE 5</span>
           <h4>Sandbox Execution</h4>
-          <p>Executes query under explicit read-only transaction locks and streams clean JSON data with audit tracking.</p>
+          <p>강제 읽기 전용 트랜잭션 잠금 하에서만 쿼리를 실행하고 정제된 JSON 데이터와 감사 추적 ID를 반환합니다. and streams clean JSON data with audit tracking.</p>
         </div>
       </div>
     </div>
@@ -1167,8 +1167,8 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
   <!-- Databases Matrix -->
   <section id="databases" class="container">
     <div class="section-header">
-      <h2 class="section-title">Supported Target Databases</h2>
-      <p class="section-subtitle">Pure-Go drivers, zero CGO, zero external binary dependencies.</p>
+      <h2 class="section-title">지원 타겟 데이터베이스</h2>
+      <p class="section-subtitle">순수 Go 드라이버 구현으로 외부 바이너리 의존성 및 CGO가 필요 없습니다.</p>
     </div>
 
     <div class="db-matrix">
@@ -1181,7 +1181,7 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
           <li>Driver: `pgx/v5`</li>
           <li>Lock: `default_transaction_read_only=on`</li>
           <li>Dialect: PostgreSQL (v12-v16)</li>
-          <li>Full DSN & Connection String support</li>
+          <li>전체 DSN 및 커넥션 스트링 지원</li>
         </ul>
       </div>
 
@@ -1194,7 +1194,7 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
           <li>Driver: `go-sql-driver/mysql`</li>
           <li>Lock: `transaction_read_only=1`</li>
           <li>Dialect: MySQL 8.x</li>
-          <li>Pure Go connection pooling</li>
+          <li>순수 Go 커넥션 풀링</li>
         </ul>
       </div>
 
@@ -1220,7 +1220,7 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
           <li>Driver: `godror` / OCI SDK</li>
           <li>Runtime: `sqlon-oracle` build</li>
           <li>Dialect: Oracle 19c / 21c</li>
-          <li>Enterprise capability contracts</li>
+          <li>엔터프라이즈 등급 계약 및 보안 규격</li>
         </ul>
       </div>
     </div>
@@ -1229,15 +1229,15 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
   <!-- Docs Hub -->
   <section id="docs" class="container">
     <div class="section-header">
-      <h2 class="section-title">Comprehensive Documentation & Guides</h2>
-      <p class="section-subtitle">Download executive reports, developer guides, and administrator reference manuals.</p>
+      <h2 class="section-title">종합 운영 문서 및 가이드</h2>
+      <p class="section-subtitle">임원 리포트, 개발자 가이드 및 시스템 관리자 매뉴얼을 다운로드하고 확인하세요.</p>
     </div>
 
     <div class="docs-hub">
       <div class="doc-card">
         <div class="doc-meta">
-          <h3>📖 User Guide</h3>
-          <p>Step-by-step instructions for NL2SQL workflows, MCP client integration, and query optimization.</p>
+          <h3>📖 사용자 가이드</h3>
+          <p>자연어 기반 SQL 생성 워크플로우, MCP 클라이언트 연동 및 쿼리 최적화 상세 가이드입니다.</p>
         </div>
         <div class="doc-links">
           <a href="user_guide.pdf" target="_blank" class="btn-doc-link">PDF Manual</a>
@@ -1247,8 +1247,8 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
 
       <div class="doc-card">
         <div class="doc-meta">
-          <h3>🛡️ Administrator Guide</h3>
-          <p>Deployment topologies, security guardrails, dataset compilation, and multi-tenant access control.</p>
+          <h3>🛡️ 관리자 가이드</h3>
+          <p>배포 구성 방식, 보안 가드레일 설정, 스키마 컴파일 및 다중 테넌트 접근 제어 가이드입니다.</p>
         </div>
         <div class="doc-links">
           <a href="admin_guide.pdf" target="_blank" class="btn-doc-link">PDF Manual</a>
@@ -1258,8 +1258,8 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
 
       <div class="doc-card">
         <div class="doc-meta">
-          <h3>📊 Executive Report</h3>
-          <p>Business architecture summary, ROI analysis, reliability guarantees, and compliance audit frameworks.</p>
+          <h3>📊 임원용 리포트</h3>
+          <p>비즈니스 아키텍처 요약, ROI 분석, 시스템 신뢰성 보장 및 감사 준수 프레임워크 보고서입니다.</p>
         </div>
         <div class="doc-links">
           <a href="executive_report.pdf" target="_blank" class="btn-doc-link">PDF Report</a>
@@ -1269,8 +1269,8 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
 
       <div class="doc-card">
         <div class="doc-meta">
-          <h3>⚡ MCP Tools Reference</h3>
-          <p>Full technical specification of all 104+ MCP tools, input schemas, resources, and prompt templates.</p>
+          <h3>⚡ MCP 도구 참조 가이드</h3>
+          <p>104개 이상의 MCP 도구, 입력 스키마, 리소스 및 프롬프트 템플릿에 대한 전체 기술 명세서입니다.</p>
         </div>
         <div class="doc-links">
           <a href="mcp-tools-reference.md" class="btn-doc-link">Tools Reference</a>
@@ -1283,41 +1283,41 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
   <!-- FAQ Section (AEO & SEO optimized) -->
   <section id="faq" class="container">
     <div class="section-header">
-      <h2 class="section-title">Frequently Asked Questions</h2>
-      <p class="section-subtitle">Direct answers for SRE teams, DBAs, and Answer Engine AI crawlers.</p>
+      <h2 class="section-title">자주 묻는 질문 (FAQ)</h2>
+      <p class="section-subtitle">DBA, SRE 팀 및 AI 검색 엔진을 위한 명확하고 검증된 답변입니다.</p>
     </div>
 
     <div class="faq-section">
       <div class="faq-item">
-        <button class="faq-question" onclick="toggleFaq(this)">What is SQLON and who is it built for?</button>
+        <button class="faq-question" onclick="toggleFaq(this)">SQLON이란 무엇이며 어떤 사용자층을 위해 설계되었나요?</button>
         <div class="faq-answer">
-          SQLON is an evidence-driven AI database operations platform built for Database Administrators (DBAs), Site Reliability Engineers (SREs), and Enterprise AI application developers. It transforms natural language instructions into validated, secure SQL queries while providing fleet observation, performance profiling, and governed change control workflows.
+          SQLON은 데이터베이스 관리자(DBA), SRE 엔지니어 및 엔터프라이즈 AI 서비스 개발자를 위해 설계된 증거 기반 AI 데이터베이스 운용 플랫폼입니다. 자연어 지시어를 33가지 정적 검증을 거친 안전한 SQL로 변환하고 실시간 성능 프로파일링 및 샌드박스 실행 환경을 제공합니다.
         </div>
       </div>
 
       <div class="faq-item">
-        <button class="faq-question" onclick="toggleFaq(this)">How does SQLON prevent LLM schema hallucinations?</button>
+        <button class="faq-question" onclick="toggleFaq(this)">SQLON은 LLM의 스키마 환각(Hallucination) 현상을 어떻게 방지하나요?</button>
         <div class="faq-answer">
-          SQLON loads JSON dataset metadata into memory and compiles an explicit catalog, join-graph, and candidate column index. Before generating SQL, the `prepare_sql_context` engine creates a rigid SQL skeleton with pre-validated table joins. If a query contains ambiguous terms, SQLON enters a mandatory clarification state to prompt the user rather than guessing schema elements.
+          SQLON은 스키마 외래키 연관 관계와 컬럼 인덱스를 메모리에 상주시켜 사전에 검증된 테이블 조인 스켈레톤을 생성합니다. 모호한 자연어 요청이 들어올 경우 AI가 임의로 스키마를 넘겨짚지 않고 사용자에게 수동 확인을 요청(Clarification State)하여 환각 현상을 원천 방지합니다.
         </div>
       </div>
 
       <div class="faq-item">
-        <button class="faq-question" onclick="toggleFaq(this)">What is Model Context Protocol (MCP) and how does SQLON support it?</button>
+        <button class="faq-question" onclick="toggleFaq(this)">Model Context Protocol(MCP)이란 무엇이며 SQLON은 이를 어떻게 지원하나요?</button>
         <div class="faq-answer">
           Model Context Protocol (MCP) is an open standard introduced by Anthropic that allows AI models to safely interact with external tools and datasets. SQLON implements standard MCP over both stdio (for local subprocesses) and HTTP (for microservices/gateways), providing 104+ tools, resources, and prompts for Claude Desktop, Cursor IDE, VS Code, and custom AI agents.
         </div>
       </div>
 
       <div class="faq-item">
-        <button class="faq-question" onclick="toggleFaq(this)">Is SQLON safe to run against production databases?</button>
+        <button class="faq-question" onclick="toggleFaq(this)">SQLON을 실제 운영 중인 데이터베이스 환경에 실행해도 안전한가요?</button>
         <div class="faq-answer">
           Yes. SQLON strictly enforces fail-closed guardrails. Read-only queries run under explicit engine transaction locks (`default_transaction_read_only=on` for Postgres, `transaction_read_only=1` for MySQL). State-modifying operations (DDL/DML) are protected by multi-step approval workflows, AST security validation against 33 rules, and audit logging.
         </div>
       </div>
 
       <div class="faq-item">
-        <button class="faq-question" onclick="toggleFaq(this)">What databases are supported out of the box?</button>
+        <button class="faq-question" onclick="toggleFaq(this)">별도 추가 모듈 없이 즉시 지원되는 데이터베이스 종류는 무엇인가요?</button>
         <div class="faq-answer">
           SQLON standard binary supports PostgreSQL (v12-v16), MySQL (v8.x), and MariaDB (v10.x/v11.x) using pure-Go drivers with zero CGO dependencies. Oracle DB is supported through the specialized `sqlon-oracle` build which includes Oracle Call Interface (OCI) bindings.
         </div>
@@ -1334,7 +1334,7 @@ Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
             <img src="assets/logo.png" alt="SQLON Logo">
             SQLON
           </a>
-          <p>The Evidence-Driven AI Database Operations Platform for DBAs, SREs, and Enterprise Systems.</p>
+          <p>DBA, SRE 및 엔터프라이즈 시스템을 위한 증거 기반 AI 데이터베이스 운용 플랫폼입니다.</p>
         </div>
 
         <div class="inquiry-box">
