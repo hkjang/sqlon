@@ -1,1388 +1,511 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SQLON — Evidence-Grounded Database Operations for AI</title>
+  <meta name="description" content="SQLON gives DBAs, SREs, and AI agents a metadata-grounded path from natural-language questions to validated, read-only SQL across PostgreSQL, MySQL, MariaDB, and Oracle.">
+  <meta name="author" content="SQLON Project">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="https://hkjang.github.io/sqlon/index_en.html">
+  <link rel="alternate" hreflang="ko" href="https://hkjang.github.io/sqlon/">
+  <link rel="alternate" hreflang="en" href="https://hkjang.github.io/sqlon/index_en.html">
+  <link rel="icon" href="favicon.ico">
 
-  <!-- Primary SEO Meta Tags -->
-  <title>SQLON - AI Database Operations & Evidence-Driven NL2SQL Platform</title>
-  <meta name="title" content="SQLON - AI Database Operations & Evidence-Driven NL2SQL Platform">
-  <meta name="description" content="SQLON is an evidence-driven AI database operations platform for DBAs & SREs. Features 104+ MCP tools, zero-hallucination join graphs, fail-closed SQL guardrails, and pure-Go multi-DB support (PostgreSQL, MySQL, MariaDB, Oracle).">
-  <meta name="keywords" content="SQLON, NL2SQL, MCP, Model Context Protocol, Database Operations, DBA AI, SRE AI, PostgreSQL, MySQL, MariaDB, Oracle, Text to SQL, AI Guardrails, OpenMetadata">
-  <meta name="author" content="SQLON Team">
-  <meta name="robots" content="index, follow">
-  <link rel="canonical" href="https://hkjang.github.io/sqlon/">
-
-  <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://hkjang.github.io/sqlon/">
-  <meta property="og:title" content="SQLON - AI Database Operations & Evidence-Driven NL2SQL Platform">
-  <meta property="og:description" content="Next-Gen AI Database Operations Engine for DBAs & SREs. MCP native with 104+ tools, zero-hallucination schema graphs, and fail-closed SQL policy enforcement.">
+  <meta property="og:site_name" content="SQLON">
+  <meta property="og:url" content="https://hkjang.github.io/sqlon/index_en.html">
+  <meta property="og:title" content="SQLON — Evidence-Grounded Database Operations for AI">
+  <meta property="og:description" content="Ground SQL generation and database operations in real metadata, explicit guardrails, and reviewable evidence.">
   <meta property="og:image" content="https://hkjang.github.io/sqlon/assets/logo.png">
+  <meta name="twitter:card" content="summary_large_image">
 
-  <!-- Twitter Card -->
-  <meta property="twitter:card" content="summary_large_image">
-  <meta property="twitter:url" content="https://hkjang.github.io/sqlon/">
-  <meta property="twitter:title" content="SQLON - AI Database Operations & Evidence-Driven NL2SQL Platform">
-  <meta property="twitter:description" content="Next-Gen AI Database Operations Engine for DBAs & SREs. MCP native with 104+ tools, zero-hallucination schema graphs, and fail-closed SQL policy enforcement.">
-  <meta property="twitter:image" content="https://hkjang.github.io/sqlon/assets/logo.png">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-
-  <!-- AEO & SEO JSON-LD Structured Data -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "SQLON",
-    "operatingSystem": "Linux, Windows, macOS, Docker",
     "applicationCategory": "DeveloperApplication",
-    "license": "https://opensource.org/licenses/Apache-2.0",
-    "description": "SQLON is an evidence-driven AI database operations platform for DBAs and SREs, providing 104+ MCP tools, zero-hallucination schema grounding, and fail-closed SQL guardrails across PostgreSQL, MySQL, MariaDB, and Oracle.",
-    "url": "https://hkjang.github.io/sqlon/",
-    "author": {
-      "@type": "Organization",
-      "name": "SQLON Open Source Community",
-      "email": "gagagiga@naver.com"
-    },
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    }
-  }
-  </script>
-
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": [
-      {
-        "@type": "Question",
-        "name": "What is SQLON?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "SQLON is an evidence-driven AI database operations platform designed for DBAs, SREs, and Enterprise AI applications. It exposes 104+ MCP (Model Context Protocol) tools, compiles in-memory schema catalogs and join graphs to eliminate LLM hallucinations, and enforces fail-closed SQL security guardrails."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "How does SQLON prevent LLM schema hallucinations in NL2SQL?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "SQLON compiles dataset JSON metadata into an in-memory catalog, candidate column index, and join graph. When a natural language prompt arrives, `prepare_sql_context` constructs exact schema skeletons with pre-validated join paths. If ambiguous columns or filter criteria exist, SQLON enforces a clarification state before any SQL is generated."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Which database engines are supported by SQLON?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "SQLON natively supports PostgreSQL (via pgx pure-Go driver), MySQL 8.x and MariaDB 10.x/11.x (via go-sql-driver), and Oracle (via the specialized sqlon-oracle runtime module)."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "What is Model Context Protocol (MCP) support in SQLON?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "SQLON implements standard MCP specification over stdio and HTTP transports. It provides 104+ registered tools, resources, and prompts, allowing seamless integration with Claude Desktop, Cursor IDE, VS Code, and custom AI agents."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Is SQLON safe for production database operations?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Yes. SQLON implements fail-closed security policy rules, mandatory read-only transaction locks (e.g. default_transaction_read_only=on), AST-level query validation against 33 static guardrails, and approval-gated change control workflows for state-modifying operations."
-        }
-      }
-    ]
+    "operatingSystem": "Linux, macOS, Windows, Docker",
+    "url": "https://hkjang.github.io/sqlon/index_en.html",
+    "downloadUrl": "https://github.com/hkjang/sqlon",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "description": "An evidence-grounded database operations platform for DBAs, SREs, and AI agents, with metadata-aware SQL generation, validation, and read-only execution."
   }
   </script>
 
   <style>
     :root {
-      --bg-main: #0b0f19;
-      --bg-card: rgba(18, 26, 44, 0.7);
-      --bg-card-hover: rgba(26, 38, 64, 0.85);
-      --bg-glass: rgba(255, 255, 255, 0.03);
-      --border-color: rgba(255, 255, 255, 0.08);
-      --border-accent: rgba(56, 189, 248, 0.3);
-      
-      --accent-cyan: #38bdf8;
-      --accent-blue: #3b82f6;
-      --accent-purple: #8b5cf6;
-      --accent-emerald: #10b981;
-      --accent-amber: #f59e0b;
-      
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-dim: #64748b;
-
-      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
+      color-scheme: dark;
+      --bg: #07101f;
+      --bg-deep: #040914;
+      --surface: #0d192b;
+      --surface-2: #111f34;
+      --line: rgba(151, 175, 211, .17);
+      --line-strong: rgba(104, 207, 255, .34);
+      --text: #f7faff;
+      --muted: #a9b8cf;
+      --faint: #71829d;
+      --blue: #61d2ff;
+      --blue-strong: #25a9f0;
+      --violet: #9d8cff;
+      --green: #57ddb1;
+      --amber: #f7c76e;
+      --shadow: 0 24px 80px rgba(0, 0, 0, .34);
+      --radius: 20px;
+      --max: 1160px;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
-      background-color: var(--bg-main);
-      color: var(--text-main);
-      font-family: var(--font-sans);
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 12% -5%, rgba(37, 169, 240, .17), transparent 33rem),
+        radial-gradient(circle at 92% 24%, rgba(125, 94, 255, .11), transparent 28rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       line-height: 1.6;
-      overflow-x: hidden;
-      background-image: 
-        radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 85% 60%, rgba(139, 92, 246, 0.08) 0%, transparent 40%);
+      -webkit-font-smoothing: antialiased;
     }
 
-    /* Container */
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 1.5rem;
-    }
+    a { color: inherit; }
+    button, input { font: inherit; }
+    code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    section { scroll-margin-top: 88px; }
+    .container { width: min(calc(100% - 40px), var(--max)); margin-inline: auto; }
+    .skip-link { position: fixed; left: 12px; top: -80px; z-index: 1000; padding: 10px 14px; border-radius: 10px; background: white; color: #07101f; }
+    .skip-link:focus { top: 12px; }
 
-    /* Navigation */
-    header {
+    .site-header {
       position: sticky;
       top: 0;
       z-index: 100;
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      background: rgba(11, 15, 25, 0.8);
-      border-bottom: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--line);
+      background: rgba(4, 9, 20, .78);
+      backdrop-filter: blur(18px);
     }
 
-    .nav-wrapper {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      height: 72px;
-    }
+    .nav { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; font-weight: 800; letter-spacing: -.025em; }
+    .brand img { width: 36px; height: 36px; object-fit: contain; filter: drop-shadow(0 8px 16px rgba(66, 191, 255, .2)); }
+    .brand span { font-size: 1.16rem; }
+    .nav-links { display: flex; align-items: center; gap: 27px; margin: 0; padding: 0; list-style: none; }
+    .nav-links a { color: var(--muted); font-size: .9rem; font-weight: 650; text-decoration: none; transition: color .2s ease; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--text); }
+    .nav-actions { display: flex; align-items: center; gap: 9px; }
+    .language { display: inline-flex; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,.025); }
+    .language a { min-width: 34px; padding: 4px 8px; border-radius: 999px; color: var(--faint); font-size: .72rem; font-weight: 800; text-align: center; text-decoration: none; }
+    .language a[aria-current="page"] { background: rgba(97,210,255,.14); color: var(--blue); }
+    .mobile-toggle { display: none; width: 42px; height: 42px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); color: var(--text); cursor: pointer; }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      text-decoration: none;
-      color: var(--text-main);
-      font-weight: 800;
-      font-size: 1.35rem;
-      letter-spacing: -0.02em;
-    }
-
-    .brand img {
-      height: 36px;
-      width: auto;
-    }
-
-    .badge-v {
-      background: rgba(56, 189, 248, 0.15);
-      color: var(--accent-cyan);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 0.15rem 0.5rem;
-      border-radius: 9999px;
-      font-family: var(--font-mono);
-    }
-
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 2rem;
-      list-style: none;
-    }
-
-    .nav-links a {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.95rem;
-      font-weight: 500;
-      transition: color 0.2s ease;
-    }
-
-    .nav-links a:hover {
-      color: var(--accent-cyan);
-    }
-
-    .btn-github {
+    .button {
       display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--text-main);
-      border: 1px solid var(--border-color);
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      text-decoration: none;
-      transition: all 0.2s ease;
-    }
-
-    .btn-github:hover {
-      background: rgba(255, 255, 255, 0.12);
-      border-color: var(--accent-cyan);
-      transform: translateY(-1px);
-    }
-
-    /* Hero Section */
-    .hero {
-      padding: 5rem 0 3rem 0;
-      text-align: center;
-      position: relative;
-    }
-
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: linear-gradient(90deg, rgba(56, 189, 248, 0.1), rgba(139, 92, 246, 0.1));
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      padding: 0.4rem 1rem;
-      border-radius: 9999px;
-      color: var(--accent-cyan);
-      font-size: 0.875rem;
-      font-weight: 600;
-      margin-bottom: 1.5rem;
-    }
-
-    .hero-title {
-      font-size: 3.25rem;
-      font-weight: 800;
-      line-height: 1.15;
-      letter-spacing: -0.03em;
-      margin-bottom: 1.5rem;
-      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .hero-title span {
-      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .hero-desc {
-      font-size: 1.2rem;
-      color: var(--text-muted);
-      max-width: 800px;
-      margin: 0 auto 2.5rem auto;
-      font-weight: 400;
-    }
-
-    .hero-ctas {
-      display: flex;
-      justify-content: center;
-      gap: 1rem;
-      margin-bottom: 3.5rem;
-      flex-wrap: wrap;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-      color: #fff;
-      padding: 0.85rem 1.75rem;
-      border-radius: 10px;
-      font-weight: 600;
-      text-decoration: none;
-      font-size: 1rem;
-      box-shadow: 0 4px 20px rgba(59, 130, 246, 0.35);
-      transition: all 0.2s ease;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 24px rgba(59, 130, 246, 0.5);
-    }
-
-    .btn-secondary {
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--text-main);
-      border: 1px solid var(--border-color);
-      padding: 0.85rem 1.75rem;
-      border-radius: 10px;
-      font-weight: 600;
-      text-decoration: none;
-      font-size: 1rem;
-      transition: all 0.2s ease;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.2);
-      transform: translateY(-2px);
-    }
-
-    /* Terminal Code Box */
-    .terminal-container {
-      max-width: 900px;
-      margin: 0 auto;
-      background: #070a12;
-      border: 1px solid var(--border-color);
-      border-radius: 14px;
-      overflow: hidden;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
-      text-align: left;
-    }
-
-    .terminal-header {
-      background: #0f1422;
-      padding: 0.75rem 1rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    .terminal-dots {
-      display: flex;
-      gap: 6px;
-    }
-
-    .dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-    }
-
-    .dot-red { background: #ef4444; }
-    .dot-yellow { background: #f59e0b; }
-    .dot-green { background: #10b981; }
-
-    .terminal-tabs {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .tab-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-dim);
-      font-size: 0.825rem;
-      font-family: var(--font-mono);
-      padding: 0.35rem 0.75rem;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .tab-btn.active {
-      background: rgba(56, 189, 248, 0.12);
-      color: var(--accent-cyan);
-      font-weight: 600;
-    }
-
-    .terminal-body {
-      padding: 1.25rem 1.5rem;
-      font-family: var(--font-mono);
-      font-size: 0.9rem;
-      color: #e2e8f0;
-      overflow-x: auto;
-      line-height: 1.6;
-    }
-
-    .terminal-body pre {
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-
-    .token-keyword { color: #f472b6; }
-    .token-string { color: #34d399; }
-    .token-comment { color: #64748b; font-style: italic; }
-    .token-fn { color: #60a5fa; }
-    .token-num { color: #fbbf24; }
-
-    /* Stats Banner */
-    .stats-section {
-      padding: 3rem 0;
-      border-top: 1px solid var(--border-color);
-      border-bottom: 1px solid var(--border-color);
-      background: rgba(15, 23, 42, 0.4);
-      margin: 4rem 0;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 2rem;
-      text-align: center;
-    }
-
-    .stat-number {
-      font-size: 2.75rem;
-      font-weight: 800;
-      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      font-family: var(--font-mono);
-    }
-
-    .stat-label {
-      color: var(--text-muted);
-      font-size: 0.95rem;
-      font-weight: 500;
-      margin-top: 0.25rem;
-    }
-
-    /* Feature Grid */
-    .section-header {
-      text-align: center;
-      margin-bottom: 3.5rem;
-    }
-
-    .section-title {
-      font-size: 2.25rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin-bottom: 0.75rem;
-    }
-
-    .section-subtitle {
-      color: var(--text-muted);
-      font-size: 1.1rem;
-      max-width: 680px;
-      margin: 0 auto;
-    }
-
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-      gap: 1.75rem;
-      margin-bottom: 5rem;
-    }
-
-    .feature-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 14px;
-      padding: 2rem;
-      transition: all 0.3s ease;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .feature-card:hover {
-      background: var(--bg-card-hover);
-      border-color: var(--border-accent);
-      transform: translateY(-4px);
-    }
-
-    .feature-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 10px;
-      background: rgba(56, 189, 248, 0.1);
-      border: 1px solid rgba(56, 189, 248, 0.2);
-      display: flex;
+      min-height: 46px;
       align-items: center;
       justify-content: center;
-      color: var(--accent-cyan);
-      margin-bottom: 1.25rem;
-    }
-
-    .feature-card h3 {
-      font-size: 1.25rem;
-      font-weight: 700;
-      margin-bottom: 0.75rem;
-      color: var(--text-main);
-    }
-
-    .feature-card p {
-      color: var(--text-muted);
-      font-size: 0.95rem;
-      line-height: 1.6;
-    }
-
-    /* Workflow Pipeline Section */
-    .workflow-section {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 20px;
-      padding: 3rem 2rem;
-      margin-bottom: 5rem;
-    }
-
-    .pipeline-steps {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1.5rem;
-      margin-top: 2.5rem;
-      position: relative;
-    }
-
-    .step-box {
-      background: rgba(11, 15, 25, 0.7);
-      border: 1px solid var(--border-color);
+      gap: 9px;
+      padding: 0 18px;
+      border: 1px solid transparent;
       border-radius: 12px;
-      padding: 1.5rem;
-      position: relative;
-    }
-
-    .step-num {
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--accent-cyan);
-      background: rgba(56, 189, 248, 0.1);
-      padding: 0.2rem 0.6rem;
-      border-radius: 6px;
-      display: inline-block;
-      margin-bottom: 0.75rem;
-    }
-
-    .step-box h4 {
-      font-size: 1.05rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-    }
-
-    .step-box p {
-      font-size: 0.875rem;
-      color: var(--text-muted);
-    }
-
-    /* Databases Matrix */
-    .db-matrix {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 5rem;
-    }
-
-    .db-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 14px;
-      padding: 1.75rem;
-    }
-
-    .db-card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-    }
-
-    .db-title {
-      font-size: 1.15rem;
-      font-weight: 700;
-    }
-
-    .tag-purego {
-      font-size: 0.75rem;
-      font-family: var(--font-mono);
-      background: rgba(16, 185, 129, 0.15);
-      color: var(--accent-emerald);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      padding: 0.15rem 0.5rem;
-      border-radius: 6px;
-    }
-
-    .db-card ul {
-      list-style: none;
-      font-size: 0.875rem;
-      color: var(--text-muted);
-    }
-
-    .db-card li {
-      margin-bottom: 0.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .db-card li::before {
-      content: "✓";
-      color: var(--accent-cyan);
-      font-weight: bold;
-    }
-
-    /* Docs & Downloads Hub */
-    .docs-hub {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 5rem;
-    }
-
-    .doc-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 14px;
-      padding: 1.75rem;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      transition: border-color 0.2s ease;
-    }
-
-    .doc-card:hover {
-      border-color: var(--accent-cyan);
-    }
-
-    .doc-meta h3 {
-      font-size: 1.15rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .doc-meta p {
-      font-size: 0.9rem;
-      color: var(--text-muted);
-      margin-bottom: 1.25rem;
-    }
-
-    .doc-links {
-      display: flex;
-      gap: 0.75rem;
-    }
-
-    .btn-doc-link {
-      font-size: 0.825rem;
-      font-weight: 600;
-      color: var(--accent-cyan);
+      font-size: .92rem;
+      font-weight: 760;
       text-decoration: none;
-      background: rgba(56, 189, 248, 0.1);
-      padding: 0.4rem 0.8rem;
-      border-radius: 6px;
-      border: 1px solid rgba(56, 189, 248, 0.2);
-      transition: all 0.2s;
+      transition: transform .2s ease, border-color .2s ease, background .2s ease;
+    }
+    .button:hover { transform: translateY(-2px); }
+    .button-primary { background: linear-gradient(135deg, #72dcff, #31b1f5); color: #06101c; box-shadow: 0 12px 36px rgba(37,169,240,.24); }
+    .button-secondary { border-color: var(--line); background: rgba(255,255,255,.035); color: var(--text); }
+    .button-secondary:hover { border-color: var(--line-strong); background: rgba(97,210,255,.07); }
+
+    .hero { padding: 94px 0 74px; }
+    .hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; align-items: center; gap: 64px; }
+    .eyebrow { display: inline-flex; align-items: center; gap: 9px; margin: 0 0 20px; color: var(--blue); font-size: .78rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+    .eyebrow::before { content: ""; width: 25px; height: 1px; background: currentColor; }
+    h1 { max-width: 720px; margin: 0; font-size: clamp(2.7rem, 6vw, 5.2rem); line-height: .99; letter-spacing: -.064em; }
+    h1 em { color: var(--blue); font-style: normal; }
+    .hero-copy { max-width: 650px; margin: 26px 0 0; color: var(--muted); font-size: clamp(1.04rem, 2vw, 1.18rem); }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+    .trust-row { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 30px; color: var(--faint); font-size: .82rem; font-weight: 650; }
+    .trust-row span { display: inline-flex; align-items: center; gap: 7px; }
+    .trust-row span::before { content: "✓"; color: var(--green); }
+
+    .console { position: relative; border: 1px solid var(--line-strong); border-radius: 22px; overflow: hidden; background: rgba(4, 10, 21, .9); box-shadow: var(--shadow); }
+    .console::before { content: ""; position: absolute; inset: -30% 35% 50% -20%; background: rgba(37,169,240,.12); filter: blur(45px); pointer-events: none; }
+    .console-bar { position: relative; min-height: 49px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.025); }
+    .dots { display: flex; gap: 7px; }
+    .dots i { width: 8px; height: 8px; border-radius: 50%; background: #40516c; }
+    .dots i:nth-child(1) { background: #ff7b72; }
+    .dots i:nth-child(2) { background: #f7c76e; }
+    .dots i:nth-child(3) { background: #57ddb1; }
+    .console-label { color: var(--faint); font-family: "SFMono-Regular", Consolas, monospace; font-size: .72rem; }
+    .console-body { position: relative; padding: 23px; }
+    .question { margin-bottom: 21px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.025); color: #dce8f9; font-size: .85rem; }
+    .question span { color: var(--blue); font-family: monospace; }
+    .flow-step { display: grid; grid-template-columns: 31px 1fr auto; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid rgba(151,175,211,.11); }
+    .flow-step:first-of-type { border-top: 0; }
+    .flow-number { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 9px; color: var(--blue); font-family: monospace; font-size: .75rem; }
+    .flow-title { font-size: .83rem; font-weight: 720; }
+    .flow-detail { color: var(--faint); font-size: .72rem; }
+    .status { padding: 4px 8px; border-radius: 999px; background: rgba(87,221,177,.1); color: var(--green); font-family: monospace; font-size: .64rem; }
+
+    .proof { padding: 0 0 86px; }
+    .proof-grid { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 17px; overflow: hidden; background: rgba(13,25,43,.55); }
+    .proof-item { padding: 24px; border-left: 1px solid var(--line); }
+    .proof-item:first-child { border-left: 0; }
+    .proof-value { display: block; margin-bottom: 3px; color: var(--text); font-size: 1.15rem; font-weight: 820; letter-spacing: -.03em; }
+    .proof-label { color: var(--faint); font-size: .76rem; }
+
+    .section { padding: 92px 0; }
+    .section-soft { border-block: 1px solid var(--line); background: rgba(4,9,20,.38); }
+    .section-head { max-width: 720px; margin-bottom: 42px; }
+    .kicker { margin: 0 0 10px; color: var(--blue); font-size: .75rem; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+    h2 { margin: 0; font-size: clamp(2rem, 4vw, 3.15rem); line-height: 1.09; letter-spacing: -.045em; }
+    .section-lead { margin: 17px 0 0; color: var(--muted); font-size: 1rem; }
+    .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .card { min-height: 240px; padding: 25px; border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(145deg, rgba(17,31,52,.87), rgba(8,17,31,.76)); }
+    .card-mark { width: 38px; height: 38px; display: grid; place-items: center; margin-bottom: 28px; border: 1px solid var(--line-strong); border-radius: 11px; background: rgba(97,210,255,.075); color: var(--blue); font-family: monospace; font-size: .75rem; font-weight: 800; }
+    .card h3 { margin: 0 0 10px; font-size: 1.08rem; letter-spacing: -.02em; }
+    .card p { margin: 0; color: var(--muted); font-size: .89rem; }
+
+    .pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; counter-reset: stage; }
+    .stage { position: relative; min-height: 235px; padding: 23px 21px; border: 1px solid var(--line); border-left: 0; background: var(--surface); counter-increment: stage; }
+    .stage:first-child { border-left: 1px solid var(--line); border-radius: 18px 0 0 18px; }
+    .stage:last-child { border-radius: 0 18px 18px 0; }
+    .stage::before { content: "0" counter(stage); display: block; margin-bottom: 34px; color: var(--blue); font-family: monospace; font-size: .72rem; }
+    .stage:not(:last-child)::after { content: "→"; position: absolute; z-index: 2; right: -12px; top: 45px; width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--bg); color: var(--blue); font-size: .72rem; }
+    .stage h3 { margin: 0 0 8px; font-size: .94rem; }
+    .stage p { margin: 0; color: var(--faint); font-size: .78rem; }
+
+    .database-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .database { padding: 23px; border: 1px solid var(--line); border-radius: 16px; background: rgba(13,25,43,.62); }
+    .database-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 20px; }
+    .database h3 { margin: 0; font-size: 1rem; }
+    .tag { padding: 4px 8px; border: 1px solid rgba(87,221,177,.23); border-radius: 999px; color: var(--green); font-family: monospace; font-size: .62rem; }
+    .tag.plugin { border-color: rgba(247,199,110,.25); color: var(--amber); }
+    .database dl { margin: 0; }
+    .database dl div { display: grid; grid-template-columns: 54px 1fr; gap: 8px; padding: 7px 0; border-top: 1px solid rgba(151,175,211,.1); font-size: .75rem; }
+    .database dt { color: var(--faint); }
+    .database dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+
+    .quickstart-grid { display: grid; grid-template-columns: .78fr 1.22fr; align-items: center; gap: 50px; }
+    .quickstart-copy p { color: var(--muted); }
+    .code-shell { border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--bg-deep); box-shadow: var(--shadow); }
+    .code-head { min-height: 47px; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border-bottom: 1px solid var(--line); color: var(--faint); font-size: .75rem; }
+    .copy-button { border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.035); color: var(--muted); padding: 5px 10px; cursor: pointer; }
+    .copy-button:hover { color: var(--text); border-color: var(--line-strong); }
+    pre { margin: 0; padding: 21px; overflow-x: auto; color: #c8d7eb; font-size: .76rem; line-height: 1.75; }
+    pre .comment { color: #61728e; }
+    pre .cmd { color: var(--green); }
+
+    .docs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    .doc { display: flex; flex-direction: column; min-height: 214px; padding: 24px; border: 1px solid var(--line); border-radius: 17px; background: rgba(13,25,43,.62); text-decoration: none; transition: transform .2s ease, border-color .2s ease; }
+    .doc:hover { transform: translateY(-3px); border-color: var(--line-strong); }
+    .doc small { color: var(--blue); font-family: monospace; font-size: .66rem; text-transform: uppercase; }
+    .doc h3 { margin: 25px 0 8px; font-size: 1.05rem; }
+    .doc p { margin: 0; color: var(--muted); font-size: .83rem; }
+    .doc span { margin-top: auto; padding-top: 20px; color: var(--blue); font-size: .8rem; font-weight: 750; }
+
+    .faq { display: grid; grid-template-columns: .72fr 1.28fr; gap: 60px; align-items: start; }
+    .faq-list { border-top: 1px solid var(--line); }
+    details { border-bottom: 1px solid var(--line); }
+    summary { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 21px 0; cursor: pointer; font-weight: 720; list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; color: var(--blue); font-family: monospace; font-size: 1.15rem; }
+    details[open] summary::after { content: "−"; }
+    details p { margin: -6px 0 22px; color: var(--muted); font-size: .9rem; }
+
+    .final-cta { padding: 84px 0; }
+    .cta-panel { position: relative; overflow: hidden; padding: 54px; border: 1px solid var(--line-strong); border-radius: 24px; background: linear-gradient(130deg, rgba(37,169,240,.13), rgba(157,140,255,.08) 60%, rgba(13,25,43,.8)); }
+    .cta-panel::after { content: "SQL"; position: absolute; right: 25px; bottom: -50px; color: rgba(255,255,255,.025); font-size: 12rem; font-weight: 900; line-height: 1; pointer-events: none; }
+    .cta-panel h2 { max-width: 730px; }
+    .cta-panel p { max-width: 660px; margin: 17px 0 28px; color: var(--muted); }
+    .site-footer { padding: 30px 0 42px; border-top: 1px solid var(--line); color: var(--faint); font-size: .78rem; }
+    .footer-row { display: flex; justify-content: space-between; gap: 20px; }
+    .footer-links { display: flex; flex-wrap: wrap; gap: 18px; }
+    .footer-links a { text-decoration: none; }
+    .footer-links a:hover { color: var(--text); }
+
+    :focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+    @media (max-width: 960px) {
+      .hero-grid, .quickstart-grid, .faq { grid-template-columns: 1fr; }
+      .hero-grid { gap: 48px; }
+      .feature-grid, .docs-grid { grid-template-columns: repeat(2, 1fr); }
+      .pipeline { grid-template-columns: 1fr 1fr; gap: 12px; }
+      .stage, .stage:first-child, .stage:last-child { border: 1px solid var(--line); border-radius: 14px; }
+      .stage:not(:last-child)::after { display: none; }
+      .database-grid { grid-template-columns: repeat(2, 1fr); }
+      .proof-grid { grid-template-columns: repeat(2, 1fr); }
+      .proof-item:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
+      .proof-item:nth-child(4) { border-top: 1px solid var(--line); }
     }
 
-    .btn-doc-link:hover {
-      background: rgba(56, 189, 248, 0.25);
+    @media (max-width: 760px) {
+      .container { width: min(calc(100% - 28px), var(--max)); }
+      .mobile-toggle { display: grid; place-items: center; }
+      .nav-actions .button { display: none; }
+      .nav-links { display: none; position: absolute; left: 14px; right: 14px; top: 64px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: #091426; box-shadow: var(--shadow); }
+      .nav-links.open { display: grid; gap: 4px; }
+      .nav-links a { display: block; padding: 11px; }
+      .hero { padding-top: 68px; }
+      h1 { font-size: clamp(2.65rem, 14vw, 4rem); }
+      .feature-grid, .docs-grid, .database-grid, .pipeline { grid-template-columns: 1fr; }
+      .card { min-height: auto; }
+      .proof-grid { grid-template-columns: 1fr; }
+      .proof-item, .proof-item:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
+      .proof-item:first-child { border-top: 0; }
+      .section { padding: 72px 0; }
+      .cta-panel { padding: 34px 25px; }
+      .footer-row { flex-direction: column; }
     }
 
-    /* FAQ Section */
-    .faq-section {
-      max-width: 850px;
-      margin: 0 auto 5rem auto;
-    }
-
-    .faq-item {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      margin-bottom: 1rem;
-      overflow: hidden;
-    }
-
-    .faq-question {
-      width: 100%;
-      text-align: left;
-      padding: 1.25rem 1.5rem;
-      background: transparent;
-      border: none;
-      color: var(--text-main);
-      font-size: 1.05rem;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .faq-question::after {
-      content: "+";
-      font-size: 1.3rem;
-      color: var(--accent-cyan);
-      transition: transform 0.2s;
-    }
-
-    .faq-item.active .faq-question::after {
-      content: "-";
-    }
-
-    .faq-answer {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.3s ease;
-      padding: 0 1.5rem;
-      color: var(--text-muted);
-      font-size: 0.95rem;
-      line-height: 1.6;
-    }
-
-    .faq-item.active .faq-answer {
-      padding: 0 1.5rem 1.25rem 1.5rem;
-      max-height: 300px;
-    }
-
-    /* Footer & Inquiry */
-    footer {
-      border-top: 1px solid var(--border-color);
-      background: #070a12;
-      padding: 4rem 0 2rem 0;
-    }
-
-    .footer-content {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: center;
-      gap: 2rem;
-      margin-bottom: 3rem;
-    }
-
-    .footer-brand {
-      max-width: 380px;
-    }
-
-    .footer-brand p {
-      color: var(--text-dim);
-      font-size: 0.9rem;
-      margin-top: 0.75rem;
-    }
-
-    .inquiry-box {
-      background: rgba(18, 26, 44, 0.8);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      border-radius: 12px;
-      padding: 1rem 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .inquiry-icon {
-      color: var(--accent-cyan);
-      font-size: 1.5rem;
-    }
-
-    .inquiry-text {
-      font-size: 0.875rem;
-    }
-
-    .inquiry-text label {
-      color: var(--text-dim);
-      display: block;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 0.15rem;
-    }
-
-    .inquiry-email {
-      color: var(--accent-cyan);
-      font-family: var(--font-mono);
-      font-weight: 600;
-      text-decoration: none;
-      font-size: 0.95rem;
-    }
-
-    .inquiry-email:hover {
-      text-decoration: underline;
-    }
-
-    .footer-bottom {
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-      padding-top: 1.5rem;
-      text-align: center;
-      color: var(--text-dim);
-      font-size: 0.85rem;
-    }
-
-    /* Responsive adjustments */
-    @media (max-width: 768px) {
-      .hero-title { font-size: 2.25rem; }
-      .hero-desc { font-size: 1rem; }
-      .nav-links { display: none; }
-      .footer-content { flex-direction: column; align-items: flex-start; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .01ms !important; }
     }
   </style>
-<style>
-.mobile-menu-btn {
-  display: none;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #f8fafc;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-@media (max-width: 768px) {
-  .mobile-menu-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  header .container, nav, .navbar {
-    position: relative;
-  }
-  .nav-links, .nav-menu, .nav-list {
-    display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: rgba(15, 23, 42, 0.98);
-    backdrop-filter: blur(12px);
-    flex-direction: column;
-    padding: 1.25rem;
-    gap: 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-    z-index: 999;
-  }
-  .nav-links.active, .nav-menu.active, .nav-list.active {
-    display: flex;
-  }
-  body {
-    overflow-x: hidden;
-  }
-  .grid, .features-grid, .cards-grid {
-    grid-template-columns: 1fr !important;
-  }
-}
-</style>
-<style>
-/* Language Switcher Styling */
-.lang-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 3px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-.lang-btn {
-  background: transparent;
-  border: none;
-  color: #94a3b8;
-  padding: 4px 10px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  border-radius: 4px;
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 0.2s ease;
-  line-height: 1.2;
-}
-.lang-btn:hover {
-  color: #ffffff;
-}
-.lang-btn.active {
-  background: #3b82f6;
-  color: #ffffff;
-}
-</style>
-<script id="auto-lang-detector">
-(function() {
-  var SAVED_KEY = 'user_lang_pref';
-  var userPref = localStorage.getItem(SAVED_KEY);
-  if (!userPref) {
-    var navLang = (navigator.language || (navigator.languages && navigator.languages[0]) || '').toLowerCase();
-    var isKoBrowser = navLang.indexOf('ko') === 0;
-    var isEnPage = window.location.pathname.indexOf('index_en.html') !== -1;
-    if (!isKoBrowser && !isEnPage) {
-      var target = window.location.href.replace(/index\.html$/, 'index_en.html');
-      if (target === window.location.href) target = 'index_en.html';
-      window.location.replace(target);
-    } else if (isKoBrowser && isEnPage) {
-      var target = window.location.href.replace(/index_en\.html$/, 'index.html');
-      if (target === window.location.href) target = 'index.html';
-      window.location.replace(target);
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', function() {
-    var langBtns = document.querySelectorAll('.lang-btn, [data-lang], #btn-ko, #btn-en, #localeToggle, #btn-lang-toggle');
-    langBtns.forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var lang = btn.getAttribute('data-lang') || (btn.textContent || '').trim().toLowerCase();
-        if (lang.indexOf('en') !== -1) {
-          localStorage.setItem(SAVED_KEY, 'en');
-        } else if (lang.indexOf('ko') !== -1) {
-          localStorage.setItem(SAVED_KEY, 'ko');
-        }
-      });
-    });
-  });
-})();
-</script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
 
-  <!-- Navigation -->
-  <header>
-    <div class="container nav-wrapper">
-      <a href="#" class="brand">
-        <img src="assets/logo.png" alt="SQLON Logo">
-        SQLON
-        <span class="badge-v">v0.1.4</span>
+  <header class="site-header">
+    <nav class="nav container" aria-label="Primary navigation">
+      <a class="brand" href="#top" aria-label="SQLON home">
+        <img src="assets/logo.png" alt="">
+        <span>SQLON</span>
       </a>
-      <ul class="nav-links">
-        <li><a href="#features">Features</a></li>
-        <li><a href="#workflow">Architecture</a></li>
+      <ul class="nav-links" id="nav-links">
+        <li><a href="#capabilities">Capabilities</a></li>
+        <li><a href="#workflow">Workflow</a></li>
         <li><a href="#databases">Databases</a></li>
-        <li><a href="#docs">Documentation</a></li>
+        <li><a href="#docs">Docs</a></li>
         <li><a href="#faq">FAQ</a></li>
       </ul>
-      <a href="https://github.com/hkjang/sqlon"
-      <div class="lang-switch">
-        <a href="index.html" class="lang-btn">KO</a>
-        <a href="index_en.html" class="lang-btn active">EN</a>
-      </div> target="_blank" rel="noopener" class="btn-github">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-        GitHub
-      </a>
-    </div>
+      <div class="nav-actions">
+        <div class="language" aria-label="Language">
+          <a href="index.html" lang="ko">KO</a>
+          <a href="index_en.html" lang="en" aria-current="page">EN</a>
+        </div>
+        <a class="button button-secondary" href="https://github.com/hkjang/sqlon" target="_blank" rel="noopener">GitHub ↗</a>
+        <button class="mobile-toggle" id="mobile-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Open navigation">☰</button>
+      </div>
+    </nav>
   </header>
 
-  <!-- Hero Section -->
-  <section class="hero container">
-    <div class="hero-badge">
-      <span>🚀 Evidence-Driven Database Operations & MCP Platform</span>
-    </div>
-    <h1 class="hero-title">
-      Transform Natural Language into<br>
-      <span>Production-Safe SQL</span> & DBA Intelligence
-    </h1>
-    <p class="hero-desc">
-      SQLON empowers SREs, DBAs, and AI Agents with 104+ MCP tools, zero-hallucination join graphs, AST static policy guardrails, and native support for PostgreSQL, MySQL, MariaDB, and Oracle.
-    </p>
-
-    <div class="hero-ctas">
-      <a href="#docs" class="btn-primary">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-        Explore Documentation
-      </a>
-      <a href="https://github.com/hkjang/sqlon"
-      <div class="lang-switch">
-        <a href="index.html" class="lang-btn">KO</a>
-        <a href="index_en.html" class="lang-btn active">EN</a>
-      </div> target="_blank" rel="noopener" class="btn-secondary">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-        Star on GitHub
-      </a>
-    </div>
-
-    <!-- Terminal Showcase -->
-    <div class="terminal-container">
-      <div class="terminal-header">
-        <div class="terminal-dots">
-          <div class="dot dot-red"></div>
-          <div class="dot dot-yellow"></div>
-          <div class="dot dot-green"></div>
-        </div>
-        <div class="terminal-tabs">
-          <button class="tab-btn active" onclick="switchTab(0)">1. MCP Workflow</button>
-          <button class="tab-btn" onclick="switchTab(1)">2. Claude Config</button>
-          <button class="tab-btn" onclick="switchTab(2)">3. Docker Start</button>
-        </div>
-      </div>
-      <div class="terminal-body" id="tab-content-0">
-<pre><span class="token-comment">// Step 1: Request grounded SQL context & schema join-graph</span>
-<span class="token-fn">prepare_sql_context</span>({
-  question: <span class="token-string">"Show top 5 active customer orders with total spent"</span>
-});
-<span class="token-comment">// Output: status="ready", skeleton="SELECT c.name, SUM(o.total) ...", joins verified</span>
-
-<span class="token-comment">// Step 2: Enforce 33 static AST guardrails & read-only safety</span>
-<span class="token-fn">validate_sql</span>({ sql: <span class="token-string">"SELECT c.name, SUM(o.amount) FROM customers c JOIN orders o..."</span> });
-
-<span class="token-comment">// Step 3: Check execution plan & index cost</span>
-<span class="token-fn">explain_sql</span>({ sql: <span class="token-string">"SELECT c.name..."</span> });
-
-<span class="token-comment">// Step 4: Execute inside read-only sandbox</span>
-<span class="token-fn">run_sql_safely</span>({ sql: <span class="token-string">"SELECT c.name..."</span> });</pre>
-      </div>
-      <div class="terminal-body" id="tab-content-1" style="display:none;">
-<pre><span class="token-comment">// Claude Desktop / Cursor mcpServers config</span>
-{
-  <span class="token-string">"mcpServers"</span>: {
-    <span class="token-string">"sqlon"</span>: {
-      <span class="token-string">"command"</span>: <span class="token-string">"sqlon"</span>,
-      <span class="token-string">"args"</span>: [<span class="token-string">"-transport"</span>, <span class="token-string">"stdio"</span>],
-      <span class="token-string">"env"</span>: {
-        <span class="token-string">"DATASET_DIR"</span>: <span class="token-string">"./data/metadb"</span>
-      }
-    }
-  }
-}</pre>
-      </div>
-      <div class="terminal-body" id="tab-content-2" style="display:none;">
-<pre><span class="token-comment"># Build & Run pure-Go standard container (PostgreSQL + MySQL + MariaDB)</span>
-$ docker build -t sqlon/sqlon:v0.1.4 .
-$ docker run -p 6767:6767 sqlon/sqlon:v0.1.4
-
-<span class="token-comment"># Access Services</span>
-MCP Endpoint: <span class="token-string">http://127.0.0.1:6767/mcp</span>
-Web Admin:    <span class="token-string">http://127.0.0.1:6767/admin</span>
-Swagger UI:   <span class="token-string">http://127.0.0.1:6767/docs</span></pre>
-      </div>
-    </div>
-  </section>
-
-  <!-- Key Metrics -->
-  <section class="stats-section">
-    <div class="container stats-grid">
-      <div>
-        <div class="stat-number">104+</div>
-        <div class="stat-label">MCP Tools & Resources</div>
-      </div>
-      <div>
-        <div class="stat-number">0%</div>
-        <div class="stat-label">Schema Hallucination Rate</div>
-      </div>
-      <div>
-        <div class="stat-number">4 Engines</div>
-        <div class="stat-label">Postgres, MySQL, MariaDB, Oracle</div>
-      </div>
-      <div>
-        <div class="stat-number">33 Guardrails</div>
-        <div class="stat-label">Fail-Closed Static Policy Rules</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Features Grid -->
-  <section id="features" class="container">
-    <div class="section-header">
-      <h2 class="section-title">Engineered for Enterprise DBA & SRE Workflows</h2>
-      <p class="section-subtitle">SQLON bridges LLM intelligence with rigid database security, deterministic schema compilation, and operational change control.</p>
-    </div>
-
-    <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
-        </div>
-        <h3>MCP Native Ecosystem</h3>
-        <p>104+ tools, resources, and prompt templates exposed via stdio & HTTP transports. Plugs directly into Claude Desktop, Cursor IDE, VS Code, and custom AI agents.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-        </div>
-        <h3>Zero Schema Hallucination</h3>
-        <p>Compiles dataset JSON metadata into in-memory catalog graphs. Evaluates join paths, candidate column matches, and candidate ambiguity before any query is written.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-        </div>
-        <h3>Fail-Closed Guardrails</h3>
-        <p>Enforces 33 AST-level SQL validation rules, forced read-only transaction locks (`tx_read_only=1`), query cost evaluation (`EXPLAIN`), and PII data masking.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M21 19c0 1.66-4 3-9 3s-9-1.34-9-3"></path></svg>
-        </div>
-        <h3>Multi-DBMS Native Drivers</h3>
-        <p>Pure-Go execution engine for PostgreSQL, MySQL, and MariaDB without CGO. Specialized OCI driver module (`sqlon-oracle`) for enterprise Oracle databases.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
-        </div>
-        <h3>Approval-Gated Change Control</h3>
-        <p>Provides SREs with governed DDL/DML change request workflows, dry-run reviews, sign-off execution, and audit logging to satisfy compliance standards.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-        </div>
-        <h3>Fleet Observability & SRE</h3>
-        <p>Deep cluster inspection, active session diagnostics, deadlocks detection, index recommendation advisor, and OpenMetadata lineage synchronization.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Workflow Pipeline -->
-  <section id="workflow" class="container">
-    <div class="workflow-section">
-      <div class="section-header" style="margin-bottom:1.5rem;">
-        <h2 class="section-title">The Evidence-Driven NL2SQL Pipeline</h2>
-        <p class="section-subtitle">How SQLON guarantees safe, accurate SQL generation from user questions.</p>
-      </div>
-
-      <div class="pipeline-steps">
-        <div class="step-box">
-          <span class="step-num">STAGE 1</span>
-          <h4>Context Compilation</h4>
-          <p>Scans dataset schema graphs, resolves candidate table joins, and verifies filter parameters against catalog metadata.</p>
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="container hero-grid">
+        <div>
+          <p class="eyebrow">Open-source database operations platform</p>
+          <h1>Ground database AI in <em>evidence</em>, not guesses.</h1>
+          <p class="hero-copy">SQLON compiles your schema metadata into a searchable catalog and join graph, then gives AI agents a reviewable path from a question to validated, read-only SQL. It is built for DBAs, SREs, and teams operating across multiple database engines.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/hkjang/sqlon" target="_blank" rel="noopener">Explore on GitHub <span aria-hidden="true">↗</span></a>
+            <a class="button button-secondary" href="#quickstart">Run it locally <span aria-hidden="true">↓</span></a>
+          </div>
+          <div class="trust-row" aria-label="Project highlights">
+            <span>Apache-2.0</span>
+            <span>MCP over stdio &amp; HTTP</span>
+            <span>Pure-Go standard build</span>
+          </div>
         </div>
 
-        <div class="step-box">
-          <span class="step-num">STAGE 2</span>
-          <h4>Clarification Check</h4>
-          <p>If columns or filters are ambiguous, halts execution and presents specific questions back to the human operator.</p>
-        </div>
-
-        <div class="step-box">
-          <span class="step-num">STAGE 3</span>
-          <h4>Skeleton Filling</h4>
-          <p>Generates target SQL dialect strictly within pre-validated slot skeletons — eliminating invented table names.</p>
-        </div>
-
-        <div class="step-box">
-          <span class="step-num">STAGE 4</span>
-          <h4>AST Guardrail Check</h4>
-          <p>Validates SQL syntax against 33 security rules (rejecting unauthorized DDL/DML, cross-schema leaks, unsafe joins).</p>
-        </div>
-
-        <div class="step-box">
-          <span class="step-num">STAGE 5</span>
-          <h4>Sandbox Execution</h4>
-          <p>Executes query under explicit read-only transaction locks and streams clean JSON data with audit tracking.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Databases Matrix -->
-  <section id="databases" class="container">
-    <div class="section-header">
-      <h2 class="section-title">Supported Target Databases</h2>
-      <p class="section-subtitle">Pure-Go drivers, zero CGO, zero external binary dependencies.</p>
-    </div>
-
-    <div class="db-matrix">
-      <div class="db-card">
-        <div class="db-card-header">
-          <h3 class="db-title">PostgreSQL</h3>
-          <span class="tag-purego">Pure Go</span>
-        </div>
-        <ul>
-          <li>Driver: `pgx/v5`</li>
-          <li>Lock: `default_transaction_read_only=on`</li>
-          <li>Dialect: PostgreSQL (v12-v16)</li>
-          <li>Full DSN & Connection String support</li>
-        </ul>
-      </div>
-
-      <div class="db-card">
-        <div class="db-card-header">
-          <h3 class="db-title">MySQL 8.x</h3>
-          <span class="tag-purego">Pure Go</span>
-        </div>
-        <ul>
-          <li>Driver: `go-sql-driver/mysql`</li>
-          <li>Lock: `transaction_read_only=1`</li>
-          <li>Dialect: MySQL 8.x</li>
-          <li>Pure Go connection pooling</li>
-        </ul>
-      </div>
-
-      <div class="db-card">
-        <div class="db-card-header">
-          <h3 class="db-title">MariaDB 10.x / 11.x</h3>
-          <span class="tag-purego">Pure Go</span>
-        </div>
-        <ul>
-          <li>Driver: `go-sql-driver/mysql`</li>
-          <li>Lock: `tx_read_only=1`</li>
-          <li>Dialect: MariaDB</li>
-          <li>Zero CGO compilation</li>
-        </ul>
-      </div>
-
-      <div class="db-card">
-        <div class="db-card-header">
-          <h3 class="db-title">Oracle DB</h3>
-          <span class="tag-purego">OCI Plugin</span>
-        </div>
-        <ul>
-          <li>Driver: `godror` / OCI SDK</li>
-          <li>Runtime: `sqlon-oracle` build</li>
-          <li>Dialect: Oracle 19c / 21c</li>
-          <li>Enterprise capability contracts</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <!-- Docs Hub -->
-  <section id="docs" class="container">
-    <div class="section-header">
-      <h2 class="section-title">Comprehensive Documentation & Guides</h2>
-      <p class="section-subtitle">Download executive reports, developer guides, and administrator reference manuals.</p>
-    </div>
-
-    <div class="docs-hub">
-      <div class="doc-card">
-        <div class="doc-meta">
-          <h3>📖 User Guide</h3>
-          <p>Step-by-step instructions for NL2SQL workflows, MCP client integration, and query optimization.</p>
-        </div>
-        <div class="doc-links">
-          <a href="user_guide.pdf" target="_blank" class="btn-doc-link">PDF Manual</a>
-          <a href="user_guide.md" class="btn-doc-link">Markdown</a>
-        </div>
-      </div>
-
-      <div class="doc-card">
-        <div class="doc-meta">
-          <h3>🛡️ Administrator Guide</h3>
-          <p>Deployment topologies, security guardrails, dataset compilation, and multi-tenant access control.</p>
-        </div>
-        <div class="doc-links">
-          <a href="admin_guide.pdf" target="_blank" class="btn-doc-link">PDF Manual</a>
-          <a href="admin_guide.md" class="btn-doc-link">Markdown</a>
-        </div>
-      </div>
-
-      <div class="doc-card">
-        <div class="doc-meta">
-          <h3>📊 Executive Report</h3>
-          <p>Business architecture summary, ROI analysis, reliability guarantees, and compliance audit frameworks.</p>
-        </div>
-        <div class="doc-links">
-          <a href="executive_report.pdf" target="_blank" class="btn-doc-link">PDF Report</a>
-          <a href="executive_report.md" class="btn-doc-link">Markdown</a>
-        </div>
-      </div>
-
-      <div class="doc-card">
-        <div class="doc-meta">
-          <h3>⚡ MCP Tools Reference</h3>
-          <p>Full technical specification of all 104+ MCP tools, input schemas, resources, and prompt templates.</p>
-        </div>
-        <div class="doc-links">
-          <a href="mcp-tools-reference.md" class="btn-doc-link">Tools Reference</a>
-          <a href="rest-api.md" class="btn-doc-link">REST API Spec</a>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- FAQ Section (AEO & SEO optimized) -->
-  <section id="faq" class="container">
-    <div class="section-header">
-      <h2 class="section-title">Frequently Asked Questions</h2>
-      <p class="section-subtitle">Direct answers for SRE teams, DBAs, and Answer Engine AI crawlers.</p>
-    </div>
-
-    <div class="faq-section">
-      <div class="faq-item">
-        <button class="faq-question" onclick="toggleFaq(this)">What is SQLON and who is it built for?</button>
-        <div class="faq-answer">
-          SQLON is an evidence-driven AI database operations platform built for Database Administrators (DBAs), Site Reliability Engineers (SREs), and Enterprise AI application developers. It transforms natural language instructions into validated, secure SQL queries while providing fleet observation, performance profiling, and governed change control workflows.
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-question" onclick="toggleFaq(this)">How does SQLON prevent LLM schema hallucinations?</button>
-        <div class="faq-answer">
-          SQLON loads JSON dataset metadata into memory and compiles an explicit catalog, join-graph, and candidate column index. Before generating SQL, the `prepare_sql_context` engine creates a rigid SQL skeleton with pre-validated table joins. If a query contains ambiguous terms, SQLON enters a mandatory clarification state to prompt the user rather than guessing schema elements.
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-question" onclick="toggleFaq(this)">What is Model Context Protocol (MCP) and how does SQLON support it?</button>
-        <div class="faq-answer">
-          Model Context Protocol (MCP) is an open standard introduced by Anthropic that allows AI models to safely interact with external tools and datasets. SQLON implements standard MCP over both stdio (for local subprocesses) and HTTP (for microservices/gateways), providing 104+ tools, resources, and prompts for Claude Desktop, Cursor IDE, VS Code, and custom AI agents.
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-question" onclick="toggleFaq(this)">Is SQLON safe to run against production databases?</button>
-        <div class="faq-answer">
-          Yes. SQLON strictly enforces fail-closed guardrails. Read-only queries run under explicit engine transaction locks (`default_transaction_read_only=on` for Postgres, `transaction_read_only=1` for MySQL). State-modifying operations (DDL/DML) are protected by multi-step approval workflows, AST security validation against 33 rules, and audit logging.
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <button class="faq-question" onclick="toggleFaq(this)">What databases are supported out of the box?</button>
-        <div class="faq-answer">
-          SQLON standard binary supports PostgreSQL (v12-v16), MySQL (v8.x), and MariaDB (v10.x/v11.x) using pure-Go drivers with zero CGO dependencies. Oracle DB is supported through the specialized `sqlon-oracle` build which includes Oracle Call Interface (OCI) bindings.
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Footer -->
-  <footer>
-    <div class="container">
-      <div class="footer-content">
-        <div class="footer-brand">
-          <a href="#" class="brand">
-            <img src="assets/logo.png" alt="SQLON Logo">
-            SQLON
-          </a>
-          <p>The Evidence-Driven AI Database Operations Platform for DBAs, SREs, and Enterprise Systems.</p>
-        </div>
-
-        <div class="inquiry-box">
-          <div class="inquiry-icon">✉️</div>
-          <div class="inquiry-text">
-            <label>Business & Technical Inquiries</label>
-            <a href="mailto:gagagiga@naver.com" class="inquiry-email">gagagiga@naver.com</a>
+        <div class="console" aria-label="SQLON workflow preview">
+          <div class="console-bar">
+            <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+            <span class="console-label">sqlon / grounded-query</span>
+          </div>
+          <div class="console-body">
+            <div class="question"><span>question:</span> “Show the five customers with the highest paid order value this quarter.”</div>
+            <div class="flow-step">
+              <span class="flow-number">01</span>
+              <div><div class="flow-title">Compile context</div><div class="flow-detail">Tables, columns, metrics, join path</div></div>
+              <span class="status">ready</span>
+            </div>
+            <div class="flow-step">
+              <span class="flow-number">02</span>
+              <div><div class="flow-title">Fill the SQL skeleton</div><div class="flow-detail">Target dialect, grounded identifiers</div></div>
+              <span class="status">grounded</span>
+            </div>
+            <div class="flow-step">
+              <span class="flow-number">03</span>
+              <div><div class="flow-title">Validate &amp; explain</div><div class="flow-detail">Static policy and query plan</div></div>
+              <span class="status">passed</span>
+            </div>
+            <div class="flow-step">
+              <span class="flow-number">04</span>
+              <div><div class="flow-title">Run read-only</div><div class="flow-detail">Bounded result with audit context</div></div>
+              <span class="status">safe</span>
+            </div>
           </div>
         </div>
       </div>
+    </section>
 
-      <div class="footer-bottom">
-        <p>&copy; 2026 SQLON Project (hkjang/sqlon). Released under Apache-2.0 License. All rights reserved.</p>
+    <section class="proof" aria-label="Technical highlights">
+      <div class="container proof-grid">
+        <div class="proof-item"><span class="proof-value">104 MCP entries</span><span class="proof-label">Tools, resources, and prompts documented in the project</span></div>
+        <div class="proof-item"><span class="proof-value">33 guardrails</span><span class="proof-label">Static SQL policy rules in the validation catalog</span></div>
+        <div class="proof-item"><span class="proof-value">3 pure-Go targets</span><span class="proof-label">PostgreSQL, MySQL, and MariaDB in the standard build</span></div>
+        <div class="proof-item"><span class="proof-value">1 governed flow</span><span class="proof-label">Context, clarification, validation, plan, and execution</span></div>
+      </div>
+    </section>
+
+    <section class="section section-soft" id="capabilities">
+      <div class="container">
+        <header class="section-head">
+          <p class="kicker">What SQLON does</p>
+          <h2>One operational layer between AI and your databases.</h2>
+          <p class="section-lead">The system exposes the evidence and controls an agent needs without asking the model to invent schema details or bypass established operational checks.</p>
+        </header>
+        <div class="feature-grid">
+          <article class="card"><div class="card-mark">CTX</div><h3>Metadata-grounded context</h3><p>Compile datasets into an in-memory catalog, candidate index, join graph, metric registry, and dialect-aware prompt context.</p></article>
+          <article class="card"><div class="card-mark">ASK</div><h3>Explicit clarification</h3><p>When a table, column, metric, or filter is ambiguous, return a structured question instead of silently choosing an interpretation.</p></article>
+          <article class="card"><div class="card-mark">SQL</div><h3>Guarded SQL execution</h3><p>Validate SQL, inspect its execution plan, enforce engine-level read-only settings, and bound the returned result.</p></article>
+          <article class="card"><div class="card-mark">MCP</div><h3>MCP-native interfaces</h3><p>Connect local clients over stdio or expose Streamable HTTP for gateways and service deployments. REST and admin interfaces are included.</p></article>
+          <article class="card"><div class="card-mark">SRE</div><h3>Operations &amp; diagnosis</h3><p>Inspect connections, sessions, locks, query behavior, and database health through a consistent operations-oriented tool surface.</p></article>
+          <article class="card"><div class="card-mark">APR</div><h3>Governed changes</h3><p>Keep state-changing work separate from read-only analysis with review, dry-run, approval, and audit-oriented workflows.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="workflow">
+      <div class="container">
+        <header class="section-head">
+          <p class="kicker">Evidence-driven workflow</p>
+          <h2>A visible path from intent to execution.</h2>
+          <p class="section-lead">Each stage produces something the operator or calling agent can inspect before moving forward.</p>
+        </header>
+        <div class="pipeline">
+          <article class="stage"><h3>Resolve context</h3><p>Search the catalog for relevant tables, columns, metrics, filters, and verified relationships.</p></article>
+          <article class="stage"><h3>Clarify ambiguity</h3><p>Stop and ask focused questions when the available evidence does not support one clear interpretation.</p></article>
+          <article class="stage"><h3>Build SQL</h3><p>Fill a dialect-aware skeleton while keeping identifiers and joins tied to compiled metadata.</p></article>
+          <article class="stage"><h3>Validate &amp; explain</h3><p>Apply static policy checks and inspect the database execution plan before running the query.</p></article>
+          <article class="stage"><h3>Execute safely</h3><p>Run in a read-only transaction and return a bounded result with traceable operational context.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-soft" id="databases">
+      <div class="container">
+        <header class="section-head">
+          <p class="kicker">Database support</p>
+          <h2>One workflow, engine-aware behavior.</h2>
+          <p class="section-lead">The standard binary uses pure-Go drivers for three engines. Oracle support is intentionally delivered as a separate OCI-enabled build.</p>
+        </header>
+        <div class="database-grid">
+          <article class="database"><div class="database-top"><h3>PostgreSQL</h3><span class="tag">PURE GO</span></div><dl><div><dt>Driver</dt><dd>pgx/v5</dd></div><div><dt>Session</dt><dd>default_transaction_read_only=on</dd></div><div><dt>Build</dt><dd>Standard</dd></div></dl></article>
+          <article class="database"><div class="database-top"><h3>MySQL 8.x</h3><span class="tag">PURE GO</span></div><dl><div><dt>Driver</dt><dd>go-sql-driver/mysql</dd></div><div><dt>Session</dt><dd>transaction_read_only=1</dd></div><div><dt>Build</dt><dd>Standard</dd></div></dl></article>
+          <article class="database"><div class="database-top"><h3>MariaDB</h3><span class="tag">PURE GO</span></div><dl><div><dt>Driver</dt><dd>go-sql-driver/mysql</dd></div><div><dt>Session</dt><dd>tx_read_only=1</dd></div><div><dt>Build</dt><dd>Standard</dd></div></dl></article>
+          <article class="database"><div class="database-top"><h3>Oracle</h3><span class="tag plugin">OCI BUILD</span></div><dl><div><dt>Driver</dt><dd>godror / OCI</dd></div><div><dt>Policy</dt><dd>Capability contracts</dd></div><div><dt>Build</dt><dd>sqlon-oracle</dd></div></dl></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="quickstart">
+      <div class="container quickstart-grid">
+        <div class="quickstart-copy">
+          <p class="kicker">Quick start</p>
+          <h2>Start locally. Connect the client you already use.</h2>
+          <p>Run SQLON in HTTP mode for the MCP endpoint, admin console, Swagger UI, and health check. Use stdio mode when an MCP desktop client should launch SQLON as a local process.</p>
+          <a class="button button-secondary" href="https://github.com/hkjang/sqlon#quick-start" target="_blank" rel="noopener">Read the setup guide ↗</a>
+        </div>
+        <div class="code-shell">
+          <div class="code-head"><span>terminal</span><button class="copy-button" type="button" data-copy="quick-code">Copy</button></div>
+          <pre id="quick-code"><span class="comment"># HTTP: MCP + admin + API docs</span>
+<span class="cmd">go run</span> ./cmd/sqlon -transport http -addr 127.0.0.1:6767
+
+<span class="comment"># Local MCP subprocess</span>
+<span class="cmd">go run</span> ./cmd/sqlon -transport stdio
+
+<span class="comment"># Service endpoints</span>
+MCP     http://127.0.0.1:6767/mcp
+Admin   http://127.0.0.1:6767/admin
+Swagger http://127.0.0.1:6767/docs
+Health  http://127.0.0.1:6767/healthz</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-soft" id="docs">
+      <div class="container">
+        <header class="section-head">
+          <p class="kicker">Documentation</p>
+          <h2>Go from evaluation to operation.</h2>
+          <p class="section-lead">Use the project README for the current implementation details, then open the role-specific guides for deeper workflows.</p>
+        </header>
+        <div class="docs-grid">
+          <a class="doc" href="https://github.com/hkjang/sqlon#readme" target="_blank" rel="noopener"><small>Start here</small><h3>Project README</h3><p>Current capabilities, supported engines, MCP interfaces, builds, and operational notes.</p><span>Open on GitHub ↗</span></a>
+          <a class="doc" href="reports/user_guide.pdf" target="_blank" rel="noopener"><small>For operators</small><h3>User guide</h3><p>SQL Lab, natural-language workflows, MCP clients, and safe query execution.</p><span>Open PDF ↗</span></a>
+          <a class="doc" href="reports/admin_guide.pdf" target="_blank" rel="noopener"><small>For platform teams</small><h3>Administrator guide</h3><p>Deployment, policy configuration, datasets, access control, and maintenance.</p><span>Open PDF ↗</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="faq">
+      <div class="container faq">
+        <header class="section-head">
+          <p class="kicker">FAQ</p>
+          <h2>The short version.</h2>
+          <p class="section-lead">Practical answers for teams deciding where SQLON fits.</p>
+        </header>
+        <div class="faq-list">
+          <details><summary>Does SQLON generate SQL entirely on its own?</summary><p>SQLON prepares grounded context, join paths, a SQL skeleton, and validation tools for an AI client or application. The recommended flow keeps each decision inspectable and asks for clarification when the metadata is ambiguous.</p></details>
+          <details><summary>Can it run directly against production databases?</summary><p>SQLON includes read-only transaction settings, SQL policy validation, plan inspection, and bounded execution. Those controls reduce risk, but your team still owns database credentials, network access, role design, policy configuration, and rollout testing.</p></details>
+          <details><summary>Which database engines require CGO?</summary><p>The standard PostgreSQL, MySQL, and MariaDB build uses pure-Go drivers. Oracle support is packaged separately because the godror runtime depends on Oracle OCI.</p></details>
+          <details><summary>How do AI clients connect?</summary><p>Use stdio when a desktop client launches SQLON locally, or Streamable HTTP at <code>/mcp</code> when SQLON runs as a service. REST APIs and a web administration interface are available in HTTP mode.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="final-cta">
+      <div class="container cta-panel">
+        <h2>Give your database agent better evidence and clearer boundaries.</h2>
+        <p>Explore the source, run the included datasets, and evaluate the complete context-to-execution workflow against your own operational requirements.</p>
+        <a class="button button-primary" href="https://github.com/hkjang/sqlon" target="_blank" rel="noopener">View SQLON on GitHub ↗</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-row">
+      <span>© 2026 SQLON Project · Apache-2.0</span>
+      <div class="footer-links">
+        <a href="mailto:gagagiga@naver.com">Contact</a>
+        <a href="https://github.com/hkjang/sqlon" target="_blank" rel="noopener">GitHub</a>
+        <a href="index.html" lang="ko">한국어</a>
       </div>
     </div>
   </footer>
 
-  <!-- Vanilla JS Interactive Logic -->
   <script>
-    function switchTab(index) {
-      document.querySelectorAll('.tab-btn').forEach((btn, idx) => {
-        if (idx === index) btn.classList.add('active');
-        else btn.classList.remove('active');
-      });
-      document.querySelectorAll('.terminal-body').forEach((el, idx) => {
-        if (idx === index) el.style.display = 'block';
-        else el.style.display = 'none';
-      });
-    }
+    const toggle = document.getElementById('mobile-toggle');
+    const nav = document.getElementById('nav-links');
+    toggle.addEventListener('click', () => {
+      const isOpen = nav.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', String(isOpen));
+      toggle.setAttribute('aria-label', isOpen ? 'Close navigation' : 'Open navigation');
+    });
+    nav.querySelectorAll('a').forEach(link => link.addEventListener('click', () => {
+      nav.classList.remove('open');
+      toggle.setAttribute('aria-expanded', 'false');
+    }));
 
-    function toggleFaq(button) {
-      const faqItem = button.parentElement;
-      faqItem.classList.toggle('active');
-    }
+    document.querySelectorAll('[data-copy]').forEach(button => {
+      button.addEventListener('click', async () => {
+        const target = document.getElementById(button.dataset.copy);
+        try {
+          await navigator.clipboard.writeText(target.innerText);
+          button.textContent = 'Copied';
+          window.setTimeout(() => { button.textContent = 'Copy'; }, 1600);
+        } catch (_) {
+          button.textContent = 'Select text';
+        }
+      });
+    });
   </script>
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const mobileBtn = document.getElementById('mobile-menu-btn');
-    const navLinks = document.querySelector('.nav-links') || document.querySelector('.nav-menu') || document.querySelector('.nav-list');
-    if (mobileBtn && navLinks) {
-      mobileBtn.addEventListener('click', () => {
-        navLinks.classList.toggle('active');
-      });
-      navLinks.querySelectorAll('a').forEach(link => {
-        link.addEventListener('click', () => navLinks.classList.remove('active'));
-      });
-    }
-  });
-</script>
-<script>document.addEventListener("DOMContentLoaded", function() { if(typeof setLanguage === "function") setLanguage("en"); });</script>
 </body>
 </html>
