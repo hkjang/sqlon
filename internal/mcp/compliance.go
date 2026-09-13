@@ -28,19 +28,19 @@ type complianceControl struct {
 
 // complianceInputs is the extracted signal set the pure evaluator reasons over.
 type complianceInputs struct {
-	SecurityStatus       string // ok|warning|critical|permission_denied|unsupported|...
-	LoginSuperusers      int    // critical superuser findings
-	ExpiredAccounts      int
-	WildcardHosts        int
-	DangerousPrivileges  int
-	ConfigBaselineSet    bool
-	ConfigDrifted        int
-	ConfigStatus         string
-	ArchivingEnabled     bool
-	BackupStatusKnown    bool
-	PlaintextSecret      bool
-	AuditChainActive     bool
-	TLSObserved          string // "on"|"off"|"unknown"
+	SecurityStatus      string // ok|warning|critical|permission_denied|unsupported|...
+	LoginSuperusers     int    // critical superuser findings
+	ExpiredAccounts     int
+	WildcardHosts       int
+	DangerousPrivileges int
+	ConfigBaselineSet   bool
+	ConfigDrifted       int
+	ConfigStatus        string
+	ArchivingEnabled    bool
+	BackupStatusKnown   bool
+	PlaintextSecret     bool
+	AuditChainActive    bool
+	TLSObserved         string // "on"|"off"|"unknown"
 }
 
 func ctrlPass(id, title string, fw map[string]string, evidence ...string) complianceControl {
