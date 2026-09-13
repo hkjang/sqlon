@@ -38,6 +38,40 @@ var piiPatterns = []piiPattern{
 	{"성명/이름", []string{"first_name", "last_name", "full_name", "cust_name", "user_name", "성명", "고객명", "이름", "홍길동"}},
 }
 
+// needleMatches decides whether a sensitive-data needle occurs in the column
+// text. Short ASCII needles ("pan", "dob", "ssn", "card") must match a whole
+// token — a naive substring match would flag "japan_code" as a credit-card
+// column and "adobe_flag" as a birth date, and that noise makes the whole
+// report untrustworthy. Longer needles, needles containing "_" (already
+// boundary-anchored), and Korean needles keep substring matching.
+func needleMatches(hay string, tokens map[string]bool, needle string) bool {
+	if strings.Contains(needle, "_") || len(needle) >= 5 || !isASCIILower(needle) {
+		return strings.Contains(hay, needle)
+	}
+	return tokens[needle]
+}
+
+func isASCIILower(s string) bool {
+	for _, r := range s {
+		if r < 'a' || r > 'z' {
+			return false
+		}
+	}
+	return s != ""
+}
+
+// tokenize splits column text into lower-cased alphanumeric tokens so short
+// needles can be matched on whole-word boundaries.
+func tokenize(s string) map[string]bool {
+	out := map[string]bool{}
+	for _, tok := range strings.FieldsFunc(s, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9')
+	}) {
+		out[tok] = true
+	}
+	return out
+}
+
 // piiHeuristic reports whether a column looks like personal data and why. It
 // checks the physical name, logical name, semantic type, and synonyms.
 func piiHeuristic(col *catalog.Column) (bool, string) {
@@ -50,9 +84,10 @@ func piiHeuristic(col *catalog.Column) (bool, string) {
 	if strings.Contains(strings.ToLower(col.SemanticType), "pii") {
 		return true, "semantic_type=PII"
 	}
+	tokens := tokenize(hay)
 	for _, p := range piiPatterns {
 		for _, n := range p.needles {
-			if strings.Contains(hay, n) {
+			if needleMatches(hay, tokens, n) {
 				return true, p.category
 			}
 		}

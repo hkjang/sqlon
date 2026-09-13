@@ -32,6 +32,29 @@ func TestPIIHeuristicMatchesKoreanAndEnglish(t *testing.T) {
 	}
 }
 
+func TestPIIHeuristicRejectsSubstringFalsePositives(t *testing.T) {
+	// Short needles (pan/dob/ssn/card/iban/addr) must match whole tokens only.
+	// A naive substring match flagged japan_code as a credit-card column and
+	// adobe_flag as a birth date, which made the report untrustworthy.
+	for _, name := range []string{
+		"japan_code", "adobe_flag", "company_panel", "expand_ratio",
+		"spandex_qty", "discard_flag", "telecom_type", "lessness_score",
+	} {
+		if got, reason := piiHeuristic(&catalog.Column{Name: name}); got {
+			t.Errorf("%q must not be flagged as PII (matched %s)", name, reason)
+		}
+	}
+}
+
+func TestPIIHeuristicStillMatchesRealShortNames(t *testing.T) {
+	// The boundary fix must not lose genuine short-token matches.
+	for _, name := range []string{"pan", "dob", "ssn", "card_no", "cust_addr", "iban", "rrn"} {
+		if got, _ := piiHeuristic(&catalog.Column{Name: name}); !got {
+			t.Errorf("%q should still be detected as PII", name)
+		}
+	}
+}
+
 func TestPIIExposureSeparatesTaggedFromUntagged(t *testing.T) {
 	cat := &catalog.Catalog{Tables: map[string]*catalog.Table{
 		"public.customer": {FQN: "public.customer", Columns: []*catalog.Column{

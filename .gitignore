@@ -20,3 +20,11 @@ data/*/profiles/
 output/
 .gitframe/
 .claude/
+
+# 실행 중 만들어지는 로컬 데이터 — data/<프로필>/ 아래 몇몇은 이미 무시하고
+# 있었지만 프로필 디렉터리 자체와 백업은 빠져 있었다.
+/data/backups/
+/data/sqlon/
+
+# 데모 서버를 띄우는 로컬 도우미 (경로가 이 기계에 묶여 있다)
+/scripts/start_demo_servers.sh
