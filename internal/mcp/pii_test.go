@@ -59,10 +59,10 @@ func TestPIIExposureSeparatesTaggedFromUntagged(t *testing.T) {
 	cat := &catalog.Catalog{Tables: map[string]*catalog.Table{
 		"public.customer": {FQN: "public.customer", Columns: []*catalog.Column{
 			{Name: "id"},
-			{Name: "ssn", PII: true},                 // tagged → protected
-			{Name: "email"},                          // heuristic, untagged → exposed
-			{Name: "mobile_phone"},                   // heuristic, untagged → exposed
-			{Name: "created_at"},                     // not PII
+			{Name: "ssn", PII: true}, // tagged → protected
+			{Name: "email"},          // heuristic, untagged → exposed
+			{Name: "mobile_phone"},   // heuristic, untagged → exposed
+			{Name: "created_at"},     // not PII
 		}},
 	}}
 	rep := piiExposureReport(cat, "active")
