@@ -80,6 +80,18 @@
     settings: '## 서버 설정 (관리자)\n\n마스터 토큰·허용 Origin·Keycloak SSO를 메타 DB에 저장하고 즉시 적용합니다.',
   };
 
+  // Silent SSO (prompt=none) loop guards, shared with login.html. A deliberate
+  // logout suppresses auto-login so it does not look broken; the marks are
+  // lifted as soon as a session exists again. sessionStorage may throw in
+  // private modes — login.html reads a throw as "already attempted".
+  var SSO_ATTEMPTED = 'sqlon.sso.silentAttempted', SSO_SIGNED_OUT = 'sqlon.sso.signedOut';
+  function markSignedOut() {
+    try { sessionStorage.setItem(SSO_SIGNED_OUT, 'true'); sessionStorage.setItem(SSO_ATTEMPTED, 'true'); } catch (e) { /* fails closed */ }
+  }
+  function clearSilentSsoState() {
+    try { sessionStorage.removeItem(SSO_SIGNED_OUT); sessionStorage.removeItem(SSO_ATTEMPTED); } catch (e) { /* nothing to clear */ }
+  }
+
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
 
@@ -326,7 +338,7 @@
       item.onclick = function () {
         wrap.classList.remove('open');
         var act = item.getAttribute('data-act');
-        if (act === 'logout') { fetch('/auth/logout', { method: 'POST' }).then(function () { location.href = '/auth/login'; }); }
+        if (act === 'logout') { markSignedOut(); fetch('/auth/logout', { method: 'POST' }).then(function () { location.href = '/auth/login'; }); }
         else if (act === 'keys') { location.href = '/admin/keys'; }
         else if (act === 'profile') { openProfileModal(u); }
         else if (act === 'password') { openPasswordModal(); }
@@ -428,9 +440,11 @@
       var me = { auth_enabled: false };
       try { me = await (await fetch('/auth/me')).json(); } catch (e) { /* standalone fallback */ }
       if (me.auth_enabled && !me.authenticated) {
-        location.href = '/auth/login?next=' + encodeURIComponent(location.pathname);
+        // path + query so a silent SSO round trip lands back on the exact deep link
+        location.href = '/auth/login?next=' + encodeURIComponent(location.pathname + location.search);
         return;
       }
+      if (me.auth_enabled && me.authenticated) clearSilentSsoState(); // session exists again → lift suppression
       window.AUTH = me.auth_enabled && me.authenticated ? me : null;
       buildSidebar(me);
       buildHelp();

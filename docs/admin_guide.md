@@ -167,6 +167,31 @@ GRANT SELECT ANY TABLE TO sqlon_ro;
 
 ---
 
+### 3.4 Keycloak SSO 와 자동 로그인 (`auto_login`)
+메타 DB(`-meta-db`)를 켠 설치에서는 Keycloak(OIDC) 로그인을 붙일 수 있습니다. 네 값이 모두 있어야 SSO 버튼이 나타납니다.
+
+| 설정 키 (`/admin/settings`) | 환경 변수 / 플래그 | 설명 |
+|---|---|---|
+| `oidc_issuer` | `SQLON_OIDC_ISSUER` / `-oidc-issuer` | 예: `https://kc.example.com/realms/myrealm` |
+| `oidc_client_id` | `SQLON_OIDC_CLIENT_ID` / `-oidc-client-id` | confidential client ID |
+| `oidc_client_secret` | `SQLON_OIDC_CLIENT_SECRET` / `-oidc-client-secret` | client secret |
+| `oidc_redirect_url` | `SQLON_OIDC_REDIRECT_URL` / `-oidc-redirect-url` | 예: `https://host:6767/auth/sso/callback` |
+| `oidc_auto_login` | `SQLON_OIDC_AUTO_LOGIN` / `-oidc-auto-login` | `true` 면 조용한 자동 로그인. **기본 `false`** |
+
+`/admin/settings` 에 저장한 값은 재기동 없이 즉시 적용되며 환경 변수보다 우선합니다.
+
+**자동 로그인(`auto_login`) 동작**
+
+* Keycloak 에 이미 로그인한 사용자가 콘솔을 열면 로그인 화면을 거치지 않고 바로 본 화면으로 들어갑니다. 로그인 화면은 먼저 OIDC `prompt=none`(화면을 그리지 않고 기존 세션으로만 답하라는 요청)으로 Keycloak 에 다녀오고, 세션이 있으면 그대로 로그인됩니다.
+* Keycloak 세션이 없으면 Keycloak 은 `login_required` 로 답합니다. 이는 오류가 아니라 평범한 대답이며, 콘솔은 `/auth/login?sso=none` 로 돌아와 일반 로그인 화면을 보여 줍니다.
+* 무한 리다이렉트 방지: 조용한 시도는 **브라우저 탭 세션당 한 번**만 하고(`sessionStorage`), 사용자가 **직접 로그아웃한 뒤**에는 시도하지 않으며(다시 로그인하면 풀림), 주소에 `?sso=none` 이 붙어 있으면 시도하지 않습니다. 사생활 보호 모드처럼 브라우저 저장소를 읽을 수 없으면 "이미 시도했다"로 간주합니다.
+* 깊은 링크(예: `/admin/db?profile=p1`)로 들어온 사용자는 조용히 로그인한 뒤 그 주소로 돌아갑니다. 돌아갈 주소는 `/` 로 시작하는 같은 출처의 경로만 허용됩니다.
+* 숨은 iframe 이 아니라 최상위 페이지 이동을 쓰므로 서드파티 쿠키가 막힌 브라우저에서도 동작하고, Keycloak 의 프레임 허용 설정이 필요 없습니다.
+* `auto_login` 이 꺼져 있으면(기본) 주소에 `?prompt=none` 을 붙여 호출해도 서버가 평범한 로그인으로 바꿉니다. 자동 로그인은 관리자 설정으로만 켜집니다.
+* REST API·MCP·`/healthz` 요청에는 영향이 없습니다. 브라우저 페이지 이동에만 해당합니다.
+
+---
+
 ## 4. 메타데이터 동기화 및 관측성(Observability)
 
 ### 4.1 스키마 메타데이터 자동 동기화 (`metasync`)

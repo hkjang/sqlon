@@ -559,7 +559,8 @@ sqlon -transport http -addr 0.0.0.0:6767 \
 ```
 
 - **로그인**: 로컬 계정(bcrypt) + 세션 쿠키, 또는 Keycloak **SSO(OIDC)**
-  (`-oidc-issuer/-oidc-client-id/-oidc-client-secret/-oidc-redirect-url`)
+  (`-oidc-issuer/-oidc-client-id/-oidc-client-secret/-oidc-redirect-url`);
+  `-oidc-auto-login`(기본 꺼짐)을 켜면 Keycloak 세션이 있는 사용자는 로그인 화면 없이 바로 들어옵니다(`prompt=none`, [관리자 가이드 3.4](docs/admin_guide.md))
 - **역할**: `admin`(전권) / `user`. 관리자는 사용자·데이터셋·전체 프로파일·
   전체 키 관리
 - **MCP 키**: `/mcp` 접근용 `ssk_...` 키를 발급·회전·폐기(`/admin/keys`).

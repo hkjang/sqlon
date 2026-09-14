@@ -12,13 +12,14 @@ import (
 
 // Known setting keys.
 const (
-	SetAdminToken   = "admin_token"    // secret
-	SetOIDCIssuer   = "oidc_issuer"    //
-	SetOIDCClientID = "oidc_client_id" //
-	SetOIDCSecret   = "oidc_client_secret"
-	SetOIDCRedirect = "oidc_redirect_url"
-	SetAllowOrigins = "allow_origins"     // comma-separated
-	SetCacheTTL     = "cache_ttl_seconds" // result cache lifetime; 0 disables
+	SetAdminToken    = "admin_token"    // secret
+	SetOIDCIssuer    = "oidc_issuer"    //
+	SetOIDCClientID  = "oidc_client_id" //
+	SetOIDCSecret    = "oidc_client_secret"
+	SetOIDCRedirect  = "oidc_redirect_url"
+	SetOIDCAutoLogin = "oidc_auto_login"   // "true" → prompt=none silent sign-in; default off
+	SetAllowOrigins  = "allow_origins"     // comma-separated
+	SetCacheTTL      = "cache_ttl_seconds" // result cache lifetime; 0 disables
 )
 
 // SettingDef describes a manageable setting for the admin UI.
@@ -42,6 +43,8 @@ var SettingDefs = []SettingDef{
 	{Key: SetOIDCSecret, Label: "OIDC Client Secret", Secret: true, Group: "Keycloak SSO", Help: ""},
 	{Key: SetOIDCRedirect, Label: "OIDC Redirect URL", Group: "Keycloak SSO",
 		Help: "예: https://host:6767/auth/sso/callback"},
+	{Key: SetOIDCAutoLogin, Label: "OIDC 자동 로그인(auto_login)", Group: "Keycloak SSO",
+		Help: "true 로 설정하면 Keycloak 세션이 있는 사용자는 로그인 화면 없이 바로 들어옵니다(prompt=none). 기본 false."},
 	{Key: SetCacheTTL, Label: "쿼리 결과 캐시 TTL(초)", Group: "성능",
 		Help: "동일 (프로파일, SQL, max_rows) 결과를 재사용하는 시간. 0=캐시 비활성. 기본 60."},
 }
@@ -60,6 +63,17 @@ func isSecretSetting(key string) bool {
 		if d.Key == key {
 			return d.Secret
 		}
+	}
+	return false
+}
+
+// SettingEnabled parses a boolean-ish setting value. Anything other than an
+// explicit affirmative reads as off, so a blank or mistyped value never turns
+// a feature on.
+func SettingEnabled(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
 	}
 	return false
 }

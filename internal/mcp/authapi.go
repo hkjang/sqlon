@@ -769,6 +769,9 @@ func (s *Server) EnableMeta(svc *meta.Service, oidc *OIDCProvider) {
 		s.bootDefaults[meta.SetOIDCClientID] = oidc.ClientID
 		s.bootDefaults[meta.SetOIDCSecret] = oidc.ClientSecret
 		s.bootDefaults[meta.SetOIDCRedirect] = oidc.RedirectURL
+		if oidc.AutoLogin {
+			s.bootDefaults[meta.SetOIDCAutoLogin] = "true"
+		}
 	}
 }
 
@@ -801,7 +804,10 @@ func (s *Server) ApplySettings(ctx context.Context) error {
 	// rebuild OIDC provider when all four values are present, else disable
 	iss, cid, sec, red := eff[meta.SetOIDCIssuer], eff[meta.SetOIDCClientID], eff[meta.SetOIDCSecret], eff[meta.SetOIDCRedirect]
 	if iss != "" && cid != "" && sec != "" && red != "" {
-		s.OIDC = &OIDCProvider{Issuer: iss, ClientID: cid, ClientSecret: sec, RedirectURL: red}
+		// auto_login defaults to off: only an explicit affirmative enables the
+		// silent prompt=none path.
+		s.OIDC = &OIDCProvider{Issuer: iss, ClientID: cid, ClientSecret: sec, RedirectURL: red,
+			AutoLogin: meta.SettingEnabled(eff[meta.SetOIDCAutoLogin])}
 	} else {
 		s.OIDC = nil
 	}
