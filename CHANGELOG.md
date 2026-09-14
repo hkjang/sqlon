@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## v0.1.5 — 2026-09-14
+
+- PII 노출 리포트(`get_pii_exposure`)의 짧은 ASCII 단서(`pan`·`dob`·`ssn`·
+  `card` 등 네 글자 이하)를 부분 문자열이 아닌 낱말 경계로 대조해
+  `japan_code`가 신용카드로, `adobe_flag`가 생년월일로 잡히던 오탐을
+  제거했습니다. 밑줄이 포함된 단서, 다섯 글자 이상 단서, 한글 단서는 기존
+  부분 문자열 대조를 유지하며 `pan`·`dob`·`ssn`·`card_no`·`cust_addr`·
+  `iban`·`rrn`은 그대로 탐지됩니다.
+- 실행 중 생기는 로컬 데이터(`data/backups`, `data/sqlon`)와 로컬 데모
+  스크립트를 `.gitignore`에 추가했습니다.
+- GitHub Pages 랜딩 페이지에 한국어 기본·영어 전환, 브라우저 언어 자동
+  감지, SEO/AEO 메타데이터와 Schema.org JSON-LD, 모바일 반응형 레이아웃,
+  GitHub Sponsor 버튼을 추가했습니다.
+
 ## v0.1.0 — 2026-07-20
 
 - 4개 엔진의 실제 누적 워크로드·대기·Top SQL·용량 통계를 읽기 전용 Provider로
