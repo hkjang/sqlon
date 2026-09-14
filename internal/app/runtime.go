@@ -39,6 +39,7 @@ type config struct {
 	adminToken, feedbackTenant, metaDSN                string
 	bootstrapAdmin                                     string
 	oidcIssuer, oidcClientID, oidcSecret, oidcRedirect string
+	oidcAutoLogin                                      bool
 	syncSource, digestWebhook                          string
 	syncInterval                                       time.Duration
 	observeInterval                                    time.Duration
@@ -123,7 +124,7 @@ func (rt Runtime) Run(ctx context.Context, args []string) error {
 	if metaSvc != nil {
 		var oidc *mcp.OIDCProvider
 		if cfg.oidcIssuer != "" && cfg.oidcClientID != "" && cfg.oidcSecret != "" && cfg.oidcRedirect != "" {
-			oidc = &mcp.OIDCProvider{Issuer: cfg.oidcIssuer, ClientID: cfg.oidcClientID, ClientSecret: cfg.oidcSecret, RedirectURL: cfg.oidcRedirect}
+			oidc = &mcp.OIDCProvider{Issuer: cfg.oidcIssuer, ClientID: cfg.oidcClientID, ClientSecret: cfg.oidcSecret, RedirectURL: cfg.oidcRedirect, AutoLogin: cfg.oidcAutoLogin}
 		}
 		srv.EnableMeta(metaSvc, oidc)
 		if err := srv.ApplySettings(ctx); err != nil {
@@ -184,6 +185,7 @@ func (rt Runtime) parse(args []string) (config, error) {
 	fs.StringVar(&c.oidcClientID, "oidc-client-id", rt.env("SQLON_OIDC_CLIENT_ID", "JAMYPG_OIDC_CLIENT_ID"), "OIDC client id")
 	fs.StringVar(&c.oidcSecret, "oidc-client-secret", rt.env("SQLON_OIDC_CLIENT_SECRET", "JAMYPG_OIDC_CLIENT_SECRET"), "OIDC client secret")
 	fs.StringVar(&c.oidcRedirect, "oidc-redirect-url", rt.env("SQLON_OIDC_REDIRECT_URL", "JAMYPG_OIDC_REDIRECT_URL"), "OIDC redirect URL")
+	fs.BoolVar(&c.oidcAutoLogin, "oidc-auto-login", meta.SettingEnabled(rt.env("SQLON_OIDC_AUTO_LOGIN", "JAMYPG_OIDC_AUTO_LOGIN")), "Sign in silently (prompt=none) when the OIDC provider already has a session")
 	fs.StringVar(&c.syncSource, "sync-source", rt.env("SQLON_SYNC_SOURCE", "JAMYPG_SYNC_SOURCE"), "Metadata sync profile")
 	fs.DurationVar(&c.syncInterval, "sync-interval", 0, "Metadata sync interval")
 	fs.DurationVar(&c.observeInterval, "observe-interval", observeInterval, "Workload/capacity collection interval (0 disables)")

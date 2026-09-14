@@ -216,11 +216,17 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	u, err := s.authenticate(r)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"auth_enabled": true, "authenticated": false,
-			"version": Version, "sso_enabled": s.OIDC != nil})
+			"version": Version, "sso_enabled": s.OIDC != nil, "sso_auto_login": s.ssoAutoLogin()})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"auth_enabled": true, "authenticated": true,
-		"version": Version, "user": u, "sso_enabled": s.OIDC != nil})
+		"version": Version, "user": u, "sso_enabled": s.OIDC != nil, "sso_auto_login": s.ssoAutoLogin()})
+}
+
+// ssoAutoLogin is published on /auth/me so the login page knows whether to
+// try a silent sign-in before rendering the form.
+func (s *Server) ssoAutoLogin() bool {
+	return s.OIDC != nil && s.OIDC.AutoLogin
 }
 
 // handleUpdateProfile lets a logged-in local user edit their own display name
@@ -374,7 +380,8 @@ func (s *Server) guard(next http.HandlerFunc, adminOnly bool) http.HandlerFunc {
 				u, _ = s.Meta.Authenticate(r.Context(), token)
 			}
 			if u == nil {
-				http.Redirect(w, r, "/auth/login?next="+url.QueryEscape(r.URL.Path), http.StatusFound)
+				// path + query so a (silent) SSO round trip returns to the deep link
+				http.Redirect(w, r, "/auth/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
 				return
 			}
 			if adminOnly && !u.IsAdmin() {
@@ -409,6 +416,11 @@ type OIDCProvider struct {
 	ClientID     string
 	ClientSecret string
 	RedirectURL  string // e.g. https://host:6767/auth/sso/callback
+	// AutoLogin lets the browser sign a visitor in silently (prompt=none) when
+	// the provider still holds a session. Off by default; the server refuses a
+	// silent attempt unless this is set, so the redirect surface stays tied to
+	// the administrator setting rather than to whatever a URL carries.
+	AutoLogin bool
 
 	mu   sync.Mutex
 	disc *oidcDiscovery
@@ -476,6 +488,24 @@ func (s *Server) handleSSOLogin(w http.ResponseWriter, r *http.Request) {
 	state := hex.EncodeToString(b[:])
 	http.SetCookie(w, &http.Cookie{Name: "sqlon_oauth_state", Value: state, Path: "/auth/sso",
 		MaxAge: 300, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: requestIsHTTPS(r)})
+	// prompt=none asks the provider to answer from an existing session only. It
+	// never renders UI: either a code comes straight back, or login_required
+	// does. An unrequested silent attempt (auto_login off) is quietly downgraded
+	// to an ordinary login so a crafted URL cannot change the flow.
+	silent := r.URL.Query().Get("prompt") == "none" && s.OIDC.AutoLogin
+	returnTo := r.URL.Query().Get("return_to")
+	if !safeReturnTo(returnTo) {
+		returnTo = ""
+	}
+	// The callback needs to know whether this leg was silent (to route a
+	// refusal to the login page instead of an error) and where to land after
+	// success; both ride in a short-lived cookie next to the state.
+	ctxVals := url.Values{"return_to": {returnTo}}
+	if silent {
+		ctxVals.Set("silent", "1")
+	}
+	http.SetCookie(w, &http.Cookie{Name: oauthCtxCookie, Value: ctxVals.Encode(), Path: "/auth/sso",
+		MaxAge: 300, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: requestIsHTTPS(r)})
 	q := url.Values{
 		"response_type": {"code"},
 		"client_id":     {s.OIDC.ClientID},
@@ -483,15 +513,71 @@ func (s *Server) handleSSOLogin(w http.ResponseWriter, r *http.Request) {
 		"scope":         {"openid profile email"},
 		"state":         {state},
 	}
+	if silent {
+		q.Set("prompt", "none")
+	}
 	http.Redirect(w, r, d.AuthorizationEndpoint+"?"+q.Encode(), http.StatusFound)
 }
+
+// oauthCtxCookie carries the silent flag and return_to across the provider
+// round trip. It is scoped and short-lived like the state cookie.
+const oauthCtxCookie = "sqlon_oauth_ctx"
+
+// safeReturnTo accepts only same-origin relative paths: a single leading
+// slash, never "//" (protocol-relative) or an absolute URL, so the login flow
+// cannot be used as an open redirect.
+func safeReturnTo(v string) bool {
+	if v == "" || !strings.HasPrefix(v, "/") || strings.HasPrefix(v, "//") || strings.ContainsAny(v, "\r\n\\") {
+		return false
+	}
+	u, err := url.Parse(v)
+	return err == nil && !u.IsAbs() && u.Host == ""
+}
+
+// oauthCtx reads and clears the round-trip context cookie.
+func oauthCtx(w http.ResponseWriter, r *http.Request) (silent bool, returnTo string) {
+	c, err := r.Cookie(oauthCtxCookie)
+	if err != nil {
+		return false, ""
+	}
+	http.SetCookie(w, &http.Cookie{Name: oauthCtxCookie, Value: "", Path: "/auth/sso", MaxAge: -1})
+	vals, err := url.ParseQuery(c.Value)
+	if err != nil {
+		return false, ""
+	}
+	returnTo = vals.Get("return_to")
+	if !safeReturnTo(returnTo) {
+		returnTo = ""
+	}
+	return vals.Get("silent") == "1", returnTo
+}
+
+// silentRefusals are the provider answers to prompt=none that mean "no usable
+// session" — ordinary outcomes, not failures.
+var silentRefusals = map[string]bool{"login_required": true, "interaction_required": true, "consent_required": true}
 
 func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 	if !s.authEnabled() || s.OIDC == nil {
 		writeAPIError(w, http.StatusServiceUnavailable, errEmpty("SSO is not configured"))
 		return
 	}
+	silent, returnTo := oauthCtx(w, r)
 	if e := r.URL.Query().Get("error"); e != "" {
+		if silent {
+			// A refused prompt=none is the provider's normal "no session" reply.
+			// Land on the login page with a marker the browser honours to stop
+			// retrying, so a signed-out visitor is never bounced in a loop.
+			// The deep link survives as ?next= so a manual login still returns.
+			q := url.Values{"sso": {"error"}}
+			if silentRefusals[e] {
+				q.Set("sso", "none")
+			}
+			if returnTo != "" {
+				q.Set("next", returnTo)
+			}
+			http.Redirect(w, r, "/auth/login?"+q.Encode(), http.StatusFound)
+			return
+		}
 		http.Error(w, "SSO 오류: "+e+" — "+r.URL.Query().Get("error_description"), http.StatusBadGateway)
 		return
 	}
@@ -577,5 +663,8 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 	_ = s.Meta.Store.TouchLogin(r.Context(), u.ID, time.Now())
 	s.setSessionCookie(w, r, token)
 	s.authAudit(r, "sso_login", u.Username)
-	http.Redirect(w, r, "/admin", http.StatusFound)
+	if returnTo == "" {
+		returnTo = "/admin"
+	}
+	http.Redirect(w, r, returnTo, http.StatusFound)
 }

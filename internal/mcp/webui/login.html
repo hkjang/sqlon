@@ -12,6 +12,8 @@
          background:linear-gradient(160deg,#101a2e 0%,#1d2b47 100%);
          font:14px/1.6 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; color:var(--ink); }
   .card { background:#fff; border-radius:16px; padding:36px 40px; width:380px; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+  /* hidden until /auth/me answers, so a silent SSO attempt never flashes the form */
+  .card.pending { visibility:hidden; }
   h1 { font-size:20px; margin:0 0 4px; } .sub { color:var(--sub); font-size:13px; margin:0 0 22px; }
   label { display:block; font-size:12.5px; color:var(--sub); margin:12px 0 4px; }
   input { width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; font-size:14px; }
@@ -29,7 +31,7 @@
 </style>
 </head>
 <body>
-<div class="card">
+<div class="card pending" id="card">
   <h1>🗂 sqlon</h1>
   <p class="sub">메타데이터 그라운딩 Text2SQL 관리 콘솔</p>
   <form onsubmit="return doLogin(event)">
@@ -55,6 +57,39 @@ function safeNext() {
   const n = qs.get('next');
   return (n && /^\/(?!\/)/.test(n)) ? n : '/admin';
 }
+function showCard() { document.getElementById('card').classList.remove('pending'); }
+
+// ---- silent SSO (prompt=none) ----
+// sessionStorage rather than localStorage: an attempt is scoped to this tab's
+// browsing session, so a fresh tab tries again while a reload after a refusal
+// does not. Keys are shared with nav.js (logout marks, console clears).
+const SSO_ATTEMPTED = 'sqlon.sso.silentAttempted', SSO_SIGNED_OUT = 'sqlon.sso.signedOut';
+function ssoFlag(key) {
+  try { return sessionStorage.getItem(key) === 'true'; }
+  // Private modes / blocked site data throw; "already attempted" is the safe
+  // reading because it can never produce a redirect loop.
+  catch (e) { return true; }
+}
+function setSsoFlag(key) { try { sessionStorage.setItem(key, 'true'); } catch (e) { /* fails closed above */ } }
+// Never more than once per browsing session: prompt=none either answers with a
+// code or bounces back with login_required, and retrying on every load would
+// ping-pong the browser between the provider and this page.
+function shouldAttemptSilentSso(me) {
+  if (!me.sso_enabled || !me.sso_auto_login) return false;
+  if (ssoFlag(SSO_SIGNED_OUT) || ssoFlag(SSO_ATTEMPTED)) return false;
+  // the callback appends this marker after a refusal, so it holds even if
+  // sessionStorage was wiped in between
+  const sso = qs.get('sso');
+  if (sso === 'none' || sso === 'error') return false;
+  return true;
+}
+function beginSilentSso() {
+  setSsoFlag(SSO_ATTEMPTED);
+  // top-level navigation, not a hidden iframe: works with third-party cookies
+  // blocked and needs no frame-ancestors allowance from the provider
+  location.assign('/auth/sso/login?prompt=none&return_to=' + encodeURIComponent(safeNext()));
+}
+
 fetch('/auth/me').then(r => r.json()).then(d => {
   if (!d.auth_enabled) {
     document.getElementById('note').innerHTML =
@@ -62,11 +97,18 @@ fetch('/auth/me').then(r => r.json()).then(d => {
       '<code>-meta-db</code>(또는 <code>JAMYPG_META_DB</code>)로 기동하면 인증이 활성화됩니다. ' +
       '<a href="/admin">콘솔로 이동</a>';
     document.querySelector('form').style.display = 'none';
+    showCard();
     return;
   }
   if (d.authenticated) { location.href = safeNext(); return; }
+  if (shouldAttemptSilentSso(d)) { beginSilentSso(); return; }
   if (d.sso_enabled) document.getElementById('ssoBlock').style.display = 'block';
-});
+  if (qs.get('sso') === 'error') {
+    const err = document.getElementById('err');
+    err.textContent = 'SSO 자동 로그인에 실패했습니다. 아래에서 직접 로그인하세요.'; err.style.display = 'block';
+  }
+  showCard();
+}).catch(showCard);
 async function doLogin(ev) {
   ev.preventDefault();
   const btn = document.getElementById('loginBtn'), err = document.getElementById('err');
