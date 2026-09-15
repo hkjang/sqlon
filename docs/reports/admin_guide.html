@@ -481,6 +481,115 @@ GRANT CREATE SESSION TO sqlon_ro;
 GRANT SELECT ANY TABLE TO sqlon_ro;
 </code></pre>
 <hr/>
+<h3>3.4 방문 추적 스크립트 (<code>/admin/settings</code> → 방문 추적)</h3>
+<p>어떤 화면이 실제로 쓰이는지 재기 위해 관리자가 <strong>화면에서</strong> 추적 도구를 붙일 수 있습니다. 설정은 메타 DB(<code>jasql_settings</code>)에 저장되고 저장 즉시 재기동 없이 적용됩니다. <strong>기본값은 꺼짐</strong>이며, 새로 설치한 서버는 켜기 전까지 화면도 응답 헤더도 달라지지 않습니다.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">설정 키</th>
+<th style="text-align:left">뜻</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><code>tracking_enabled</code></td>
+<td style="text-align:left">켜야 스니펫이 붙습니다. 기본 꺼짐. 끄면 화면과 정책이 원래대로 돌아갑니다</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>tracking_provider</code></td>
+<td style="text-align:left"><code>none</code> · <code>momento</code> · <code>ga4</code> · <code>gtm</code> · <code>matomo</code> · <code>custom</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><code>tracking_momento_url</code> · <code>tracking_momento_site_id</code></td>
+<td style="text-align:left">Momento 수집기 주소와 사이트 id</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>tracking_momento_proxy</code></td>
+<td style="text-align:left">기본 켜짐. 이 서버가 <code>/momento/*</code> 를 수집기로 넘깁니다(아래 참고)</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>tracking_measurement_id</code></td>
+<td style="text-align:left">GA4 · GTM 의 측정 id</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>tracking_matomo_url</code> · <code>tracking_matomo_site_id</code></td>
+<td style="text-align:left">Matomo 주소와 사이트 id</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>tracking_custom_snippet</code></td>
+<td style="text-align:left">붙여넣은 <code>&lt;script&gt;</code> 스니펫. <strong>8KB</strong> 를 넘으면 저장되지 않습니다</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>tracking_allowed_hosts</code></td>
+<td style="text-align:left">스니펫에서 자동으로 읽지 못한 출처를 더하는 자리(쉼표 구분)</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>tracking_include_admin</code></td>
+<td style="text-align:left"><code>/admin</code> 아래 관리 화면도 추적할지. 기본 아니오</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>tracking_placement</code></td>
+<td style="text-align:left"><code>head</code>(기본) 또는 <code>body</code></td>
+</tr>
+</tbody>
+</table>
+<p>여러 키가 함께 뜻을 이루므로(제공자 + 주소 + 사이트 id) 저장 시 <strong>바뀐 뒤의 조합 전체</strong>를 검사하며, 잘못된 조합은 아무것도 저장하지 않고 이유를 돌려줍니다. 스니펫은 <code>/api/*</code>·<code>/healthz</code>·<code>/mcp</code>·정적 자산(<code>nav.js</code> 등)에는 절대 붙지 않고 HTML 화면에만 붙습니다.</p>
+<h4>Momento (사내 수집기) — 권장</h4>
+<p>Momento 는 사내 자체 호스팅 수집기라 방문 데이터가 밖으로 나가지 않는 유일한 선택지이며, 제공자 목록의 첫 자리에 있습니다.</p>
+<ol>
+<li><code>tracking_provider</code> = <code>momento</code>, <code>tracking_momento_url</code> = 수집기 주소(예: <code>https://momento.internal:8443</code>), <code>tracking_momento_site_id</code> = 사이트 id 를 넣고 <code>tracking_enabled</code> 를 켭니다.</li>
+<li><code>tracking_momento_proxy</code> 가 켜져 있으면(기본) 화면에는 다음 스니펫이 들어가고, 이 서버가 <code>/momento/*</code> 요청을 수집기로 대신 전달합니다. 전달할 때 이 서버의 세션 쿠키·인증 헤더는 <strong>떼어냅니다</strong>.</li>
+</ol>
+<pre><code class="language-html">&lt;script async src="/momento/tracker.js" nonce="…"
+        data-site-id="&lt;site_id&gt;" data-environment="prd"
+        data-contract-version="1" data-endpoint="/momento"&gt;&lt;/script&gt;
+</code></pre>
+<p>같은 오리진으로 나가므로 외부 출처가 정책(CSP)에 아예 등장하지 않습니다. 프록시를 끄면 수집기 주소가 스니펫과 정책에 직접 적힙니다.</p>
+<h4>콘텐츠 보안 정책(CSP)과 nonce</h4>
+<p><code>&lt;script&gt;</code> 한 줄을 넣는 일이 아니라 어려운 쪽은 CSP 입니다. 스니펫을 정책 없이 붙이면 브라우저가 조용히 막고 관리자는 화면이 비어 있는 이유를 알 수 없습니다. SQLON 은 다음과 같이 처리합니다.</p>
+<ul>
+<li><strong>요청마다 nonce</strong> 를 만들어 스니펫의 <strong>모든</strong> <code>&lt;script&gt;</code> 태그에 붙이고(이미 nonce 가 있는 태그는 그대로 둠), 같은 값을 <code>script-src 'nonce-…'</code> 에 넣습니다. <code>'unsafe-inline'</code> 으로 정책을 푸는 일은 <strong>하지 않습니다</strong> — 한 번 풀면 추적을 끈 뒤에도 느슨한 채로 남기 때문입니다.</li>
+<li><strong>정책 출처는 스니펫에서 읽어 냅니다.</strong> 붙여 넣은 스니펫 안의 <code>http(s)://…</code> 출처를 긁어 <code>script-src</code>·<code>connect-src</code>·<code>img-src</code> 에 자동으로 더하고, 제공자별로 필요한 출처(GA4/GTM 의 googletagmanager 등)도 함께 더합니다. 못 읽은 출처는 <code>tracking_allowed_hosts</code> 에 손으로 더합니다.</li>
+<li>추적이 <strong>켜진 화면</strong>에만 다음 두 헤더가 나갑니다. 꺼지면 두 헤더 모두 사라져 원래대로 돌아갑니다.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">헤더</th>
+<th style="text-align:left">내용</th>
+<th style="text-align:left">비고</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><code>Content-Security-Policy</code></td>
+<td style="text-align:left"><code>img-src 'self' data: blob: &lt;출처…&gt;; connect-src 'self' ws: wss: &lt;출처…&gt;; report-uri /api/tracking/csp-report</code></td>
+<td style="text-align:left"><strong>강제</strong>. 스니펫의 신호(beacon)·픽셀은 여기에 적힌 출처로만 나갈 수 있습니다</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>Content-Security-Policy-Report-Only</code></td>
+<td style="text-align:left"><code>script-src 'self' 'nonce-&lt;요청 nonce&gt;' &lt;출처…&gt;; report-uri /api/tracking/csp-report</code></td>
+<td style="text-align:left"><strong>보고 전용</strong>. 현재 관리 화면이 인라인 이벤트 핸들러(<code>onclick="…"</code>)를 쓰고 있어 script-src 를 강제하면 화면이 멈춥니다. 대신 위반을 신고만 받아 아래 표에 보이며, 인라인 핸들러를 걷어낸 뒤 같은 헤더를 강제로 바꿀 수 있게 준비되어 있습니다</td>
+</tr>
+</tbody>
+</table>
+<div class="alert alert-note"><div class="alert-title">NOTE</div>
+<p>스니펫에 <code>İ</code>(U+0130) 나 <code>K</code>(U+212A 켈빈 기호)처럼 소문자로 바꾸면 바이트 길이가 달라지는 글자가 섞여 있어도 nonce 는 태그에 제대로 붙습니다. 태그 검색은 ASCII 만 접어서 비교합니다.</p>
+</div>
+<h4>차단된 출처 보기와 허용</h4>
+<p>추적이 켜져 있는 동안 브라우저는 정책에 막힌 요청을 <code>POST /api/tracking/csp-report</code> 로 신고하고, 서버는 <strong>출처와 지시어</strong>를 메모리에 기억합니다(같은 출처는 횟수만 늘어나며 최대 100건, 재기동 시 비워짐). <code>/admin/settings</code> 아래 <strong>"방문 추적 — 차단된 출처"</strong> 표에 <code>차단</code>(강제 정책이 막음) / <code>보고</code>(보고 전용 정책이 표시) / <code>허용됨</code>(이미 정책에 있음)으로 보이고, <strong>[허용]</strong> 을 누르면 <code>tracking_allowed_hosts</code> 에 더해져 즉시 정책에 반영됩니다.</p>
+<pre><code class="language-bash"># 차단된 출처 목록 (admin)
+curl -H "X-Admin-Token: $SQLON_ADMIN_TOKEN" http://localhost:6767/api/tracking/violations
+# 한 번에 허용
+curl -X POST -H "X-Admin-Token: $SQLON_ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"origin":"https://collector.example.com"}' http://localhost:6767/api/tracking/allow
+# 기록 지우기
+curl -X DELETE -H "X-Admin-Token: $SQLON_ADMIN_TOKEN" http://localhost:6767/api/tracking/violations
+</code></pre>
+<div class="alert alert-important"><div class="alert-title">IMPORTANT</div>
+<p>로그인 화면(<code>/auth/login</code>)도 추적 대상이지만 스니펫은 페이지 방문만 보냅니다. 자격 증명이나 개인 식별 값을 보내는 스니펫을 붙이지 마십시오. 관리 화면(<code>/admin/*</code>)은 <code>tracking_include_admin</code> 이 켜졌을 때만 추적합니다.</p>
+</div>
+<hr/>
 <h2>4. 메타데이터 동기화 및 관측성(Observability)</h2>
 <h3>4.1 스키마 메타데이터 자동 동기화 (<code>metasync</code>)</h3>
 <p>SQLON은 데이터베이스 테이블 구조, 인덱스 현황 및 테이블/컬럼 Comment 정보를 지속적으로 캡처하여 메타 DB에 저장합니다.</p>

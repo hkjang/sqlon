@@ -1142,11 +1142,16 @@ func (s *Server) adminAudit(r *http.Request, action, detail string, callErr erro
 }
 
 func (s *Server) serveWebUI(path, contentType string) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		b, err := webuiFS.ReadFile(path)
 		if err != nil {
 			http.Error(w, "asset not found: "+path, http.StatusNotFound)
 			return
+		}
+		// HTML pages may carry the visitor-tracking snippet (see tracking.go);
+		// scripts, images and other assets never do.
+		if strings.HasPrefix(contentType, "text/html") {
+			b = s.trackPage(w, r.URL.Path, b)
 		}
 		w.Header().Set("Content-Type", contentType)
 		w.Header().Set("Cache-Control", "no-cache")

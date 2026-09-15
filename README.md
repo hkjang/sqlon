@@ -568,8 +568,13 @@ sqlon -transport http -addr 0.0.0.0:6767 \
   공개. Postgres에 저장되어 사용자마다 접근 범위가 다름
 - 첫 기동 시 부트스트랩 관리자를 생성(비밀번호 미지정 시 로그에 1회 출력)
 
-- **서버 설정 관리**: 마스터 토큰·허용 Origin·Keycloak SSO를 `/admin/settings`
-  에서 메타 DB에 저장하고 **재기동 없이 즉시 적용**(플래그/env는 기본값)
+- **서버 설정 관리**: 마스터 토큰·허용 Origin·Keycloak SSO·방문 추적을
+  `/admin/settings` 에서 메타 DB에 저장하고 **재기동 없이 즉시 적용**(플래그/env는 기본값)
+- **방문 추적(기본 꺼짐)**: 관리자가 `/admin/settings` 에서 추적 도구를 붙임.
+  제공자는 사내 수집기 **momento**(같은 오리진 프록시 `/momento/*` 기본) ·
+  ga4 · gtm · matomo · custom(8KB). 스니펫의 모든 `<script>` 에 요청별 nonce 가
+  붙고 스니펫에서 읽은 출처가 CSP 에 더해지며, 정책에 막힌 출처는 설정 화면에서
+  보고 한 번에 허용. `'unsafe-inline'` 은 쓰지 않음. 상세: admin_guide 3.4
 - **데이터셋도 메타 DB에서 관리**: 편집 가능한 카탈로그 JSON 14종의 진실
   원본이 Postgres(`sqlon_meta.datasets`)가 되어 `/admin`·MCP 도구 편집이 DB에
   영속화됨(로드 시 파일로 materialize해 기존 로더 재사용)
