@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- 서비스 간 문서 넘기기(사내 HANDOFF-STANDARD, 보내는 쪽): DBA 코파일럿의 DBA
+  다이제스트를 「다른 서비스로 보내기」로 `muni`·`ptium`·`weekly` 에 markdown 으로
+  넘깁니다. `POST /api/v1/handoff/claims` 가 로그인한 사용자가 읽을 수 있는 프로파일
+  하나에 묶인 단일 사용 5분 표(claim)를 발급하고, 받는 쪽은 표만 들고
+  `GET /api/v1/handoff/claims/{claim}` 으로 본문을 가져갑니다(사용·만료 뒤 `404`).
+  보낼 곳은 새 설정 `handoff_targets`(`서비스=오리진`, 기본 비어 있음 → 단추 숨김)와
+  선택 설정 `handoff_public_url` 로 관리자가 정합니다. 표는 감사 로그에 남지 않습니다.
+
 ## v0.1.5 — 2026-09-14
 
 - PII 노출 리포트(`get_pii_exposure`)의 짧은 ASCII 단서(`pan`·`dob`·`ssn`·

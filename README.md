@@ -525,7 +525,7 @@ HTTP 모드로 기동하면 브라우저 기반 관리 화면과 Swagger 문서�
 | `/admin` | **데이터셋 관리 콘솔** — 18개 데이터셋의 용도·스키마·상태 확인, 내용 편집·적용(백업+검증+핫스왑), 제거, 백업/복원, 카탈로그 리로드. 단계별 사용 가이드가 화면에 내장 |
 | `/admin/editor` | **테이블 편집기** — 데이터셋을 표(그리드)로 렌더링해 JSON 없이 편집: 셀 클릭 인라인 수정(타입 자동 보존), 행 추가/복제/삭제, **컬럼 추가/이름변경/삭제**, 검색·페이지네이션. 저장 시 동일한 백업·검증·핫스왑·롤백 적용 |
 | `/admin/db` | **DB 연결 관리·쿼리 실행** — postgres/mysql/mariadb 프로파일 추가/수정/삭제/접속 테스트, Read-Only 쿼리 콘솔(검증→미리보기→실행→취소), 실행 이력·메트릭 ([docs/db-connector.md](docs/db-connector.md)) |
-| `/admin/dba` | **DBA 코파일럿** — 읽기 전용 DBA 진단 대시보드: 헬스 점검, 인덱스 어드바이저(CREATE INDEX 후보), 워크로드 리포트, SQL 안티패턴 린트, SQL 자연어 설명을 탭 UI로 제공(자동 실행·변경 없음, 권고용) |
+| `/admin/dba` | **DBA 코파일럿** — 읽기 전용 DBA 진단 대시보드: 헬스 점검, 인덱스 어드바이저(CREATE INDEX 후보), 워크로드 리포트, SQL 안티패턴 린트, SQL 자연어 설명을 탭 UI로 제공(자동 실행·변경 없음, 권고용). 상단 DBA 다이제스트는 「다른 서비스로 보내기」로 `muni`·`ptium`·`weekly` 에 markdown 으로 넘길 수 있음(사내 HANDOFF-STANDARD, 단일 사용 5분 표; 관리자가 `handoff_targets` 를 설정했을 때만 단추 표시 — [docs/admin_guide.md](docs/admin_guide.md) 3.4) |
 | `/admin/dba-console` | **DBA 관리 콘솔** (`dba`/`admin` 역할 전용) — 권한 있는 쓰기 세션으로 사용자·역할, 데이터베이스, 권한(GRANT/REVOKE), 서버 설정, 세션(취소/종료), 유지보수(VACUUM/ANALYZE/REINDEX), 임의 권한 SQL을 탭 UI로 관리. 프로파일의 `dba` 자격증명 필요, 모든 변경 감사 로그 기록 |
 | `/auth/login` · `/admin/users` · `/admin/keys` | **인증·사용자·MCP 키** (메타 DB 활성 시) — 로컬/Keycloak SSO 로그인, 사용자·역할 관리(admin), MCP 키 발급·회전·폐기, 프로파일별 권한(grant). 상세: [docs/auth.md](docs/auth.md) |
 | `/docs` | **Swagger UI** — REST API 문서 + Try it out (오프라인 동작, 자산 임베드) |

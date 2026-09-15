@@ -73,6 +73,10 @@
       <b id="digestHeadline" style="font-size:15px"></b>
       <span class="grow"></span>
       <span id="digestMeta" class="mini" style="color:#9db4dd"></span>
+      <span id="handoffBox" style="display:none;align-items:center;gap:6px">
+        <select id="handoffTarget" title="보낼 서비스"></select>
+        <button class="btn mini" id="handoffSend" title="표를 발급해 받는 서비스의 /handoff 를 새 창에서 엽니다">다른 서비스로 보내기</button>
+      </span>
     </div>
   </div>
   <div class="tabs" id="tabs">
@@ -396,6 +400,34 @@ function loadDigest(){
     $('digestBanner').style.display='block';
   }).catch(function(){$('digestBanner').style.display='none';});
 }
+
+/* ---------- 다른 서비스로 보내기 (HANDOFF-STANDARD, 보내는 쪽) ----------
+   관리자가 설정한 허용 목록(handoff_targets)이 비어 있으면 단추가 보이지 않는다.
+   누르면 5분짜리 단일 사용 표를 발급하고 받는 쪽의 /handoff 를 새 창에서 연다. */
+var handoffTargets=[];
+function loadHandoffTargets(){
+  fetch('/api/v1/handoff/targets',{headers:headers()}).then(function(r){return r.json();}).then(function(d){
+    handoffTargets=(d&&d.targets)||[];
+    if(!handoffTargets.length){$('handoffBox').style.display='none';return;}
+    $('handoffTarget').innerHTML=handoffTargets.map(function(t,i){return '<option value="'+i+'">'+esc(t.service)+'</option>';}).join('');
+    $('handoffBox').style.display='inline-flex';
+  }).catch(function(){$('handoffBox').style.display='none';});
+}
+function sendHandoff(){
+  var t=handoffTargets[Number($('handoffTarget').value)];
+  if(!t){flash(false,'보낼 서비스를 고르세요');return;}
+  // 창은 클릭 안에서 먼저 열어야 팝업 차단을 피한다; 표가 오면 주소를 채운다.
+  var win=window.open('about:blank','_blank');
+  if(win){win.opener=null;} // 받는 쪽 창이 이 화면을 되돌아 조작하지 못하게
+  post('/api/v1/handoff/claims',{resource:prof()?('dba-digest:'+prof()):'dba-digest',format:'markdown'}).then(function(d){
+    if(!d||d.error||!d.claim){if(win)win.close();flash(false,'표 발급 실패: '+((d&&d.error)||'unknown'));return;}
+    var u=t.origin+'/handoff?source='+encodeURIComponent(d.source)+'&claim='+encodeURIComponent(d.claim);
+    if(win){win.location=u;}else{window.open(u,'_blank');}
+    flash(true,t.service+' 로 보냈습니다 (5분 안에 한 번만 받아 갈 수 있음)');
+  }).catch(function(e){if(win)win.close();flash(false,'표 발급 실패: '+e);});
+}
+$('handoffSend').onclick=sendHandoff;
+
 function loadProfiles(){
   return fetch('/api/db-profiles',{headers:headers()}).then(function(r){return r.json();}).then(function(d){
     var ps=d.profiles||[];var last=localStorage.getItem('jasqlLastProfile');
@@ -404,7 +436,7 @@ function loadProfiles(){
   }).catch(function(){});
 }
 
-JASQL.mount({ page:'dba', onReady:function(me){ if(me&&me.version)$('scope').textContent='v'+me.version; loadProfiles().then(loadDigest); }});
+JASQL.mount({ page:'dba', onReady:function(me){ if(me&&me.version)$('scope').textContent='v'+me.version; loadProfiles().then(loadDigest); loadHandoffTargets(); }});
 </script>
 </body>
 </html>

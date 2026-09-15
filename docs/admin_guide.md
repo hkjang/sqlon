@@ -167,6 +167,43 @@ GRANT SELECT ANY TABLE TO sqlon_ro;
 
 ---
 
+### 3.4 다른 서비스로 문서 넘기기 — 허용 목록 설정 (`handoff_targets`)
+
+SQLON은 사내 「서비스 간 문서 넘기기 표준(HANDOFF-STANDARD)」의 **보내는 쪽**입니다.
+DBA 코파일럿(`/admin/dba`) 상단의 DBA 다이제스트를 `markdown` 으로 `muni`·`ptium`·`weekly`
+에 넘길 수 있습니다. 사람이 파일을 내려받아 다시 올리지 않습니다.
+
+* 서비스끼리 자격 증명을 들고 있지 않습니다. 로그인한 사용자가 **한 번만 쓸 수 있는
+  5분짜리 표(claim)** 를 발급받고(`POST /api/v1/handoff/claims`), 브라우저가 받는 쪽의
+  `/handoff?source=<이 서비스>&claim=<표>` 를 새 창에서 엽니다. 받는 쪽은 표만 들고
+  `GET /api/v1/handoff/claims/{claim}` 으로 본문을 직접 받아 갑니다(인증 없음, 1회, 이후 `404`).
+* 표는 **그 사용자가 읽을 수 있는 프로파일 하나의 다이제스트**에만 묶입니다. 남의
+  비공개 프로파일로는 표가 만들어지지 않습니다(`404`). 표 값은 감사 로그에 남지 않으며
+  문서 id(`dba-digest:<profile>`)와 사용자만 `handoff_claim_create`/`handoff_claim_serve` 로 기록됩니다.
+* 재기동하면 발급된 표는 사라집니다(메모리 보관). 5분짜리 표이므로 다시 누르면 됩니다.
+
+**설정 방법** — `/admin/settings` (admin) → 「문서 넘기기」 그룹, 또는 `PUT /api/settings`:
+
+| 키 | 값 | 설명 |
+| --- | --- | --- |
+| `handoff_targets` | `서비스=오리진` 을 쉼표로 나열 | 예: `muni=https://muni.intra, ptium=https://ptium.intra, weekly=https://weekly.intra`. 서비스 이름은 표준의 형식 표(`muni`·`kanpic`·`ptium`·`weekly`)에 있어야 하며, **markdown 을 받을 수 있는 서비스만** 단추에 나타납니다(`kanpic` 은 적어도 무시). 오리진은 `http(s)://호스트[:포트]` 만 허용되고 경로·쿼리가 있으면 무시됩니다. |
+| `handoff_public_url` | (선택) `https://sqlon.intra` | 받는 쪽이 표를 가져올 때 쓰는 이 서비스의 오리진. 비우면 요청의 `Host`(리버스 프록시의 `X-Forwarded-Proto`/`X-Forwarded-Host` 반영)로 만듭니다. 프록시 뒤에서 `Host` 가 바뀌는 환경이면 명시하십시오. |
+
+```bash
+curl -X PUT http://localhost:6767/api/settings \
+  -H "X-Admin-Token: $SQLON_ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"handoff_targets":"muni=https://muni.intra, ptium=https://ptium.intra, weekly=https://weekly.intra",
+       "handoff_public_url":"https://sqlon.intra"}'
+```
+
+> [!NOTE]
+> 기본값은 **비어 있음**이며 그때는 「다른 서비스로 보내기」 단추가 보이지 않습니다.
+> 새로 설치한 곳에서는 아무것도 달라지지 않습니다. 저장 즉시 적용되며 재기동은 필요 없습니다.
+> 받는 쪽(muni·ptium·weekly)의 허용 목록에도 이 서비스의 오리진(`handoff_public_url`)이
+> 등록되어 있어야 문서가 열립니다 — 그쪽 관리자에게 함께 요청하십시오.
+
+---
+
 ## 4. 메타데이터 동기화 및 관측성(Observability)
 
 ### 4.1 스키마 메타데이터 자동 동기화 (`metasync`)

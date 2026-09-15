@@ -813,6 +813,7 @@ func (s *Server) ApplySettings(ctx context.Context) error {
 	} else {
 		s.queryCache.SetTTL(defaultCacheTTLSeconds)
 	}
+	s.applyHandoffSettings(eff)
 	return nil
 }
 

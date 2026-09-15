@@ -19,6 +19,12 @@ const (
 	SetOIDCRedirect = "oidc_redirect_url"
 	SetAllowOrigins = "allow_origins"     // comma-separated
 	SetCacheTTL     = "cache_ttl_seconds" // result cache lifetime; 0 disables
+	// document handoff (HANDOFF-STANDARD): the admin-managed list of services
+	// a document may be sent to, and this service's public origin as seen by
+	// them. Empty targets = the "send to" button is hidden (fresh installs
+	// change nothing).
+	SetHandoffTargets   = "handoff_targets"    // comma-separated "service=https://origin"
+	SetHandoffPublicURL = "handoff_public_url" // optional; derived from the request when empty
 )
 
 // SettingDef describes a manageable setting for the admin UI.
@@ -44,6 +50,10 @@ var SettingDefs = []SettingDef{
 		Help: "예: https://host:6767/auth/sso/callback"},
 	{Key: SetCacheTTL, Label: "쿼리 결과 캐시 TTL(초)", Group: "성능",
 		Help: "동일 (프로파일, SQL, max_rows) 결과를 재사용하는 시간. 0=캐시 비활성. 기본 60."},
+	{Key: SetHandoffTargets, Label: "문서 보낼 곳(쉼표 구분, 서비스=오리진)", Group: "문서 넘기기",
+		Help: "예: muni=https://muni.intra, ptium=https://ptium.intra, weekly=https://weekly.intra. 마크다운을 받을 수 있는 서비스(muni·ptium·weekly)만 단추에 나타납니다. 비우면 보내기 단추가 보이지 않습니다."},
+	{Key: SetHandoffPublicURL, Label: "이 서비스의 공개 주소(선택)", Group: "문서 넘기기",
+		Help: "받는 쪽이 표를 가져올 때 쓰는 이 서비스의 오리진. 예: https://sqlon.intra. 비우면 요청의 Host(X-Forwarded-Proto/Host 반영)로 만듭니다."},
 }
 
 func isKnownSetting(key string) bool {
