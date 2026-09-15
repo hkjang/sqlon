@@ -66,10 +66,15 @@ type Server struct {
 	OIDC          *OIDCProvider // nil = SSO disabled
 	mu            sync.Mutex
 	dataMu        sync.Mutex        // serializes dataset mutations + catalog reloads
-	settingsMu    sync.RWMutex      // guards Options.AdminToken/AllowedOrigins/OIDC live updates
+	settingsMu    sync.RWMutex      // guards Options.AdminToken/AllowedOrigins/OIDC/handoff live updates
 	bootDefaults  map[string]string // flag/env setting values captured at EnableMeta
-	sessions      map[string]time.Time
-	events        map[string]uint64
+	// document handoff (sender side): admin allow list + our public origin,
+	// both from settings, and the in-memory single-use claim store.
+	handoffTargets   []handoffTarget
+	handoffPublicURL string
+	handoff          *handoffStore
+	sessions         map[string]time.Time
+	events           map[string]uint64
 	// pendingClar tracks blocking clarification questions per MCP session:
 	// prepare_sql_context sets them when it withholds the skeleton and clears
 	// them once the (re-)call succeeds; run_sql_safely refuses to execute
@@ -167,6 +172,7 @@ func NewServer(c *catalog.Catalog, opts Options) *Server {
 		asyncJobs:       newAsyncJobStore(),
 		feedbackLimiter: newFeedbackRateLimiter(feedbackDefaultLimit, feedbackDefaultWindow),
 		metrics:         newMetricsRegistry(),
+		handoff:         newHandoffStore(),
 	}
 	s.setCatalog(c)
 	return s
@@ -181,6 +187,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.registerDBAPI(mux)
 	s.registerDBAConsole(mux)
 	s.registerPoolAPI(mux)
+	s.registerHandoff(mux)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

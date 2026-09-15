@@ -23,7 +23,8 @@ var openAPISpec = `{
     { "name": "changes", "description": "승인 기반 변경 통제: 변경계획 생성·제출·승인·실행·롤백·취소 (DBA 권한 필요)" },
     { "name": "db-profiles", "description": "DB 접속 프로파일(PostgreSQL/MySQL/MariaDB/Oracle) CRUD와 접속 테스트 (/admin/db 화면과 동일 기능)" },
     { "name": "query", "description": "Read-Only 쿼리 실행: 검증/실행/미리보기/실행계획/메타데이터/이력/취소" },
-    { "name": "activity", "description": "MCP 호출 이력·통계 (개인화): 본인 기본, admin은 all/user 필터" }
+    { "name": "activity", "description": "MCP 호출 이력·통계 (개인화): 본인 기본, admin은 all/user 필터" },
+    { "name": "handoff", "description": "서비스 간 문서 넘기기(HANDOFF-STANDARD, 보내는 쪽): DBA 다이제스트를 markdown 으로 muni·ptium·weekly 에 넘기는 단일 사용 5분 표(claim)" }
   ],
   "components": {
     "securitySchemes": {
@@ -191,6 +192,29 @@ var openAPISpec = `{
         "requestBody": { "required": true, "content": { "application/json": { "schema": {"type":"object","additionalProperties":{"type":["string","null"]}},
           "examples": { "oidc": { "value": { "oidc_issuer":"https://kc/realms/x","oidc_client_id":"sqlon","oidc_client_secret":"...","oidc_redirect_url":"https://host:6767/auth/sso/callback" } } } } } },
         "responses": { "200": {"description":"{ok, settings[], note}"}, "403": {"description":"admin 아님"} } }
+    },
+    "/api/v1/handoff/targets": {
+      "get": {
+        "tags": ["handoff"], "summary": "보낼 수 있는 서비스 목록 — 설정 handoff_targets 중 markdown 을 받는 곳만",
+        "description": "비어 있으면(기본값) 화면의 '다른 서비스로 보내기' 단추가 보이지 않습니다. source 는 받는 쪽이 표를 가져올 이 서비스의 오리진(handoff_public_url 또는 요청 Host).",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{targets:[{service,origin}], format:'markdown', source}"}, "401": {"description":"인증 필요"} } }
+    },
+    "/api/v1/handoff/claims": {
+      "post": {
+        "tags": ["handoff"], "summary": "표 발급 — 로그인한 사용자가 읽을 수 있는 문서 하나에 묶인 단일 사용 5분 표",
+        "description": "resource 는 'dba-digest'(전체) 또는 'dba-digest:<profile>'; format 은 'markdown' 만. 표는 감사 로그에 남지 않습니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"type":"object","properties":{"resource":{"type":"string"},"format":{"type":"string","enum":["markdown"]}},"required":["resource","format"]},
+          "examples": { "digest": { "value": { "resource":"dba-digest:pg_main", "format":"markdown" } } } } } },
+        "responses": { "201": {"description":"{claim, source, filename, content_type, bytes, expires_at}"}, "400": {"description":"보낼 수 없는 형식"}, "401": {"description":"인증 필요"}, "404": {"description":"문서가 없거나 읽을 권한이 없음"} } }
+    },
+    "/api/v1/handoff/claims/{claim}": {
+      "get": {
+        "tags": ["handoff"], "summary": "표를 내준다 — 인증 없음, 표가 곧 자격 (한 번만)",
+        "description": "받는 서비스가 호출합니다. 본문은 text/markdown; charset=utf-8, Content-Disposition: attachment; filename*=UTF-8''… . 이미 쓴 표·만료된 표·모르는 표는 모두 404 이며 이유를 구별하지 않습니다.",
+        "parameters": [ {"name":"claim","in":"path","required":true,"schema":{"type":"string"}} ],
+        "responses": { "200": {"description":"markdown 본문 (1회)"}, "404": {"description":"없음·사용됨·만료"} } }
     },
     "/api/health": {
       "get": {
