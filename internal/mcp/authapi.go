@@ -11,6 +11,7 @@ import (
 
 	"sqlon/internal/dbconn"
 	"sqlon/internal/meta"
+	"sqlon/internal/tracking"
 )
 
 // registerAuthAPI wires user administration, MCP key lifecycle, and DB
@@ -265,12 +266,23 @@ func (s *Server) registerAuthAPI(mux *http.ServeMux) {
 			writeAPIError(w, http.StatusBadRequest, err)
 			return
 		}
+		// 방문 추적은 여러 키가 함께 뜻을 이루므로(제공자 + 주소 + 사이트 id) 하나씩
+		// 저장하기 전에 바뀐 뒤의 모습 전체를 검사한다. 잘못된 조합은 아무것도 저장하지
+		// 않고 이유를 돌려준다.
+		if err := s.validateTrackingChange(r.Context(), req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
 		for key, val := range req {
 			if val == nil {
 				_ = s.Meta.Store.DeleteSetting(r.Context(), key)
 				continue
 			}
 			if err := s.Meta.ApplySetting(r.Context(), key, *val, actorName(actor)); err != nil {
+				if errors.Is(err, meta.ErrInvalidSetting) {
+					writeAPIError(w, http.StatusBadRequest, err)
+					return
+				}
 				writeAPIError(w, http.StatusBadRequest, errEmpty("unknown or invalid setting: "+key))
 				return
 			}
@@ -282,7 +294,7 @@ func (s *Server) registerAuthAPI(mux *http.ServeMux) {
 		s.adminAudit(r, "settings_update", strings.Join(keysOf(req), ","), nil)
 		view, _ := s.Meta.SettingsView(r.Context())
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "settings": view, "sso_enabled": s.OIDC != nil,
-			"note": "런타임 적용됨(재기동 불필요): 마스터 토큰·허용 Origin·OIDC(SSO)."})
+			"note": "런타임 적용됨(재기동 불필요): 마스터 토큰·허용 Origin·OIDC(SSO)·방문 추적."})
 	})
 
 	// ---- profile grants ----
@@ -813,7 +825,35 @@ func (s *Server) ApplySettings(ctx context.Context) error {
 	} else {
 		s.queryCache.SetTTL(defaultCacheTTLSeconds)
 	}
+	s.tracking = tracking.ReadConfig(eff)
 	return nil
+}
+
+// validateTrackingChange checks the tracking configuration as it would be
+// after the requested changes. Only runs when a tracking key is touched.
+func (s *Server) validateTrackingChange(ctx context.Context, req map[string]*string) error {
+	touched := false
+	for key := range req {
+		if strings.HasPrefix(key, "tracking_") {
+			touched = true
+			break
+		}
+	}
+	if !touched {
+		return nil
+	}
+	eff, err := s.Meta.EffectiveSettings(ctx, s.bootDefaults)
+	if err != nil {
+		return err
+	}
+	for key, val := range req {
+		if val == nil {
+			delete(eff, key)
+		} else {
+			eff[key] = *val
+		}
+	}
+	return tracking.ReadConfig(eff).Validate()
 }
 
 var _ = strings.TrimSpace // keep strings import if unused paths change
