@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 )
@@ -111,8 +112,10 @@ func (s *Server) runScheduledSync(ctx context.Context, source string, applySync 
 			"ts": time.Now().Format(time.RFC3339Nano), "tool": "scheduler:sync",
 			"detail": source, "is_error": true, "error": res["error"],
 		})
+		s.notifySchedulerState(ctx, source, true, fmt.Sprint(res["error"]))
 		return
 	}
+	s.notifySchedulerState(ctx, source, false, "")
 	changes := 0
 	if n, ok := res["change_count"].(int); ok {
 		changes = n

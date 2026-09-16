@@ -570,6 +570,13 @@ sqlon -transport http -addr 0.0.0.0:6767 \
 
 - **서버 설정 관리**: 마스터 토큰·허용 Origin·Keycloak SSO를 `/admin/settings`
   에서 메타 DB에 저장하고 **재기동 없이 즉시 적용**(플래그/env는 기본값)
+- **이벤트 알림 메일(SMTP)**: 기본 꺼짐. `/admin/settings`의 `mail.*` 키로 사내
+  릴레이(기본 25번 포트·인증 없음·TLS 없음)를 지정하면 변경 계획 승인 요청·
+  실행 가능, 변경 실행 실패, 1분 넘게 걸린 비동기 쿼리 완료, 예약 동기화
+  실패·회복을 관련자에게 보냅니다. 배경 발송(릴레이가 죽어도 요청은 정상),
+  시도마다 기록(본문 제외), 자기 행동은 자기에게 보내지 않음, 비밀번호는 API로
+  되읽히지 않음. 시험 발송 단추와 발송 기록은 설정 화면에 있습니다.
+  상세: [docs/admin_guide.md](docs/admin_guide.md) 3.4
 - **데이터셋도 메타 DB에서 관리**: 편집 가능한 카탈로그 JSON 14종의 진실
   원본이 Postgres(`sqlon_meta.datasets`)가 되어 `/admin`·MCP 도구 편집이 DB에
   영속화됨(로드 시 파일로 materialize해 기존 로더 재사용)

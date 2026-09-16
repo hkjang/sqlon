@@ -16,7 +16,8 @@ var openAPISpec = `{
     { "name": "users", "description": "사용자 관리 — admin 전용 (meta DB 활성 시)" },
     { "name": "mcp-keys", "description": "MCP API 키 라이프사이클: 발급/조회/회전/폐기" },
     { "name": "grants", "description": "DB 프로파일 사용자 권한(use/manage) 부여·회수" },
-    { "name": "settings", "description": "런타임 설정(마스터 토큰·허용 Origin·Keycloak SSO)을 메타 DB에 저장·즉시 적용 — admin 전용" },
+    { "name": "settings", "description": "런타임 설정(마스터 토큰·허용 Origin·Keycloak SSO·메일 알림)을 메타 DB에 저장·즉시 적용 — admin 전용" },
+    { "name": "mail", "description": "사내 SMTP 릴레이 이벤트 알림 — 발송 기록 조회·시험 발송 (admin 전용, mail.enabled 기본 false)" },
     { "name": "datasets", "description": "데이터셋 조회/교체/제거/복원" },
     { "name": "catalog", "description": "카탈로그 상태와 리로드" },
     { "name": "fleet", "description": "권한 범위의 DB 플릿 인벤토리와 근거 기반 연결·구성 위험 상태" },
@@ -191,6 +192,24 @@ var openAPISpec = `{
         "requestBody": { "required": true, "content": { "application/json": { "schema": {"type":"object","additionalProperties":{"type":["string","null"]}},
           "examples": { "oidc": { "value": { "oidc_issuer":"https://kc/realms/x","oidc_client_id":"sqlon","oidc_client_secret":"...","oidc_redirect_url":"https://host:6767/auth/sso/callback" } } } } } },
         "responses": { "200": {"description":"{ok, settings[], note}"}, "403": {"description":"admin 아님"} } }
+    },
+    "/api/mail/deliveries": {
+      "get": {
+        "tags": ["mail"], "summary": "메일 발송 기록 (admin) — 최신순, 본문 없음",
+        "description": "시도마다 남긴 기록: 이벤트, 수신자, 제목, 참조(변경 id·잡 id 등), 행위자, 결과(sent|failed|queued), 시도 횟수, 오류. 본문은 저장하지 않습니다. 최근 500건을 메모리에 두고 data/mail/deliveries-YYYYMMDD.jsonl 에 남겨 재기동 후에도 조회됩니다.",
+        "security": [{"SessionCookie":[]},{"AdminToken":[]}],
+        "parameters": [
+          {"name":"status","in":"query","schema":{"type":"string","enum":["sent","failed","queued"]}},
+          {"name":"limit","in":"query","schema":{"type":"integer","default":50,"maximum":500}} ],
+        "responses": { "200": {"description":"{items[], total, status{sent,failed,queued}}"}, "403": {"description":"admin 아님"} } }
+    },
+    "/api/mail/test": {
+      "post": {
+        "tags": ["mail"], "summary": "시험 발송 (admin) — 저장된 설정으로 실제 한 통",
+        "description": "recipient 를 비우면 호출자 계정의 메일 주소로 보냅니다. 동기로 보내고 결과를 바로 돌려주며 기록에도 남습니다. mail.enabled 가 꺼져 있거나 호스트가 없으면 502 와 이유.",
+        "security": [{"SessionCookie":[]},{"AdminToken":[]}],
+        "requestBody": { "required": false, "content": { "application/json": { "schema": {"type":"object","properties":{"recipient":{"type":"string","format":"email"}}} } } },
+        "responses": { "200": {"description":"{ok:true, recipient}"}, "400": {"description":"수신자 주소 아님"}, "502": {"description":"{ok:false, recipient, error} — 릴레이 실패·꺼짐·설정 부족"}, "403": {"description":"admin 아님"} } }
     },
     "/api/health": {
       "get": {

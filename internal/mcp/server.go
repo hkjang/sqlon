@@ -26,6 +26,7 @@ import (
 	"sqlon/internal/dbconn"
 	"sqlon/internal/engine/adapters"
 	"sqlon/internal/fleet"
+	"sqlon/internal/mail"
 	"sqlon/internal/meta"
 	"sqlon/internal/observability"
 	"sqlon/internal/storage"
@@ -64,6 +65,7 @@ type Server struct {
 	Changes       *change.Service
 	Meta          *meta.Service // nil = standalone mode (auth disabled)
 	OIDC          *OIDCProvider // nil = SSO disabled
+	Mail          *mail.Service // nil = no meta DB; sends nothing until mail.enabled
 	mu            sync.Mutex
 	dataMu        sync.Mutex        // serializes dataset mutations + catalog reloads
 	settingsMu    sync.RWMutex      // guards Options.AdminToken/AllowedOrigins/OIDC live updates
@@ -91,6 +93,10 @@ type Server struct {
 	// (prepare/validate/execute with a profile), fingerprint-invalidated.
 	wsMu    sync.Mutex
 	wsCache map[string]wsCacheEntry
+	// schedulerFailing remembers per sync source whether the last tick failed
+	// so the mail goes out on the transition, not on every tick.
+	mailMu           sync.Mutex
+	schedulerFailing map[string]bool
 }
 
 // opDir returns the fixed operational data dir (falls back to the active
@@ -181,6 +187,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.registerDBAPI(mux)
 	s.registerDBAConsole(mux)
 	s.registerPoolAPI(mux)
+	s.registerMailAPI(mux)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -1669,6 +1676,7 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 		if err != nil {
 			return map[string]any{"status": "error", "error": err.Error()}, nil
 		}
+		s.notifyChange(ctx, p, actorName(userFrom(ctx)), nil)
 		return map[string]any{"status": "ok", "data": p}, nil
 	case "approve_change":
 		var a struct {
@@ -1685,6 +1693,7 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 		if err != nil {
 			return map[string]any{"status": "error", "error": err.Error()}, nil
 		}
+		s.notifyChange(ctx, p, actor, nil)
 		return map[string]any{"status": "ok", "data": p, "approval": p.Approvals[len(p.Approvals)-1]}, nil
 	case "execute_approved_change":
 		var a struct {
@@ -1711,6 +1720,7 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			}
 		}
 		p, err := s.Changes.Execute(ctx, a.ID, approvedChangeRunner{server: s})
+		s.notifyChange(ctx, p, actorName(userFrom(ctx)), err)
 		if err != nil {
 			return map[string]any{"status": "error", "error": err.Error(), "data": p}, nil
 		}
@@ -1735,6 +1745,7 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return nil, err
 		}
 		p, err := s.Changes.Rollback(ctx, a.ID, approvedChangeRunner{server: s})
+		s.notifyChange(ctx, p, actorName(userFrom(ctx)), err)
 		if err != nil {
 			return map[string]any{"status": "error", "error": err.Error(), "data": p}, nil
 		}

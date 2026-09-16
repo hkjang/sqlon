@@ -757,6 +757,7 @@ func (s *Server) EnableMeta(svc *meta.Service, oidc *OIDCProvider) {
 	s.Meta = svc
 	s.OIDC = oidc
 	s.DB.SetProfileStore(metaProfileStore{svc: svc})
+	s.enableMail(svc)
 	s.bootDefaults = map[string]string{
 		meta.SetAdminToken: s.Options.AdminToken,
 		meta.SetCacheTTL:   strconv.Itoa(defaultCacheTTLSeconds),

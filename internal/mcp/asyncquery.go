@@ -97,18 +97,22 @@ func (s *Server) submitAsyncQuery(profile, sql, user string, opts dbconn.ExecOpt
 		res, masked, _, err := s.executeGuarded(ctx, profile, sql, opts, true)
 		now := time.Now()
 		st.mu.Lock()
-		defer st.mu.Unlock()
 		job.FinishedAt = &now
 		if err != nil {
 			job.Status = "failed"
 			job.Error = err.Error()
 			job.Hint = dbHint(err.Error())
-			return
+		} else {
+			job.Status = "done"
+			job.Result = res
+			job.Masked = masked
+			job.Diagnosis = s.diagnoseResult(sql, res)
 		}
-		job.Status = "done"
-		job.Result = res
-		job.Masked = masked
-		job.Diagnosis = s.diagnoseResult(sql, res)
+		// Copy what the mail needs while still under the lock; the notification
+		// itself runs outside it and never touches the job again.
+		done := *job
+		st.mu.Unlock()
+		s.notifyAsyncFinished(&done)
 	}()
 	return job, ""
 }
