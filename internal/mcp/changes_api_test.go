@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"sqlon/internal/change"
+	"sqlon/internal/meta"
 )
 
 func newChangeMux(t *testing.T) (*http.ServeMux, string) {
@@ -79,6 +80,75 @@ func TestChangeAPILifecycleAndPersistence(t *testing.T) {
 	p, ok := restarted.Get("chg-http-1")
 	if !ok || string(p.State) != "cancelled" || len(p.Approvals) != 1 {
 		t.Fatalf("restored plan diverged: ok=%v state=%s approvals=%d", ok, p.State, len(p.Approvals))
+	}
+}
+
+// A critical plan needs two approvals. Over REST each approval must be
+// attributed to the authenticated user — not a shared "dba" placeholder —
+// otherwise the second approver is rejected as "already approved" and the
+// plan can never leave review_required.
+func TestChangeAPIApprovalActorIsAuthenticatedUser(t *testing.T) {
+	s, mux, _, aliceTok := newAuthServer(t)
+	login := func(u, p string) string {
+		t.Helper()
+		rec := doReq(t, mux, "POST", "/auth/login", `{"username":"`+u+`","password":"`+p+`"}`, nil)
+		if rec.Code != 200 {
+			t.Fatalf("login %s: %d %s", u, rec.Code, rec.Body.String())
+		}
+		for _, c := range rec.Result().Cookies() {
+			if c.Name == meta.SessionCookie {
+				return c.Value
+			}
+		}
+		t.Fatalf("no session cookie for %s", u)
+		return ""
+	}
+	for _, u := range []string{"dan", "erin"} {
+		if _, err := s.Meta.CreateLocalUser(t.Context(), u, u+"pass1", meta.RoleDBA, "", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	danTok, erinTok := login("dan", "danpass1"), login("erin", "erinpass1")
+
+	body := strings.Replace(changePlanBody, `"risk": "medium"`, `"risk": "critical"`, 1)
+	if rec := doReq(t, mux, "POST", "/api/changes", body, nil); rec.Code != 401 {
+		t.Fatalf("unauthenticated create should be 401, got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(t, mux, "POST", "/api/changes", body, withCookie(aliceTok)); rec.Code != 403 {
+		t.Fatalf("plain user create should be 403, got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(t, mux, "POST", "/api/changes", body, withCookie(danTok)); rec.Code != 201 {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(t, mux, "POST", "/api/changes/chg-http-1/submit", "", withCookie(danTok)); rec.Code != 200 {
+		t.Fatalf("submit: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Data change.Plan `json:"data"`
+	}
+	rec := doReq(t, mux, "POST", "/api/changes/chg-http-1/approve", "", withCookie(danTok))
+	if rec.Code != 200 {
+		t.Fatalf("first approve: %d %s", rec.Code, rec.Body.String())
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Data.State != change.ReviewRequired || len(resp.Data.Approvals) != 1 || resp.Data.Approvals[0].Actor != "dan" {
+		t.Fatalf("first approval must be attributed to dan and keep the plan in review: %s", rec.Body.String())
+	}
+	// The same approver cannot count twice.
+	rec = doReq(t, mux, "POST", "/api/changes/chg-http-1/approve", "", withCookie(danTok))
+	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "already approved") {
+		t.Fatalf("repeat approval by dan should be refused: %d %s", rec.Code, rec.Body.String())
+	}
+	// A second, distinct DBA completes the quorum.
+	rec = doReq(t, mux, "POST", "/api/changes/chg-http-1/approve", "", withCookie(erinTok))
+	if rec.Code != 200 {
+		t.Fatalf("second approve: %d %s", rec.Code, rec.Body.String())
+	}
+	resp.Data = change.Plan{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Data.State != change.Approved || len(resp.Data.Approvals) != 2 || resp.Data.Approvals[1].Actor != "erin" {
+		t.Fatalf("second approval by erin should approve the plan: %s", rec.Body.String())
 	}
 }
 
