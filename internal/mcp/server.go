@@ -29,6 +29,7 @@ import (
 	"sqlon/internal/meta"
 	"sqlon/internal/observability"
 	"sqlon/internal/storage"
+	"sqlon/internal/tracking"
 )
 
 const ProtocolVersion = "2025-06-18"
@@ -66,10 +67,15 @@ type Server struct {
 	OIDC          *OIDCProvider // nil = SSO disabled
 	mu            sync.Mutex
 	dataMu        sync.Mutex        // serializes dataset mutations + catalog reloads
-	settingsMu    sync.RWMutex      // guards Options.AdminToken/AllowedOrigins/OIDC live updates
+	settingsMu    sync.RWMutex      // guards Options.AdminToken/AllowedOrigins/OIDC/tracking live updates
 	bootDefaults  map[string]string // flag/env setting values captured at EnableMeta
-	sessions      map[string]time.Time
-	events        map[string]uint64
+	// tracking is the visitor-tracking configuration read from settings on
+	// every ApplySettings; zero value = off. trackingViolations keeps the
+	// origins the page policy blocked while tracking is on (in memory).
+	tracking           tracking.Config
+	trackingViolations *tracking.Recorder
+	sessions           map[string]time.Time
+	events             map[string]uint64
 	// pendingClar tracks blocking clarification questions per MCP session:
 	// prepare_sql_context sets them when it withholds the skeleton and clears
 	// them once the (re-)call succeeds; run_sql_safely refuses to execute
@@ -154,19 +160,20 @@ func NewServer(c *catalog.Catalog, opts Options) *Server {
 	coll.AlertWebhookURL = opts.AlertWebhookURL
 
 	s := &Server{
-		Options:         opts,
-		dataDir:         c.DataDir,
-		DB:              dbManager,
-		Collector:       coll,
-		Observability:   observability.New(dbManager, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders(), adapters.SecurityProviders(), adapters.ConfigProviders(), adapters.MaintenanceProviders()),
-		Changes:         changes,
-		sessions:        map[string]time.Time{},
-		events:          map[string]uint64{},
-		pendingClar:     map[string][]string{},
-		queryCache:      newResultCache(),
-		asyncJobs:       newAsyncJobStore(),
-		feedbackLimiter: newFeedbackRateLimiter(feedbackDefaultLimit, feedbackDefaultWindow),
-		metrics:         newMetricsRegistry(),
+		Options:            opts,
+		dataDir:            c.DataDir,
+		DB:                 dbManager,
+		Collector:          coll,
+		Observability:      observability.New(dbManager, adapters.ObservabilityProviders(), adapters.ReplicationProviders(), adapters.BackupProviders(), adapters.SecurityProviders(), adapters.ConfigProviders(), adapters.MaintenanceProviders()),
+		Changes:            changes,
+		sessions:           map[string]time.Time{},
+		events:             map[string]uint64{},
+		pendingClar:        map[string][]string{},
+		queryCache:         newResultCache(),
+		asyncJobs:          newAsyncJobStore(),
+		feedbackLimiter:    newFeedbackRateLimiter(feedbackDefaultLimit, feedbackDefaultWindow),
+		metrics:            newMetricsRegistry(),
+		trackingViolations: tracking.NewRecorder(),
 	}
 	s.setCatalog(c)
 	return s
@@ -181,6 +188,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.registerDBAPI(mux)
 	s.registerDBAConsole(mux)
 	s.registerPoolAPI(mux)
+	s.registerTracking(mux)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

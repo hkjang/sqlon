@@ -167,6 +167,75 @@ GRANT SELECT ANY TABLE TO sqlon_ro;
 
 ---
 
+### 3.4 방문 추적 스크립트 (`/admin/settings` → 방문 추적)
+
+어떤 화면이 실제로 쓰이는지 재기 위해 관리자가 **화면에서** 추적 도구를 붙일 수 있습니다. 설정은 메타 DB(`jasql_settings`)에 저장되고 저장 즉시 재기동 없이 적용됩니다. **기본값은 꺼짐**이며, 새로 설치한 서버는 켜기 전까지 화면도 응답 헤더도 달라지지 않습니다.
+
+| 설정 키 | 뜻 |
+| :--- | :--- |
+| `tracking_enabled` | 켜야 스니펫이 붙습니다. 기본 꺼짐. 끄면 화면과 정책이 원래대로 돌아갑니다 |
+| `tracking_provider` | `none` · `momento` · `ga4` · `gtm` · `matomo` · `custom` |
+| `tracking_momento_url` · `tracking_momento_site_id` | Momento 수집기 주소와 사이트 id |
+| `tracking_momento_proxy` | 기본 켜짐. 이 서버가 `/momento/*` 를 수집기로 넘깁니다(아래 참고) |
+| `tracking_measurement_id` | GA4 · GTM 의 측정 id |
+| `tracking_matomo_url` · `tracking_matomo_site_id` | Matomo 주소와 사이트 id |
+| `tracking_custom_snippet` | 붙여넣은 `<script>` 스니펫. **8KB** 를 넘으면 저장되지 않습니다 |
+| `tracking_allowed_hosts` | 스니펫에서 자동으로 읽지 못한 출처를 더하는 자리(쉼표 구분) |
+| `tracking_include_admin` | `/admin` 아래 관리 화면도 추적할지. 기본 아니오 |
+| `tracking_placement` | `head`(기본) 또는 `body` |
+
+여러 키가 함께 뜻을 이루므로(제공자 + 주소 + 사이트 id) 저장 시 **바뀐 뒤의 조합 전체**를 검사하며, 잘못된 조합은 아무것도 저장하지 않고 이유를 돌려줍니다. 스니펫은 `/api/*`·`/healthz`·`/mcp`·정적 자산(`nav.js` 등)에는 절대 붙지 않고 HTML 화면에만 붙습니다.
+
+#### Momento (사내 수집기) — 권장
+
+Momento 는 사내 자체 호스팅 수집기라 방문 데이터가 밖으로 나가지 않는 유일한 선택지이며, 제공자 목록의 첫 자리에 있습니다.
+
+1. `tracking_provider` = `momento`, `tracking_momento_url` = 수집기 주소(예: `https://momento.internal:8443`), `tracking_momento_site_id` = 사이트 id 를 넣고 `tracking_enabled` 를 켭니다.
+2. `tracking_momento_proxy` 가 켜져 있으면(기본) 화면에는 다음 스니펫이 들어가고, 이 서버가 `/momento/*` 요청을 수집기로 대신 전달합니다. 전달할 때 이 서버의 세션 쿠키·인증 헤더는 **떼어냅니다**.
+
+```html
+<script async src="/momento/tracker.js" nonce="…"
+        data-site-id="<site_id>" data-environment="prd"
+        data-contract-version="1" data-endpoint="/momento"></script>
+```
+
+같은 오리진으로 나가므로 외부 출처가 정책(CSP)에 아예 등장하지 않습니다. 프록시를 끄면 수집기 주소가 스니펫과 정책에 직접 적힙니다.
+
+#### 콘텐츠 보안 정책(CSP)과 nonce
+
+`<script>` 한 줄을 넣는 일이 아니라 어려운 쪽은 CSP 입니다. 스니펫을 정책 없이 붙이면 브라우저가 조용히 막고 관리자는 화면이 비어 있는 이유를 알 수 없습니다. SQLON 은 다음과 같이 처리합니다.
+
+* **요청마다 nonce** 를 만들어 스니펫의 **모든** `<script>` 태그에 붙이고(이미 nonce 가 있는 태그는 그대로 둠), 같은 값을 `script-src 'nonce-…'` 에 넣습니다. `'unsafe-inline'` 으로 정책을 푸는 일은 **하지 않습니다** — 한 번 풀면 추적을 끈 뒤에도 느슨한 채로 남기 때문입니다.
+* **정책 출처는 스니펫에서 읽어 냅니다.** 붙여 넣은 스니펫 안의 `http(s)://…` 출처를 긁어 `script-src`·`connect-src`·`img-src` 에 자동으로 더하고, 제공자별로 필요한 출처(GA4/GTM 의 googletagmanager 등)도 함께 더합니다. 못 읽은 출처는 `tracking_allowed_hosts` 에 손으로 더합니다.
+* 추적이 **켜진 화면**에만 다음 두 헤더가 나갑니다. 꺼지면 두 헤더 모두 사라져 원래대로 돌아갑니다.
+
+| 헤더 | 내용 | 비고 |
+| :--- | :--- | :--- |
+| `Content-Security-Policy` | `img-src 'self' data: blob: <출처…>; connect-src 'self' ws: wss: <출처…>; report-uri /api/tracking/csp-report` | **강제**. 스니펫의 신호(beacon)·픽셀은 여기에 적힌 출처로만 나갈 수 있습니다 |
+| `Content-Security-Policy-Report-Only` | `script-src 'self' 'nonce-<요청 nonce>' <출처…>; report-uri /api/tracking/csp-report` | **보고 전용**. 현재 관리 화면이 인라인 이벤트 핸들러(`onclick="…"`)를 쓰고 있어 script-src 를 강제하면 화면이 멈춥니다. 대신 위반을 신고만 받아 아래 표에 보이며, 인라인 핸들러를 걷어낸 뒤 같은 헤더를 강제로 바꿀 수 있게 준비되어 있습니다 |
+
+> [!NOTE]
+> 스니펫에 `İ`(U+0130) 나 `K`(U+212A 켈빈 기호)처럼 소문자로 바꾸면 바이트 길이가 달라지는 글자가 섞여 있어도 nonce 는 태그에 제대로 붙습니다. 태그 검색은 ASCII 만 접어서 비교합니다.
+
+#### 차단된 출처 보기와 허용
+
+추적이 켜져 있는 동안 브라우저는 정책에 막힌 요청을 `POST /api/tracking/csp-report` 로 신고하고, 서버는 **출처와 지시어**를 메모리에 기억합니다(같은 출처는 횟수만 늘어나며 최대 100건, 재기동 시 비워짐). `/admin/settings` 아래 **"방문 추적 — 차단된 출처"** 표에 `차단`(강제 정책이 막음) / `보고`(보고 전용 정책이 표시) / `허용됨`(이미 정책에 있음)으로 보이고, **[허용]** 을 누르면 `tracking_allowed_hosts` 에 더해져 즉시 정책에 반영됩니다.
+
+```bash
+# 차단된 출처 목록 (admin)
+curl -H "X-Admin-Token: $SQLON_ADMIN_TOKEN" http://localhost:6767/api/tracking/violations
+# 한 번에 허용
+curl -X POST -H "X-Admin-Token: $SQLON_ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"origin":"https://collector.example.com"}' http://localhost:6767/api/tracking/allow
+# 기록 지우기
+curl -X DELETE -H "X-Admin-Token: $SQLON_ADMIN_TOKEN" http://localhost:6767/api/tracking/violations
+```
+
+> [!IMPORTANT]
+> 로그인 화면(`/auth/login`)도 추적 대상이지만 스니펫은 페이지 방문만 보냅니다. 자격 증명이나 개인 식별 값을 보내는 스니펫을 붙이지 마십시오. 관리 화면(`/admin/*`)은 `tracking_include_admin` 이 켜졌을 때만 추적합니다.
+
+---
+
 ## 4. 메타데이터 동기화 및 관측성(Observability)
 
 ### 4.1 스키마 메타데이터 자동 동기화 (`metasync`)

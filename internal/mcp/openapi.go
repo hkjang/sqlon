@@ -16,7 +16,8 @@ var openAPISpec = `{
     { "name": "users", "description": "사용자 관리 — admin 전용 (meta DB 활성 시)" },
     { "name": "mcp-keys", "description": "MCP API 키 라이프사이클: 발급/조회/회전/폐기" },
     { "name": "grants", "description": "DB 프로파일 사용자 권한(use/manage) 부여·회수" },
-    { "name": "settings", "description": "런타임 설정(마스터 토큰·허용 Origin·Keycloak SSO)을 메타 DB에 저장·즉시 적용 — admin 전용" },
+    { "name": "settings", "description": "런타임 설정(마스터 토큰·허용 Origin·Keycloak SSO·방문 추적)을 메타 DB에 저장·즉시 적용 — admin 전용" },
+    { "name": "tracking", "description": "방문 추적: 정책(CSP)에 차단된 출처 신고·조회·허용 (tracking_* 설정은 /api/settings)" },
     { "name": "datasets", "description": "데이터셋 조회/교체/제거/복원" },
     { "name": "catalog", "description": "카탈로그 상태와 리로드" },
     { "name": "fleet", "description": "권한 범위의 DB 플릿 인벤토리와 근거 기반 연결·구성 위험 상태" },
@@ -186,11 +187,35 @@ var openAPISpec = `{
         "responses": { "200": {"description":"{settings[], sso_enabled, boot_only}"}, "403": {"description":"admin 아님"} } },
       "put": {
         "tags": ["settings"], "summary": "설정 저장·즉시 적용 (admin)",
-        "description": "본문은 key→value 맵. 값=설정, \"\"=빈값, null=삭제(플래그/env 기본값으로 복귀). 마스터 토큰·허용 Origin·OIDC(SSO)는 재기동 없이 적용됩니다.",
+        "description": "본문은 key→value 맵. 값=설정, \"\"=빈값, null=삭제(플래그/env 기본값으로 복귀). 마스터 토큰·허용 Origin·OIDC(SSO)·방문 추적(tracking_*)은 재기동 없이 적용됩니다. tracking_* 키는 바뀐 뒤의 조합 전체를 검사해 잘못되면 아무것도 저장하지 않습니다(8KB 초과 스니펫 포함).",
         "security": [{"SessionCookie":[]},{"AdminToken":[]}],
         "requestBody": { "required": true, "content": { "application/json": { "schema": {"type":"object","additionalProperties":{"type":["string","null"]}},
           "examples": { "oidc": { "value": { "oidc_issuer":"https://kc/realms/x","oidc_client_id":"sqlon","oidc_client_secret":"...","oidc_redirect_url":"https://host:6767/auth/sso/callback" } } } } } },
         "responses": { "200": {"description":"{ok, settings[], note}"}, "403": {"description":"admin 아님"} } }
+    },
+    "/api/tracking/csp-report": {
+      "post": {
+        "tags": ["tracking"], "summary": "브라우저 CSP 위반 신고 수신 (인증 없음, 추적이 켜진 동안만 기록)",
+        "description": "페이지 정책의 report-uri. 본문은 application/csp-report 형식 {csp-report:{blocked-uri, effective-directive, document-uri, disposition}}. http(s) 출처만 기억하며 같은 (지시어, 출처)는 횟수만 늘어납니다(최대 100건).",
+        "requestBody": { "required": true, "content": { "application/csp-report": { "schema": {"type":"object"} }, "application/json": { "schema": {"type":"object"} } } },
+        "responses": { "204": {"description":"접수(또는 무시)"} } }
+    },
+    "/api/tracking/violations": {
+      "get": {
+        "tags": ["tracking"], "summary": "차단된 출처 목록 (admin)",
+        "security": [{"SessionCookie":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{enabled, provider, proxy, validation_error?, policy?, policy_report_only?, violations[{origin,directive,disposition,page,count,first_seen,last_seen,allowed}]}"}, "403": {"description":"admin 아님"} } },
+      "delete": {
+        "tags": ["tracking"], "summary": "기록 지우기 (admin)",
+        "security": [{"SessionCookie":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{ok}"} } }
+    },
+    "/api/tracking/allow": {
+      "post": {
+        "tags": ["tracking"], "summary": "차단된 출처를 tracking_allowed_hosts 에 더하고 즉시 적용 (admin)",
+        "security": [{"SessionCookie":[]},{"AdminToken":[]}],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"type":"object","properties":{"origin":{"type":"string","example":"https://collector.example.com"}},"required":["origin"]}}}},
+        "responses": { "200": {"description":"{ok, allowed_hosts}"}, "400": {"description":"http(s) 출처가 아님"} } }
     },
     "/api/health": {
       "get": {
