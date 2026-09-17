@@ -156,8 +156,12 @@ async function forgetViolations() {
 function control(s) {
   const key = ' data-key="' + esc(s.key) + '"';
   if (s.type === 'bool') {
-    const on = /^(1|true|yes|on|y)$/i.test(String(s.value || ''));
-    return '<label class="check"><input type="checkbox"' + key + (on ? ' checked' : '') + '> 사용</label>';
+    // Draw the state the server actually reads: a setting whose default is
+    // "true" (momento proxy) is on unless explicitly negative, others are on
+    // only when explicitly positive. Blank therefore renders as the default.
+    const v = String(s.is_set ? s.value : '').trim();
+    const on = s.default === 'true' ? !/^(0|false|no|off|n)$/i.test(v) : /^(1|true|yes|on|y)$/i.test(v);
+    return '<label class="check"><input type="checkbox"' + key + ' data-initial="' + on + '"' + (on ? ' checked' : '') + '> 사용</label>';
   }
   if (s.type === 'select') {
     return '<select' + key + '>' + (s.options || []).map(o =>
@@ -173,8 +177,13 @@ async function save(ev) {
   ev.preventDefault();
   const payload = {};
   document.querySelectorAll('#groups input, #groups select, #groups textarea').forEach(inp => {
-    // checkbox: always explicit ("true"/"false") so unticking really turns it off
-    if (inp.type === 'checkbox') { payload[inp.dataset.key] = inp.checked ? 'true' : 'false'; return; }
+    // checkbox: explicit "true"/"false" so unticking really turns it off, but
+    // only when it was actually toggled — an untouched box must not persist a
+    // value (e.g. saving the master token must not write momento_proxy=false).
+    if (inp.type === 'checkbox') {
+      if (String(inp.checked) !== inp.dataset.initial) payload[inp.dataset.key] = inp.checked ? 'true' : 'false';
+      return;
+    }
     const v = inp.value;
     // secret with placeholder-only (unchanged) → skip; others send if non-empty or explicitly changed
     if (v !== '') payload[inp.dataset.key] = v;

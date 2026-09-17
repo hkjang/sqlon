@@ -273,17 +273,28 @@ func (s *Server) registerAuthAPI(mux *http.ServeMux) {
 			writeAPIError(w, http.StatusBadRequest, err)
 			return
 		}
+		// 키별 검사(알려진 키·값 형식)도 저장 전에 모두 마친다. 저장 루프 안에서
+		// 실패하면 map 순회 순서에 따라 일부 키만 남는 부분 저장이 된다.
+		for key, val := range req {
+			if val == nil {
+				continue
+			}
+			if err := s.Meta.CheckSetting(key, *val); err != nil {
+				if errors.Is(err, meta.ErrInvalidSetting) {
+					writeAPIError(w, http.StatusBadRequest, err)
+					return
+				}
+				writeAPIError(w, http.StatusBadRequest, errEmpty("unknown or invalid setting: "+key))
+				return
+			}
+		}
 		for key, val := range req {
 			if val == nil {
 				_ = s.Meta.Store.DeleteSetting(r.Context(), key)
 				continue
 			}
 			if err := s.Meta.ApplySetting(r.Context(), key, *val, actorName(actor)); err != nil {
-				if errors.Is(err, meta.ErrInvalidSetting) {
-					writeAPIError(w, http.StatusBadRequest, err)
-					return
-				}
-				writeAPIError(w, http.StatusBadRequest, errEmpty("unknown or invalid setting: "+key))
+				writeAPIError(w, http.StatusInternalServerError, err)
 				return
 			}
 		}

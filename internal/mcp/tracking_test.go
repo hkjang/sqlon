@@ -171,6 +171,24 @@ func TestTrackingSettingsValidation(t *testing.T) {
 	if rec := putSettings(t, mux, adminTok, `{"tracking_matomo_url":"ftp://x"}`); rec.Code != 400 {
 		t.Fatalf("bad url accepted: %d", rec.Code)
 	}
+	// a per-key format error refuses the whole request: the valid key beside
+	// it must not land either, whatever order the map is walked in
+	for i := 0; i < 16; i++ {
+		if rec := putSettings(t, mux, adminTok, `{"tracking_enabled":"false","tracking_matomo_url":"ftp://x"}`); rec.Code != 400 {
+			t.Fatalf("bad url beside valid key accepted: %d", rec.Code)
+		}
+		stored, _ = s.Meta.Store.GetSettings(t.Context())
+		if _, ok := stored["tracking_enabled"]; ok {
+			t.Fatalf("partial change stored beside bad url: %v", stored)
+		}
+		if rec := putSettings(t, mux, adminTok, `{"tracking_placement":"body","no_such_setting":"1"}`); rec.Code != 400 {
+			t.Fatalf("unknown key beside valid key accepted: %d", rec.Code)
+		}
+		stored, _ = s.Meta.Store.GetSettings(t.Context())
+		if _, ok := stored["tracking_placement"]; ok {
+			t.Fatalf("partial change stored beside unknown key: %v", stored)
+		}
+	}
 
 	// settings view exposes the group with control types for the console
 	rec = doReq(t, mux, "GET", "/api/settings", "", withCookie(adminTok))
@@ -180,13 +198,16 @@ func TestTrackingSettingsValidation(t *testing.T) {
 			Group   string   `json:"group"`
 			Type    string   `json:"type"`
 			Options []string `json:"options"`
+			Default string   `json:"default"`
 		} `json:"settings"`
 	}
 	_ = json.Unmarshal(rec.Body.Bytes(), &view)
 	found := map[string]string{}
+	defaults := map[string]string{}
 	for _, s := range view.Settings {
 		if s.Group == "방문 추적" {
 			found[s.Key] = s.Type
+			defaults[s.Key] = s.Default
 			if s.Key == "tracking_provider" && (len(s.Options) == 0 || s.Options[1] != "momento") {
 				t.Fatalf("momento must be the first real provider: %v", s.Options)
 			}
@@ -194,6 +215,11 @@ func TestTrackingSettingsValidation(t *testing.T) {
 	}
 	if found["tracking_enabled"] != "bool" || found["tracking_custom_snippet"] != "multiline" || found["tracking_provider"] != "select" {
 		t.Fatalf("control types: %v", found)
+	}
+	// the console draws a blank bool as its server-side default: the proxy is
+	// on unless explicitly turned off, the others are off unless turned on
+	if defaults["tracking_momento_proxy"] != "true" || defaults["tracking_enabled"] != "" || defaults["tracking_include_admin"] != "" {
+		t.Fatalf("bool defaults: %v", defaults)
 	}
 }
 

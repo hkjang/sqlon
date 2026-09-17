@@ -37,6 +37,9 @@ type SettingDef struct {
 	Type string `json:"type,omitempty"`
 	// Options lists the accepted values for a "select" setting.
 	Options []string `json:"options,omitempty"`
+	// Default is what an unset value means to the server, so the console can
+	// draw a blank "bool" as the state it really is (e.g. proxy = on).
+	Default string `json:"default,omitempty"`
 	// Validate rejects a value before it is stored; nil accepts anything.
 	Validate func(value string) error `json:"-"`
 }
@@ -64,7 +67,7 @@ var SettingDefs = []SettingDef{
 	{Key: tracking.SetMomentoURL, Label: "Momento 수집기 주소", Group: "방문 추적",
 		Help: "예: https://momento.internal:8443", Validate: validateOptionalURL},
 	{Key: tracking.SetMomentoSiteID, Label: "Momento 사이트 ID", Group: "방문 추적", Help: ""},
-	{Key: tracking.SetMomentoProxy, Label: "Momento 같은 오리진 프록시", Group: "방문 추적", Type: "bool",
+	{Key: tracking.SetMomentoProxy, Label: "Momento 같은 오리진 프록시", Group: "방문 추적", Type: "bool", Default: "true",
 		Help: "기본 켜짐. 이 서버가 /momento/* 를 수집기로 넘겨 외부 출처가 정책에 등장하지 않습니다."},
 	{Key: tracking.SetMeasurementID, Label: "GA4 / GTM 측정 ID", Group: "방문 추적", Help: "예: G-XXXXXXX 또는 GTM-XXXXXXX"},
 	{Key: tracking.SetMatomoURL, Label: "Matomo 주소", Group: "방문 추적", Help: "예: https://matomo.example.com", Validate: validateOptionalURL},
@@ -210,7 +213,7 @@ func (s *Service) SettingsView(ctx context.Context) ([]map[string]any, error) {
 		out = append(out, map[string]any{
 			"key": d.Key, "label": d.Label, "secret": d.Secret, "group": d.Group,
 			"help": d.Help, "value": MaskSettingValue(d.Key, v), "is_set": v != "",
-			"type": d.Type, "options": d.Options,
+			"type": d.Type, "options": d.Options, "default": d.Default,
 		})
 	}
 	return out, nil
@@ -220,8 +223,10 @@ func (s *Service) SettingsView(ctx context.Context) ([]map[string]any, error) {
 // tell "unknown key" from "bad value" and show the reason.
 var ErrInvalidSetting = errors.New("invalid setting value")
 
-// ApplySetting validates and stores a single setting.
-func (s *Service) ApplySetting(ctx context.Context, key, value, updatedBy string) error {
+// CheckSetting validates a value against its definition without storing it,
+// so a multi-key update can be refused as a whole before anything is written.
+// Returns ErrNotFound for an unknown key and ErrInvalidSetting for a bad value.
+func (s *Service) CheckSetting(key, value string) error {
 	d, ok := settingDef(key)
 	if !ok {
 		return ErrNotFound
@@ -230,6 +235,14 @@ func (s *Service) ApplySetting(ctx context.Context, key, value, updatedBy string
 		if err := d.Validate(value); err != nil {
 			return fmt.Errorf("%w: %s: %v", ErrInvalidSetting, key, err)
 		}
+	}
+	return nil
+}
+
+// ApplySetting validates and stores a single setting.
+func (s *Service) ApplySetting(ctx context.Context, key, value, updatedBy string) error {
+	if err := s.CheckSetting(key, value); err != nil {
+		return err
 	}
 	return s.Store.SetSetting(ctx, key, value, updatedBy)
 }
