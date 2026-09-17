@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- REST 변경 관리 API(`/api/changes/*`)가 인증한 사용자를 요청 컨텍스트에
+  실어, 승인·실행·롤백 기록의 행위자가 항상 `dba` 로 남던 문제를
+  고쳤습니다. 승인 2건이 필요한 `critical` 계획에서 두 번째 승인자가
+  "already approved" 로 막혀 승인이 끝나지 않던 현상이 사라집니다. 같은
+  경로의 REST 감사 항목(`admin:*`)에도 `actor` 필드로 인증 사용자 이름을
+  남깁니다(단독 모드에서는 없음).
+
 ## v0.1.5 — 2026-09-14
 
 - PII 노출 리포트(`get_pii_exposure`)의 짧은 ASCII 단서(`pan`·`dob`·`ssn`·

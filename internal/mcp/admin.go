@@ -297,7 +297,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	// Plan creation and approval are shared service calls; no endpoint here can
 	// execute privileged SQL.
 	mux.HandleFunc("GET /api/changes", func(w http.ResponseWriter, r *http.Request) {
-		if !s.requireDBA(w, r) {
+		r, ok := s.requireDBA(w, r)
+		if !ok {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": s.Changes.List(), "collected_at": time.Now().UTC()})
@@ -306,7 +307,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	// command/verification/compensation SQL for reversible privileged
 	// operations; changes nothing on the target DB.
 	mux.HandleFunc("POST /api/changes/predict-impact", func(w http.ResponseWriter, r *http.Request) {
-		if !s.requireDBA(w, r) {
+		r, ok := s.requireDBA(w, r)
+		if !ok {
 			return
 		}
 		var req struct {
@@ -335,7 +337,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "prediction": change.PredictImpact(engine, req.SQL)})
 	})
 	mux.HandleFunc("POST /api/changes/template", func(w http.ResponseWriter, r *http.Request) {
-		if !s.requireDBA(w, r) {
+		r, ok := s.requireDBA(w, r)
+		if !ok {
 			return
 		}
 		var req struct {
@@ -361,7 +364,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": step, "dialect": dialect})
 	})
 	mux.HandleFunc("POST /api/changes", func(w http.ResponseWriter, r *http.Request) {
-		if !s.requireDBA(w, r) {
+		r, ok := s.requireDBA(w, r)
+		if !ok {
 			return
 		}
 		var p change.Plan
@@ -381,7 +385,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	// lock/rewrite impact attached. It only ASSEMBLES a draft — nothing executes
 	// until the normal submit→approve→execute gate is passed.
 	mux.HandleFunc("POST /api/changes/generate", func(w http.ResponseWriter, r *http.Request) {
-		if !s.requireDBA(w, r) {
+		r, ok := s.requireDBA(w, r)
+		if !ok {
 			return
 		}
 		var req struct {
@@ -416,7 +421,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 			"notice": "초안(draft)이 생성되었습니다. 변경 관리에서 제출→승인→실행하세요.", "collected_at": time.Now().UTC()})
 	})
 	mux.HandleFunc("GET /api/changes/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if !s.requireDBA(w, r) {
+		r, ok := s.requireDBA(w, r)
+		if !ok {
 			return
 		}
 		p, ok := s.Changes.Get(r.PathValue("id"))
@@ -427,7 +433,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": p})
 	})
 	mux.HandleFunc("POST /api/changes/{id}/submit", func(w http.ResponseWriter, r *http.Request) {
-		if !s.requireDBA(w, r) {
+		r, ok := s.requireDBA(w, r)
+		if !ok {
 			return
 		}
 		p, err := s.Changes.Submit(r.PathValue("id"))
@@ -438,7 +445,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": p})
 	})
 	mux.HandleFunc("POST /api/changes/{id}/approve", func(w http.ResponseWriter, r *http.Request) {
-		if !s.requireDBA(w, r) {
+		r, ok := s.requireDBA(w, r)
+		if !ok {
 			return
 		}
 		actor := "dba"
@@ -453,7 +461,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": p})
 	})
 	mux.HandleFunc("POST /api/changes/{id}/execute", func(w http.ResponseWriter, r *http.Request) {
-		if !s.requireDBA(w, r) {
+		r, ok := s.requireDBA(w, r)
+		if !ok {
 			return
 		}
 		id := r.PathValue("id")
@@ -496,7 +505,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	// only reachable from rollback_required, i.e. after an approved execution
 	// failed — so no separate approval id is required, matching MCP semantics.
 	mux.HandleFunc("POST /api/changes/{id}/rollback", func(w http.ResponseWriter, r *http.Request) {
-		if !s.requireDBA(w, r) {
+		r, ok := s.requireDBA(w, r)
+		if !ok {
 			return
 		}
 		id := r.PathValue("id")
@@ -517,7 +527,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": p, "collected_at": time.Now().UTC()})
 	})
 	mux.HandleFunc("POST /api/changes/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
-		if !s.requireDBA(w, r) {
+		r, ok := s.requireDBA(w, r)
+		if !ok {
 			return
 		}
 		p, err := s.Changes.Cancel(r.PathValue("id"))
@@ -1103,7 +1114,11 @@ func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 
 // requireDBA gates the REST DBA console: meta mode needs the dba (or admin)
 // role; standalone falls back to the master-token gate exactly like admin.
-func (s *Server) requireDBA(w http.ResponseWriter, r *http.Request) bool {
+// On success the returned request carries the authenticated user in its
+// context (userFrom), so change approvals and audit entries name the real
+// actor instead of a shared placeholder — critical plans need two distinct
+// approvers, which is impossible when every approval is attributed to "dba".
+func (s *Server) requireDBA(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
 	if s.authEnabled() {
 		u, err := s.authenticate(r)
 		if err != nil {
@@ -1111,19 +1126,19 @@ func (s *Server) requireDBA(w http.ResponseWriter, r *http.Request) bool {
 				"error": "authentication required",
 				"hint":  "로그인 세션, MCP 키, 또는 X-Admin-Token이 필요합니다.",
 			})
-			return false
+			return r, false
 		}
 		if !u.IsDBA() {
 			writeJSON(w, http.StatusForbidden, map[string]any{
 				"error": "dba or admin role required",
 				"hint":  "DBA 콘솔은 dba/admin 역할 전용입니다. 관리자에게 역할 승격을 요청하세요.",
 			})
-			return false
+			return r, false
 		}
-		return true
+		return r.WithContext(withUser(r.Context(), u)), true
 	}
 	// standalone: same master-token gate as admin
-	return s.requireAdmin(w, r)
+	return r, s.requireAdmin(w, r)
 }
 
 // adminAudit records REST mutations into the same audit JSONL as MCP calls.
