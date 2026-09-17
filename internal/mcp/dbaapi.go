@@ -29,7 +29,8 @@ func (s *Server) registerDBAConsole(mux *http.ServeMux) {
 	// ---- inspection (POST with {profile} for uniformity) ----
 	post := func(path string, fn func(ctx context.Context, req dbaReq) map[string]any) {
 		mux.HandleFunc("POST "+path, func(w http.ResponseWriter, r *http.Request) {
-			if !s.requireDBA(w, r) {
+			r, ok := s.requireDBA(w, r)
+			if !ok {
 				return
 			}
 			var req dbaReq
