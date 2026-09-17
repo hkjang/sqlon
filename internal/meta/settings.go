@@ -81,7 +81,10 @@ var SettingDefs = []SettingDef{
 			return nil
 		}},
 	{Key: tracking.SetAllowedHosts, Label: "추가 허용 출처(쉼표 구분)", Group: "방문 추적",
-		Help: "스니펫에서 자동으로 못 읽은 출처. 아래 '차단된 출처' 목록에서 한 번에 더할 수 있습니다."},
+		Help: "스니펫에서 자동으로 못 읽은 출처. https://host[:port] 또는 https://*.host 형식만 받으며, 아래 '차단된 출처' 목록에서 한 번에 더할 수 있습니다.",
+		// 값이 그대로 정책(CSP)에 실리므로 출처 형식만 통과시킨다 — 'unsafe-inline'
+		// 같은 키워드나 ';' 로 지시어를 끼워 넣는 길을 여기서 막는다.
+		Validate: tracking.ValidateAllowedHosts},
 	{Key: tracking.SetIncludeAdmin, Label: "관리 화면도 추적", Group: "방문 추적", Type: "bool",
 		Help: "기본 아니오. /admin 아래 화면은 이 값이 켜졌을 때만 추적합니다."},
 	{Key: tracking.SetPlacement, Label: "삽입 위치", Group: "방문 추적", Type: "select", Options: []string{"head", "body"},

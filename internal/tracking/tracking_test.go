@@ -166,6 +166,42 @@ func TestSnippetOriginsAndPolicySources(t *testing.T) {
 	}
 }
 
+func TestValidateAllowedHosts(t *testing.T) {
+	for _, good := range []string{
+		"", " ", "https://a.example.com", "http://a.example.com:8080", "https://*.x.example.com",
+		"https://[::1]:9", "https://10.0.0.5", "HTTPS://A.Example.com",
+		"https://a.example.com, https://b.example.com\nhttps://c.example.com\thttp://d",
+	} {
+		if err := ValidateAllowedHosts(good); err != nil {
+			t.Fatalf("%q refused: %v", good, err)
+		}
+	}
+	for _, bad := range []string{
+		"'unsafe-inline'", "'self'", "*", "data:", "blob:", "https:", "javascript:",
+		"https://a.example.com;default-src", "https://a.example.com;", "x;default-src",
+		"'unsafe-inline' * data: x;default-src", "https://a.example.com/path", "https://a.example.com/",
+		"https://a.example.com?x", "https://a.example.com#x", "a.example.com", "ftp://a.example.com",
+		"https://user@a.example.com", "https://*", "https://*.", "https://a.*.example.com",
+		"https://*.10.0.0.5", "https://a.example.com:x", "https://a.example.com\v'unsafe-inline'",
+		"https://a.example.com, 'unsafe-inline'",
+	} {
+		if err := ValidateAllowedHosts(bad); err == nil {
+			t.Fatalf("%q accepted", bad)
+		}
+	}
+}
+
+func TestPolicySourcesDropNonOrigins(t *testing.T) {
+	// A value stored before the setting was validated still may not reach
+	// the header as anything but an origin.
+	c := ReadConfig(map[string]string{SetEnabled: "true", SetProvider: "custom", SetCustomSnippet: "<script>1</script>",
+		SetAllowedHosts: "'unsafe-inline' * data: x;default-src https://ok.example.com"})
+	p := PolicyFor(c, "/", "n")
+	if p.Enforced != "img-src 'self' data: blob: https://ok.example.com; connect-src 'self' ws: wss: https://ok.example.com; report-uri "+ReportPath {
+		t.Fatalf("policy carries non-origin tokens: %s", p.Enforced)
+	}
+}
+
 func TestInjectPlacement(t *testing.T) {
 	page := []byte("<!DOCTYPE html><HTML><HEAD><title>x</title></HEAD><BODY>hi</BODY></HTML>")
 	head := string(Inject(page, "<script>1</script>", "head"))

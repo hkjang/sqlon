@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"path"
 	"strings"
 
 	"sqlon/internal/tracking"
@@ -155,12 +156,23 @@ func (s *Server) registerTracking(mux *http.ServeMux) {
 	})
 }
 
-// handleMomentoProxy forwards /momento/* to the configured collector. The
-// collector receives visitor beacons only, so the app's own credentials are
-// stripped before the request leaves.
+// handleMomentoProxy forwards the tracker script and its beacons under
+// /momento/ to the configured collector. Only the two paths the tracker
+// actually uses go through, each with the method the tracker sends: the
+// collector serves its console, admin API, login and health on the same
+// origin, and an anonymous visitor must not be able to reach those from here.
+// The app's own credentials are stripped before the request leaves.
 func (s *Server) handleMomentoProxy(w http.ResponseWriter, r *http.Request) {
 	cfg := s.trackingConfig()
 	if !cfg.UsesProxy() {
+		http.NotFound(w, r)
+		return
+	}
+	rel := path.Clean(strings.TrimPrefix(r.URL.Path, tracking.ProxyPath))
+	switch {
+	case rel == tracking.ProxyTrackerPath && (r.Method == http.MethodGet || r.Method == http.MethodHead):
+	case rel == tracking.ProxyCollectPath && r.Method == http.MethodPost:
+	default:
 		http.NotFound(w, r)
 		return
 	}
@@ -172,7 +184,9 @@ func (s *Server) handleMomentoProxy(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 256<<10)
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
-			pr.Out.URL.Path = strings.TrimPrefix(pr.Out.URL.Path, tracking.ProxyPath)
+			// SetURL joins target.Path (a collector under a base path) with
+			// the cleaned relative path, so a base path survives the hop.
+			pr.Out.URL.Path = rel
 			pr.Out.URL.RawPath = ""
 			pr.SetURL(target)
 			for _, h := range []string{"Cookie", "Authorization", "X-Admin-Token", "X-MCP-Key"} {

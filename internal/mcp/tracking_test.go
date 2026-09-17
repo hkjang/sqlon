@@ -49,9 +49,11 @@ func TestTrackingMomentoProxyEndToEnd(t *testing.T) {
 	_, mux, adminTok, userTok := newAuthServer(t)
 
 	// A stand-in collector: records what reached it.
-	var gotPath, gotCookie, gotHost string
+	var gotMethod, gotPath, gotCookie, gotHost string
+	hits := 0
 	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath, gotCookie, gotHost = r.URL.Path, r.Header.Get("Cookie"), r.Host
+		hits++
+		gotMethod, gotPath, gotCookie, gotHost = r.Method, r.URL.Path, r.Header.Get("Cookie"), r.Host
 		w.Header().Set("Content-Type", "application/javascript")
 		_, _ = w.Write([]byte("/* tracker */"))
 	}))
@@ -123,8 +125,57 @@ func TestTrackingMomentoProxyEndToEnd(t *testing.T) {
 	if rec.Code != 200 || rec.Body.String() != "/* tracker */" {
 		t.Fatalf("proxy: %d %s", rec.Code, rec.Body.String())
 	}
-	if gotPath != "/tracker.js" || gotCookie != "" || gotHost == "" {
-		t.Fatalf("proxied request path=%q cookie=%q host=%q", gotPath, gotCookie, gotHost)
+	if gotMethod != "GET" || gotPath != "/tracker.js" || gotCookie != "" || gotHost == "" {
+		t.Fatalf("proxied request %s %s cookie=%q host=%q", gotMethod, gotPath, gotCookie, gotHost)
+	}
+	// ...and the beacon endpoint tracker.js posts to (contract version 1)
+	rec = doReq(t, mux, "POST", "/momento/collect/v1/events", `{"site_id":"sqlon","events":[]}`, map[string]string{"Content-Type": "application/json"})
+	if rec.Code != 200 || gotMethod != "POST" || gotPath != "/collect/v1/events" {
+		t.Fatalf("beacon proxy: %d %s %s", rec.Code, gotMethod, gotPath)
+	}
+
+	// The collector serves its console, admin API, login and health on the
+	// same origin: nothing outside the two tracker paths may pass, and the
+	// tracker paths only with the method the tracker uses.
+	seen := hits
+	for _, c := range []struct{ method, path string }{
+		{"DELETE", "/momento/api/admin/users/1"},
+		{"GET", "/momento/api/admin/users"},
+		{"POST", "/momento/api/auth/login"},
+		{"GET", "/momento/healthz"},
+		{"GET", "/momento/"},
+		{"GET", "/momento/collect/v1/events"},
+		{"DELETE", "/momento/collect/v1/events"},
+		{"POST", "/momento/tracker.js"},
+		{"GET", "/momento/tracker.js/../api/admin/users"},
+		{"GET", "/momento/tracker.json"},
+	} {
+		rec := doReq(t, mux, c.method, c.path, "", nil)
+		// (the mux answers a dot-segment path with a redirect before the proxy sees it)
+		if rec.Code != 404 && rec.Code/100 != 3 {
+			t.Fatalf("%s %s passed through the proxy: %d", c.method, c.path, rec.Code)
+		}
+		if hits != seen {
+			t.Fatalf("%s %s reached the collector as %s %s", c.method, c.path, gotMethod, gotPath)
+		}
+	}
+
+	// A collector under a base path keeps it on the forwarded request, and
+	// the allow list is applied to the path relative to /momento.
+	if rec := putSettings(t, mux, adminTok, `{"tracking_momento_url":"`+collector.URL+`/base/"}`); rec.Code != 200 {
+		t.Fatalf("base path: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doReq(t, mux, "GET", "/momento/tracker.js", "", nil)
+	if rec.Code != 200 || gotMethod != "GET" || gotPath != "/base/tracker.js" {
+		t.Fatalf("base path tracker: %d %s %s", rec.Code, gotMethod, gotPath)
+	}
+	rec = doReq(t, mux, "POST", "/momento/collect/v1/events", `{}`, nil)
+	if rec.Code != 200 || gotMethod != "POST" || gotPath != "/base/collect/v1/events" {
+		t.Fatalf("base path beacon: %d %s %s", rec.Code, gotMethod, gotPath)
+	}
+	seen = hits
+	if rec := doReq(t, mux, "DELETE", "/momento/api/admin/users/1", "", nil); rec.Code != 404 || hits != seen {
+		t.Fatalf("base path admin passed through: %d hits=%d", rec.Code, hits-seen)
 	}
 
 	// turning it off restores the page and drops the headers
@@ -171,6 +222,47 @@ func TestTrackingSettingsValidation(t *testing.T) {
 	if rec := putSettings(t, mux, adminTok, `{"tracking_matomo_url":"ftp://x"}`); rec.Code != 400 {
 		t.Fatalf("bad url accepted: %d", rec.Code)
 	}
+	// the allow list is written verbatim into the page policy, so only origins
+	// may be stored: no keywords, no scheme sources, no directive injection
+	for _, bad := range []string{
+		`'unsafe-inline'`, `'self'`, `*`, `data:`, `blob:`, `https:`, `javascript:`,
+		`https://a.example.com;default-src`, `https://a.example.com;`, `x;default-src`,
+		`'unsafe-inline' * data: x;default-src`, `https://a.example.com/path`,
+		`a.example.com`, `ftp://a.example.com`, `https://user@a.example.com`,
+		`https://*`, `https://*.`, `https://a.*.example.com`, `https://a.example.com:x`,
+		`https://a.example.com\u000b'unsafe-inline'`, // JSON escape: a vertical tab inside the token
+	} {
+		rec := putSettings(t, mux, adminTok, `{"tracking_allowed_hosts":"`+bad+`"}`)
+		if rec.Code != 400 || !strings.Contains(rec.Body.String(), "tracking_allowed_hosts") {
+			t.Fatalf("allowed host %q accepted: %d %s", bad, rec.Code, rec.Body.String())
+		}
+		stored, _ = s.Meta.Store.GetSettings(t.Context())
+		if stored["tracking_allowed_hosts"] != "" {
+			t.Fatalf("bad allowed host stored: %q", stored["tracking_allowed_hosts"])
+		}
+	}
+	// origins and wildcard hosts pass, however the list is separated
+	good := "https://*.x.example.com, http://a.example.com:8080 https://b.example.com\nhttps://[::1]:9\thttps://10.0.0.5"
+	if rec := putSettings(t, mux, adminTok, `{"tracking_allowed_hosts":"`+strings.ReplaceAll(strings.ReplaceAll(good, "\n", `\n`), "\t", `\t`)+`"}`); rec.Code != 200 {
+		t.Fatalf("valid allowed hosts refused: %d %s", rec.Code, rec.Body.String())
+	}
+	stored, _ = s.Meta.Store.GetSettings(t.Context())
+	if stored["tracking_allowed_hosts"] != good {
+		t.Fatalf("allowed hosts stored as %q", stored["tracking_allowed_hosts"])
+	}
+	rec = putSettings(t, mux, adminTok, `{"tracking_enabled":"true","tracking_provider":"custom","tracking_custom_snippet":"<script>1</script>"}`)
+	if rec.Code != 200 {
+		t.Fatalf("enable custom: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doReq(t, mux, "GET", "/auth/login", "", nil)
+	if csp := rec.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "img-src 'self' data: blob: https://*.x.example.com http://a.example.com:8080 https://b.example.com https://[::1]:9 https://10.0.0.5;") {
+		t.Fatalf("wildcard host missing from policy: %s", csp)
+	}
+	// back to a fresh install for the checks below
+	if rec := putSettings(t, mux, adminTok, `{"tracking_enabled":null,"tracking_provider":null,"tracking_custom_snippet":null,"tracking_allowed_hosts":null}`); rec.Code != 200 {
+		t.Fatalf("clear: %d %s", rec.Code, rec.Body.String())
+	}
+
 	// a per-key format error refuses the whole request: the valid key beside
 	// it must not land either, whatever order the map is walked in
 	for i := 0; i < 16; i++ {

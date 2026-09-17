@@ -11,8 +11,10 @@ package tracking
 import (
 	"fmt"
 	"html"
+	"net"
 	"net/url"
 	"strings"
+	"unicode"
 )
 
 const (
@@ -31,6 +33,14 @@ const (
 	// ProxyPath is the same-origin path the app forwards to the Momento
 	// collector. With the proxy, no external origin appears in the policy.
 	ProxyPath = "/momento"
+
+	// The only two collector paths the tracker reaches through the proxy
+	// (momento contract version 1): the script itself, and the batch endpoint
+	// tracker.js derives from data-endpoint as `${endpoint}/collect/v1/events`.
+	// The collector serves its console, admin API and login on the same
+	// origin, so everything else must stay unreachable from here.
+	ProxyTrackerPath = "/tracker.js"
+	ProxyCollectPath = "/collect/v1/events"
 )
 
 // Providers lists the accepted provider values in display order.
@@ -193,7 +203,7 @@ func (c Config) Snippet(nonce string) string {
 			if originOf(c.MomentoURL) == "" {
 				return ""
 			}
-			return withNonce(fmt.Sprintf(`<script async src="%s/tracker.js" data-site-id="%s" data-environment="prd" data-contract-version="1" data-endpoint="%s"></script>`, ProxyPath, site, ProxyPath), nonce)
+			return withNonce(fmt.Sprintf(`<script async src="%s%s" data-site-id="%s" data-environment="prd" data-contract-version="1" data-endpoint="%s"></script>`, ProxyPath, ProxyTrackerPath, site, ProxyPath), nonce)
 		}
 		base := strings.TrimRight(c.MomentoURL, "/")
 		if originOf(base) == "" {
@@ -348,8 +358,13 @@ func (c Config) PolicySources() (scripts, connects, images []string) {
 			add(origin)
 		}
 	}
+	// Only origins reach the header: the setting is validated on the way in,
+	// and a value that got in before that check is still not allowed to
+	// place a keyword or a second directive into the policy.
 	for _, host := range SplitHosts(c.AllowedHosts) {
-		add(host)
+		if validateAllowedHost(host) == nil {
+			add(host)
+		}
 	}
 	return scripts, connects, images
 }
@@ -364,6 +379,62 @@ func SplitHosts(list string) []string {
 		}
 	}
 	return out
+}
+
+// ValidateAllowedHosts refuses an allow list unless every entry is an origin:
+// `https?://host[:port]` or the wildcard form `https://*.host`. The entries
+// are written verbatim into the page policy, so a quoted keyword such as
+// 'unsafe-inline', a bare `*`, a scheme source like data: or a `;` would
+// otherwise let the setting rewrite the policy instead of adding to it.
+func ValidateAllowedHosts(list string) error {
+	for _, host := range SplitHosts(list) {
+		if err := validateAllowedHost(host); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateAllowedHost(token string) error {
+	bad := func() error {
+		return fmt.Errorf("%q: https://host[:port] 또는 https://*.host 형식의 출처만 허용됩니다", token)
+	}
+	// url.Parse lets these through as part of the host; in a policy they
+	// end a source, quote a keyword or start the next directive.
+	if strings.ContainsAny(token, ";'\"") || strings.IndexFunc(token, unicode.IsSpace) >= 0 {
+		return bad()
+	}
+	u, err := url.Parse(token)
+	if err != nil {
+		return bad()
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Opaque != "" || u.User != nil || u.Host == "" ||
+		u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery {
+		return bad()
+	}
+	name := u.Hostname()
+	wildcard := strings.HasPrefix(name, "*.")
+	host := strings.TrimPrefix(name, "*.")
+	if host == "" {
+		return bad()
+	}
+	if net.ParseIP(host) != nil {
+		if wildcard {
+			return bad()
+		}
+	} else {
+		for _, r := range host {
+			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '.') {
+				return bad()
+			}
+		}
+	}
+	for _, r := range u.Port() {
+		if r < '0' || r > '9' {
+			return bad()
+		}
+	}
+	return nil
 }
 
 // SnippetOrigins lists every http(s) origin written into a tracking snippet:
