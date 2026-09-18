@@ -235,6 +235,71 @@ func TestMailChangeReviewGoesToApproversNotActor(t *testing.T) {
 	}
 }
 
+// A critical plan needs two approvals. The first one leaves the plan in
+// review_required, which must not be mistaken for a new submission: nobody is
+// mailed, and the approver is never named as the submitter.
+func TestMailPartialApprovalOfCriticalPlanIsSilent(t *testing.T) {
+	s, mux, toks, sink := newMailServer(t)
+	enableMail(t, mux, toks["admin"], nil)
+
+	body := strings.Replace(changePlanBody, `"chg-http-1"`, `"chg-crit"`, 1)
+	body = strings.Replace(body, `"risk": "medium"`, `"risk": "critical"`, 1)
+	if rec := doReq(t, mux, "POST", "/api/changes", body, withCookie(toks["admin"])); rec.Code != 201 {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(t, mux, "POST", "/api/changes/chg-crit/submit", "", withCookie(toks["admin"])); rec.Code != 200 {
+		t.Fatalf("submit: %d %s", rec.Code, rec.Body.String())
+	}
+	s.Mail.Wait()
+	// admin submits → dan hears once, and the body says two approvals are needed.
+	if got := sink.recipients(); len(got) != 1 || got[0] != "dan@corp.test" {
+		t.Fatalf("review_required recipients: %v", got)
+	}
+	if m := sink.sent[0]; !strings.Contains(m.Subject, "승인 요청") || !strings.Contains(m.Body, "admin 님이") || !strings.Contains(m.Body, "승인 2건") {
+		t.Fatalf("review mail: %+v", m)
+	}
+
+	// dan approves over REST (1 of 2) → still review_required; no mail, no
+	// delivery record, and dan is never written up as the submitter.
+	rec := doReq(t, mux, "POST", "/api/changes/chg-crit/approve", "", withCookie(toks["dan"]))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"review_required"`) {
+		t.Fatalf("first approve: %d %s", rec.Code, rec.Body.String())
+	}
+	s.Mail.Wait()
+	if len(sink.sent) != 1 {
+		t.Fatalf("partial approval must not mail, got %+v", sink.sent[1:])
+	}
+	if page := deliveries(t, mux, toks["admin"], ""); page.Total != 1 {
+		t.Fatalf("partial approval recorded a delivery: %+v", page)
+	}
+
+	// admin approves through the MCP tool (2 of 2) → approved; dan hears it can
+	// run, admin (actor) does not.
+	adminUser, err := s.Meta.Store.GetUserByUsername(context.Background(), "admin")
+	if err != nil || adminUser == nil {
+		t.Fatalf("admin user: %v", err)
+	}
+	params, _ := json.Marshal(map[string]any{"name": "approve_change", "arguments": json.RawMessage(`{"id":"chg-crit"}`)})
+	res, err := s.callTool(withUser(context.Background(), adminUser), params)
+	if err != nil {
+		t.Fatalf("second approve: %v", err)
+	}
+	if got := res.(map[string]any)["data"].(change.Plan); got.State != change.Approved || len(got.Approvals) != 2 {
+		t.Fatalf("second approve: state=%s approvals=%d", got.State, len(got.Approvals))
+	}
+	s.Mail.Wait()
+	if got := sink.recipients(); len(got) != 2 || got[1] != "dan@corp.test" {
+		t.Fatalf("approved recipients: %v", got)
+	}
+	if m := sink.sent[1]; !strings.Contains(m.Subject, "실행 가능") || !strings.Contains(m.Body, "admin 님의 승인") || strings.Contains(m.Body, "제출했습니다") {
+		t.Fatalf("approved mail: %+v", m)
+	}
+	page := deliveries(t, mux, toks["admin"], "")
+	if page.Total != 2 || page.Items[0].Event != mail.EventChangeApproved || page.Items[0].Actor != "admin" {
+		t.Fatalf("deliveries after full approval: %+v", page)
+	}
+}
+
 func TestMailEventSwitchAndPasswordMasking(t *testing.T) {
 	s, mux, toks, sink := newMailServer(t)
 	enableMail(t, mux, toks["admin"], map[string]string{mail.KeyNotifyChangeReview: "false", mail.KeyPassword: "s3cret"})

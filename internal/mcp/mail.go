@@ -115,7 +115,11 @@ func (s *Server) notifyChange(ctx context.Context, p change.Plan, actor string, 
 	}
 	var n mail.Notification
 	switch {
-	case callErr == nil && p.State == change.ReviewRequired:
+	// review_required with no approval yet is the submission. A plan that needs
+	// several approvals (critical) stays in this state after the first one; that
+	// is not a new request, and the approver is not its submitter, so nothing
+	// goes out until every approval is in.
+	case callErr == nil && p.State == change.ReviewRequired && len(p.Approvals) == 0:
 		n = mail.ChangeReviewRequired(actor, p.ID, p.ProfileID, p.Target, string(p.Risk), p.Reason, p.RequiredApprovals)
 	case callErr == nil && p.State == change.Approved && p.RequiredApprovals > 0:
 		n = mail.ChangeApproved(actor, p.ID, p.ProfileID, p.Target, string(p.Risk))
