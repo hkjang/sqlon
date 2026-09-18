@@ -167,6 +167,64 @@ GRANT SELECT ANY TABLE TO sqlon_ro;
 
 ---
 
+### 3.4 이벤트 알림 메일 (사내 SMTP 릴레이)
+
+승인을 기다리는 변경 계획, 실패로 멈춘 실행, 오래 걸린 쿼리의 완료처럼 **사람이
+실제로 기다리는 일**을 사내 SMTP 릴레이로 알립니다. **기본값은 꺼짐**이라 새로
+설치한 곳에서는 아무것도 달라지지 않으며, 메타 DB(`-meta-db`)가 있을 때만
+동작합니다(설정과 사용자 주소를 거기서 읽습니다).
+
+설정은 `/admin/settings`(또는 `PUT /api/settings`)의 「메일 알림 (SMTP)」 그룹에
+있고 저장 즉시 적용됩니다(재기동 불필요). 키 이름은 사내 메일 표준과 같습니다.
+
+| 키 | 기본값 | 뜻 |
+|---|---|---|
+| `mail.enabled` | `false` | 꺼짐이 기본. 관리자가 켭니다 |
+| `mail.smtp_host` | — | 사내 릴레이 주소. 켜져 있어도 비어 있으면 보내지 않고 로그에 이유를 남깁니다 |
+| `mail.smtp_port` | `25` | 사내 릴레이는 대개 25. 587=STARTTLS, 465=암시적 TLS(자동 인식) |
+| `mail.security` | `auto` | `auto` · `none` · `starttls` · `tls`. `auto`는 서버가 STARTTLS를 알리면 쓰고 아니면 평문. **평문(TLS 없는) 세션에서는 자격증명을 보내지 않습니다**: `mail.username`이 있는데 세션이 TLS가 아니면 AUTH를 시도하지 않고 오류로 끝냅니다(PLAIN·LOGIN 모두). 릴레이가 정말 평문 인증만 받는다면 `none`을 명시적으로 고른 경우에만 허용합니다 |
+| `mail.skip_tls_verify` | `false` | 사내 사설 인증서일 때만 `true` |
+| `mail.username` · `mail.password` | 빈 값 | **선택**. 비우면 인증 없이 보냅니다. 비밀번호는 저장 뒤 「설정됨」만 보이고 API로 되읽을 수 없으며 로그에도 남지 않습니다 |
+| `mail.from_address` · `mail.from_name` | `sqlon@<호스트>` · `sqlon` | 보내는 사람 |
+| `mail.base_url` | — | 메일 속 「바로 열기」 링크가 가리킬 이 서버 주소(예: `https://sqlon.corp`). 비우면 링크를 넣지 않습니다 |
+| `mail.timeout_seconds` | `10` | 연결·세션 제한 시간 |
+| `mail.notify_change_review` | `true` | 변경 계획이 승인 대기(`review_required`)에 들어가거나 승인이 모두 모여 실행 가능(`approved`)해지면 → dba/admin |
+| `mail.notify_change_failed` | `true` | 변경 실행·롤백이 실패로 멈추면(`rollback_required`/`failed`) → dba/admin |
+| `mail.notify_query_finished` | `true` | 1분 넘게 걸린 비동기 쿼리가 끝나면(성공·실패) → 제출한 사용자 |
+| `mail.notify_scheduler` | `true` | 예약 메타데이터 동기화가 실패로 바뀌거나 회복되면 → admin (틱마다 아니라 전환 시 1회) |
+
+동작 원칙:
+
+* **요청을 막지 않습니다.** 메일은 배경에서 두 번까지 시도하며, 릴레이가 죽어
+  있어도 변경 제출·승인 같은 요청은 정상으로 끝납니다.
+* **시도마다 기록합니다.** 언제·어떤 이벤트·누구에게·제목·결과(`sent`/`failed`)·
+  시도 횟수·오류를 `data/mail/deliveries-YYYYMMDD.jsonl`에 남기고 최근 500건을
+  설정 화면과 `GET /api/mail/deliveries`에서 봅니다. **본문은 저장하지 않습니다.**
+* **사용자 명부를 따로 두지 않습니다.** 수신자는 사용자 관리의 계정 메일 주소를
+  그대로 쓰므로, 주소가 비어 있거나 비활성인 계정은 조용히 건너뜁니다.
+* **자기가 한 일은 자기에게 보내지 않습니다.** 제출자는 승인 요청 메일을, 승인자는
+  실행 가능 메일을 받지 않습니다.
+* 폐쇄망에서는 릴레이로 사내 메일 서비스 `postra`를 가리키면 알림이 밖으로 나가지
+  않습니다.
+
+**시험 발송** — 설정을 저장한 뒤 같은 화면의 「메일 시험 발송」 칸에 수신자를 넣고
+(비우면 내 계정 주소) 단추를 누르면 저장된 설정으로 실제 한 통을 보내고 결과를
+그 자리에서 보여 줍니다. 릴레이 설정은 한 번에 맞는 일이 드무니 켠 뒤 꼭 한 번
+보내 보세요. REST로는:
+
+```bash
+curl -X POST http://localhost:6767/api/mail/test \
+  -H "X-Admin-Token: SecureMasterToken2026!" \
+  -H "Content-Type: application/json" \
+  -d '{"recipient": "dba-team@corp.example"}'
+# 200 {"ok":true,"recipient":"..."}  /  502 {"ok":false,"error":"SMTP 연결 실패(...)"}
+
+curl "http://localhost:6767/api/mail/deliveries?status=failed&limit=20" \
+  -H "X-Admin-Token: SecureMasterToken2026!"
+```
+
+---
+
 ## 4. 메타데이터 동기화 및 관측성(Observability)
 
 ### 4.1 스키마 메타데이터 자동 동기화 (`metasync`)

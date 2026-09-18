@@ -33,6 +33,15 @@
   code { background:#eef1f5; border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
   table.boot { width:100%; border-collapse:collapse; font-size:12.5px; }
   table.boot td { padding:5px 8px; border-bottom:1px solid var(--line); }
+  table.log { width:100%; border-collapse:collapse; font-size:12px; }
+  table.log th, table.log td { padding:4px 6px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  table.log th { color:var(--sub); font-weight:600; }
+  .st { font-size:11px; font-weight:700; border-radius:5px; padding:1px 6px; }
+  .st.sent { background:var(--green-soft); color:var(--green); }
+  .st.failed { background:var(--red-soft); color:var(--red); }
+  .st.queued { background:var(--amber-soft); color:var(--amber); }
+  .inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .inline input { flex:1; min-width:220px; }
   #userchip { font-size:12px; color:#cfe0ff; }
 </style>
 </head>
@@ -44,7 +53,7 @@
 <main>
   <div class="card">
     <div class="mini">아래 설정은 <b>메타 DB(jasql_settings)에 저장</b>되며 저장 즉시 <b>재기동 없이 적용</b>됩니다
-      (마스터 토큰·허용 Origin·Keycloak SSO). 비밀 값은 <code>••••••(set)</code>로 표시되며, 입력란을 비워두면 기존 값이 유지됩니다.
+      (마스터 토큰·허용 Origin·Keycloak SSO·메일 알림). 비밀 값은 <code>••••••(set)</code>로 표시되며, 입력란을 비워두면 기존 값이 유지됩니다.
       값을 지우려면 [비우기]를 누르세요. 플래그/환경변수로 준 값은 여기 저장된 값이 없을 때의 기본값으로 쓰입니다.</div>
   </div>
 
@@ -55,6 +64,20 @@
       <div class="result" id="result"></div>
     </div>
   </form>
+
+  <div class="card" id="mailCard" style="display:none">
+    <h2>메일 시험 발송 · 발송 기록</h2>
+    <div class="mini" style="margin-bottom:8px">위에서 <b>저장한</b> 메일 설정으로 실제 한 통을 보내 릴레이가 맞는지 확인합니다.
+      수신자를 비우면 내 계정의 메일 주소로 보냅니다. 기록에는 제목·수신자·결과만 남고 본문은 담지 않습니다.</div>
+    <div class="inline">
+      <input id="mailTo" placeholder="수신자 메일 주소 (비우면 내 주소)">
+      <button type="button" class="btn primary" id="mailTestBtn">✉ 시험 발송</button>
+      <button type="button" class="btn" id="mailReloadBtn">↻ 기록 새로고침</button>
+    </div>
+    <div class="result" id="mailResult"></div>
+    <div id="mailSummary" class="mini" style="margin-top:10px"></div>
+    <table class="log" id="mailLog"></table>
+  </div>
 
   <div class="card">
     <h2>부팅 전용 (재기동 필요 — 여기서 변경 불가)</h2>
@@ -97,7 +120,33 @@ async function load() {
   const b = d.boot_only || {};
   $('#bootTable').innerHTML = Object.entries(b).map(([k, v]) =>
     '<tr><td class="mini"><b>' + esc(k) + '</b></td><td class="mono">' + esc(v) + '</td></tr>').join('');
+  if (DEFS.some(s => s.key.startsWith('mail.'))) { $('#mailCard').style.display = ''; await loadMailLog(); }
 }
+async function loadMailLog() {
+  try {
+    const d = await api('GET', '/api/mail/deliveries?limit=50');
+    const st = d.status || {};
+    $('#mailSummary').textContent = '최근 기록 ' + (d.total || 0) + '건 — 성공 ' + (st.sent || 0) + ' · 실패 ' + (st.failed || 0) + ' · 대기 ' + (st.queued || 0)
+      + ' (재기동 후에도 남으며 본문은 저장하지 않음)';
+    const rows = (d.items || []);
+    $('#mailLog').innerHTML = rows.length === 0 ? '<tr><td class="mini">아직 보낸 메일이 없습니다.</td></tr>' :
+      '<tr><th>시각</th><th>이벤트</th><th>수신자</th><th>제목</th><th>결과</th></tr>' + rows.map(r =>
+        '<tr><td>' + esc(fmtTime(r.updated_at || r.created_at)) + '</td><td><code>' + esc(r.event) + '</code>' +
+        (r.ref ? '<div class="mini">' + esc(r.ref) + '</div>' : '') + '</td><td>' + esc(r.recipient) + '</td><td>' + esc(r.subject) + '</td>' +
+        '<td><span class="st ' + esc(r.status) + '">' + esc(r.status) + '</span>' + (r.attempts > 1 ? ' <span class="mini">×' + r.attempts + '</span>' : '') +
+        (r.error ? '<div class="mini">' + esc(r.error) + '</div>' : '') + '</td></tr>').join('');
+  } catch (e) { $('#mailSummary').textContent = '발송 기록을 불러오지 못했습니다: ' + e.message; }
+}
+async function sendTestMail() {
+  const el = $('#mailResult'); el.className = 'result'; el.textContent = '';
+  const btn = $('#mailTestBtn'); btn.disabled = true;
+  try {
+    const d = await api('POST', '/api/mail/test', JSON.stringify({ recipient: $('#mailTo').value.trim() }));
+    el.className = 'result ok'; el.textContent = '✅ ' + d.recipient + ' 로 시험 메일을 보냈습니다. 받은 편지함을 확인하세요.';
+  } catch (e) { el.className = 'result bad'; el.textContent = '✘ 발송 실패: ' + e.message; }
+  finally { btn.disabled = false; await loadMailLog(); }
+}
+function fmtTime(s) { if (!s) return ''; const d = new Date(s); return isNaN(d) ? s : d.toLocaleString(); }
 async function save(ev) {
   ev.preventDefault();
   const payload = {};
@@ -120,6 +169,8 @@ async function clearOne(key) {
   catch (e) { showResult('bad', e.message); }
 }
 function showResult(cls, msg) { const el = $('#result'); el.className = 'result ' + cls; el.textContent = msg; }
+document.getElementById('mailTestBtn').addEventListener('click', sendTestMail);
+document.getElementById('mailReloadBtn').addEventListener('click', loadMailLog);
 JASQL.mount({ page: 'settings', onReady: init });
 </script>
 </body>

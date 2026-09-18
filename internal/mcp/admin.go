@@ -435,6 +435,7 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 			writeAPIError(w, http.StatusBadRequest, err)
 			return
 		}
+		s.notifyChange(r.Context(), p, s.restActor(r), nil)
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": p})
 	})
 	mux.HandleFunc("POST /api/changes/{id}/approve", func(w http.ResponseWriter, r *http.Request) {
@@ -450,6 +451,7 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 			writeAPIError(w, http.StatusBadRequest, err)
 			return
 		}
+		s.notifyChange(r.Context(), p, s.restActor(r), nil)
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "data": p})
 	})
 	mux.HandleFunc("POST /api/changes/{id}/execute", func(w http.ResponseWriter, r *http.Request) {
@@ -482,6 +484,7 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 			actor = u.Username
 		}
 		audit := map[string]any{"ts": time.Now().UTC().Format(time.RFC3339Nano), "tool": "sqlon:change_execute", "change_id": id, "actor": actor, "db_profile_id": p.ProfileID}
+		s.notifyChange(r.Context(), p, s.restActor(r), err)
 		if err != nil {
 			audit["is_error"] = true
 			audit["error"] = err.Error()
@@ -506,6 +509,7 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 			actor = u.Username
 		}
 		audit := map[string]any{"ts": time.Now().UTC().Format(time.RFC3339Nano), "tool": "sqlon:change_rollback", "change_id": id, "actor": actor, "db_profile_id": p.ProfileID}
+		s.notifyChange(r.Context(), p, s.restActor(r), err)
 		if err != nil {
 			audit["is_error"] = true
 			audit["error"] = err.Error()

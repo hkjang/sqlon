@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- 사내 SMTP 릴레이로 이벤트 알림 메일을 보내는 `internal/mail` 을 추가했습니다
+  (사내 메일 표준, 기본 꺼짐). `/admin/settings` 의 `mail.*` 키(mail.enabled,
+  mail.smtp_host, mail.smtp_port=25, mail.security=auto, mail.username/password
+  선택, mail.from_*, mail.base_url, mail.timeout_seconds, mail.notify_*)로
+  설정하며 비밀번호는 API가 또돌려주지 않습니다. 보내는 이벤트는 변경 계획
+  승인 요청·실행 가능(dba/admin), 변경 실행·롤백 실패(dba/admin), 1분 넘게
+  걸린 비동기 쿼리 완료(제출자), 예약 메타데이터 동기화 실패·회복(admin,
+  전환 시 1회)이며 자기가 한 일은 자기에게 보내지 않습니다. 발송은 배경에서
+  두 번까지 시도하고 시도마다 `data/mail/deliveries-*.jsonl` 에 제목·수신자·
+  결과를 남기며(본문 제외) `GET /api/mail/deliveries` 와 설정 화면에서 볼 수
+  있습니다. `POST /api/mail/test` 와 설정 화면의 시험 발송 단추로 저장된
+  설정으로 실제 한 통을 보내 확인합니다.
+
 ## v0.1.5 — 2026-09-14
 
 - PII 노출 리포트(`get_pii_exposure`)의 짧은 ASCII 단서(`pan`·`dob`·`ssn`·
