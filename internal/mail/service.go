@@ -52,6 +52,11 @@ type Page struct {
 	Skipped []string       `json:"skipped,omitempty"`
 }
 
+// maxInFlight caps concurrent background deliveries. A relay that accepts
+// connections but never answers holds each one for the full session timeout;
+// without a cap every event would add another stuck goroutine and socket.
+const maxInFlight = 8
+
 // Service resolves recipients, sends in the background, and records every
 // attempt. Zero value is unusable; use New.
 type Service struct {
@@ -61,6 +66,7 @@ type Service struct {
 	send      func(context.Context, Config, Message) error
 	now       func() time.Time
 	wg        sync.WaitGroup
+	inflight  chan struct{} // semaphore of maxInFlight slots for background sends
 }
 
 // New wires a service. dataDir may be empty, in which case the delivery log
@@ -72,6 +78,7 @@ func New(settings Settings, directory Directory, dataDir string) *Service {
 		log:       NewLog(dataDir),
 		send:      Deliver,
 		now:       func() time.Time { return time.Now().UTC() },
+		inflight:  make(chan struct{}, maxInFlight),
 	}
 }
 
@@ -120,11 +127,15 @@ func (s *Service) Notify(ctx context.Context, n Notification, actor string, reci
 	}
 	body := n.Render(cfg)
 	for _, addr := range addresses {
+		// The queued record is written at once so the admin screen shows the
+		// mail even while it waits for one of the maxInFlight send slots.
 		d := s.log.Add(Delivery{Event: n.Event, Recipient: addr, Subject: n.Subject, Ref: n.Ref, Actor: actor,
 			Status: "queued", CreatedAt: s.now(), UpdatedAt: s.now()})
 		s.wg.Add(1)
 		go func(d Delivery) {
 			defer s.wg.Done()
+			s.inflight <- struct{}{}
+			defer func() { <-s.inflight }()
 			s.deliver(d, cfg, Message{To: addr, Subject: n.Subject, Body: body})
 		}(d)
 	}

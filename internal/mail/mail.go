@@ -133,6 +133,16 @@ func startSession(c *smtp.Client, cfg Config) error {
 	if cfg.Username == "" {
 		return nil
 	}
+	// Credentials never travel over a plaintext session unless the admin chose
+	// security=none on purpose. The decision rests on the actual session state
+	// (not the host name, which net/smtp always reports as cfg.Host) so a relay
+	// that offers AUTH without STARTTLS under security=auto fails here, before
+	// any AUTH line is written.
+	_, secure := c.TLSConnectionState()
+	allowPlaintext := cfg.Security == SecurityNone
+	if !secure && !allowPlaintext {
+		return fmt.Errorf("%w: STARTTLS 없이 인증 정보를 보낼 수 없습니다. mail.security=starttls/tls 를 쓰거나, 릴레이가 정말 평문 인증만 받으면 none 을 명시하세요", ErrInvalid)
+	}
 	ok, mechs := c.Extension("AUTH")
 	if !ok {
 		return fmt.Errorf("%w: 서버가 AUTH를 지원하지 않습니다. mail.username을 비우고 사용하세요", ErrInvalid)
@@ -140,22 +150,51 @@ func startSession(c *smtp.Client, cfg Config) error {
 	upper := strings.ToUpper(mechs)
 	switch {
 	case strings.Contains(upper, "PLAIN"):
-		return c.Auth(smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host))
+		return c.Auth(plainAuth{user: cfg.Username, pass: cfg.Password, allowPlaintext: allowPlaintext})
 	case strings.Contains(upper, "LOGIN"):
-		return c.Auth(loginAuth{user: cfg.Username, pass: cfg.Password, host: cfg.Host})
+		return c.Auth(loginAuth{user: cfg.Username, pass: cfg.Password, allowPlaintext: allowPlaintext})
 	default:
 		return c.Auth(smtp.CRAMMD5Auth(cfg.Username, cfg.Password))
 	}
 }
 
+// errPlaintextAuth is the second line of defence behind startSession: an Auth
+// asked to start on a non-TLS session refuses unless security=none was chosen.
+var errPlaintextAuth = errors.New("TLS 없는 세션에서는 인증 정보를 보내지 않습니다 (mail.security=none 을 명시한 경우만 허용)")
+
+// plainAuth is PLAIN with the same plaintext policy as loginAuth. The standard
+// library's PlainAuth decides by host name (localhost is exempt), which is not
+// the rule this package documents.
+type plainAuth struct {
+	user, pass     string
+	allowPlaintext bool
+}
+
+func (a plainAuth) Start(info *smtp.ServerInfo) (string, []byte, error) {
+	if !info.TLS && !a.allowPlaintext {
+		return "", nil, errPlaintextAuth
+	}
+	return "PLAIN", []byte("\x00" + a.user + "\x00" + a.pass), nil
+}
+
+func (a plainAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if more {
+		return nil, fmt.Errorf("PLAIN 인증에 예상하지 않은 서버 응답: %q", fromServer)
+	}
+	return nil, nil
+}
+
 // loginAuth speaks the LOGIN mechanism many corporate relays (Exchange in
 // particular) offer instead of PLAIN; the standard library ships only PLAIN
 // and CRAM-MD5.
-type loginAuth struct{ user, pass, host string }
+type loginAuth struct {
+	user, pass     string
+	allowPlaintext bool
+}
 
 func (a loginAuth) Start(info *smtp.ServerInfo) (string, []byte, error) {
-	if !info.TLS && info.Name != a.host {
-		return "", nil, errors.New("LOGIN 인증은 설정한 호스트로 연결된 세션에서만 사용합니다")
+	if !info.TLS && !a.allowPlaintext {
+		return "", nil, errPlaintextAuth
 	}
 	return "LOGIN", nil, nil
 }

@@ -515,7 +515,7 @@ GRANT SELECT ANY TABLE TO sqlon_ro;
 <tr>
 <td><code>mail.security</code></td>
 <td><code>auto</code></td>
-<td><code>auto</code> · <code>none</code> · <code>starttls</code> · <code>tls</code>. <code>auto</code>는 서버가 STARTTLS를 알리면 쓰고 아니면 평문</td>
+<td><code>auto</code> · <code>none</code> · <code>starttls</code> · <code>tls</code>. <code>auto</code>는 서버가 STARTTLS를 알리면 쓰고 아니면 평문. <strong>평문(TLS 없는) 세션에서는 자격증명을 보내지 않습니다</strong>: <code>mail.username</code>이 있는데 세션이 TLS가 아니면 AUTH를 시도하지 않고 오류로 끝냅니다(PLAIN·LOGIN 모두). 릴레이가 정말 평문 인증만 받는다면 <code>none</code>을 명시적으로 고른 경우에만 허용합니다</td>
 </tr>
 <tr>
 <td><code>mail.skip_tls_verify</code></td>

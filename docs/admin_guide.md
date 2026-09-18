@@ -182,7 +182,7 @@ GRANT SELECT ANY TABLE TO sqlon_ro;
 | `mail.enabled` | `false` | 꺼짐이 기본. 관리자가 켭니다 |
 | `mail.smtp_host` | — | 사내 릴레이 주소. 켜져 있어도 비어 있으면 보내지 않고 로그에 이유를 남깁니다 |
 | `mail.smtp_port` | `25` | 사내 릴레이는 대개 25. 587=STARTTLS, 465=암시적 TLS(자동 인식) |
-| `mail.security` | `auto` | `auto` · `none` · `starttls` · `tls`. `auto`는 서버가 STARTTLS를 알리면 쓰고 아니면 평문 |
+| `mail.security` | `auto` | `auto` · `none` · `starttls` · `tls`. `auto`는 서버가 STARTTLS를 알리면 쓰고 아니면 평문. **평문(TLS 없는) 세션에서는 자격증명을 보내지 않습니다**: `mail.username`이 있는데 세션이 TLS가 아니면 AUTH를 시도하지 않고 오류로 끝냅니다(PLAIN·LOGIN 모두). 릴레이가 정말 평문 인증만 받는다면 `none`을 명시적으로 고른 경우에만 허용합니다 |
 | `mail.skip_tls_verify` | `false` | 사내 사설 인증서일 때만 `true` |
 | `mail.username` · `mail.password` | 빈 값 | **선택**. 비우면 인증 없이 보냅니다. 비밀번호는 저장 뒤 「설정됨」만 보이고 API로 되읽을 수 없으며 로그에도 남지 않습니다 |
 | `mail.from_address` · `mail.from_name` | `sqlon@<호스트>` · `sqlon` | 보내는 사람 |

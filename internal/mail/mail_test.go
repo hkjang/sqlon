@@ -3,25 +3,32 @@ package mail
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"net"
+	"net/smtp"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
 // fakeRelay is a minimal plaintext SMTP server: enough of the dialogue for
-// EHLO/AUTH PLAIN/MAIL/RCPT/DATA/QUIT to run and capture what was sent.
+// EHLO/AUTH PLAIN|LOGIN/MAIL/RCPT/DATA/QUIT to run and capture what was sent.
+// It never advertises STARTTLS, which is exactly the relay that must not be
+// handed credentials under security=auto.
 type fakeRelay struct {
 	ln       net.Listener
 	mu       sync.Mutex
 	messages []string
-	auths    []string
+	auths    []string // every AUTH command line plus LOGIN credential lines
 	wantAuth bool
+	mechs    string // advertised AUTH mechanisms when wantAuth
 }
 
 func newFakeRelay(t *testing.T, wantAuth bool) *fakeRelay {
@@ -30,7 +37,7 @@ func newFakeRelay(t *testing.T, wantAuth bool) *fakeRelay {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := &fakeRelay{ln: ln, wantAuth: wantAuth}
+	r := &fakeRelay{ln: ln, wantAuth: wantAuth, mechs: "PLAIN LOGIN"}
 	go func() {
 		for {
 			c, err := ln.Accept()
@@ -64,7 +71,7 @@ func (r *fakeRelay) serve(c net.Conn) {
 		case strings.HasPrefix(cmd, "EHLO"):
 			if r.wantAuth {
 				w("250-relay.test")
-				w("250 AUTH PLAIN LOGIN")
+				w("250 AUTH " + r.mechs)
 			} else {
 				w("250 relay.test")
 			}
@@ -72,6 +79,19 @@ func (r *fakeRelay) serve(c net.Conn) {
 			r.mu.Lock()
 			r.auths = append(r.auths, strings.TrimSpace(line))
 			r.mu.Unlock()
+			if strings.HasPrefix(cmd, "AUTH LOGIN") {
+				// Username: / Password: prompts, base64 like a real relay.
+				for _, prompt := range []string{"VXNlcm5hbWU6", "UGFzc3dvcmQ6"} {
+					w("334 " + prompt)
+					l, err := rd.ReadString('\n')
+					if err != nil {
+						return
+					}
+					r.mu.Lock()
+					r.auths = append(r.auths, strings.TrimSpace(l))
+					r.mu.Unlock()
+				}
+			}
 			w("235 ok")
 		case strings.HasPrefix(cmd, "MAIL"), strings.HasPrefix(cmd, "RCPT"):
 			w("250 ok")
@@ -105,6 +125,12 @@ func (r *fakeRelay) got() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]string(nil), r.messages...)
+}
+
+func (r *fakeRelay) gotAuths() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.auths...)
 }
 
 func relayConfig(r *fakeRelay) Config {
@@ -141,17 +167,107 @@ func TestDeliverAuthenticatesOnlyWhenUsernameSet(t *testing.T) {
 	if err := Deliver(context.Background(), cfg, Message{To: "a@example.test", Subject: "s", Body: "b"}); err != nil {
 		t.Fatalf("anonymous deliver: %v", err)
 	}
-	if len(relay.auths) != 0 {
-		t.Fatalf("no AUTH expected without username, got %v", relay.auths)
+	if auths := relay.gotAuths(); len(auths) != 0 {
+		t.Fatalf("no AUTH expected without username, got %v", auths)
 	}
-	// PLAIN over a plaintext connection is refused by net/smtp unless the host
-	// is localhost — the relay here is 127.0.0.1 so it is allowed.
+	// relayConfig sets security=none explicitly, which is the one case where
+	// credentials may travel over a plaintext session.
 	cfg.Username, cfg.Password = "svc", "pw"
 	if err := Deliver(context.Background(), cfg, Message{To: "a@example.test", Subject: "s", Body: "b"}); err != nil {
 		t.Fatalf("authenticated deliver: %v", err)
 	}
-	if len(relay.auths) != 1 || !strings.HasPrefix(strings.ToUpper(relay.auths[0]), "AUTH PLAIN") {
-		t.Fatalf("expected one AUTH PLAIN, got %v", relay.auths)
+	if auths := relay.gotAuths(); len(auths) != 1 || !strings.HasPrefix(strings.ToUpper(auths[0]), "AUTH PLAIN") {
+		t.Fatalf("expected one AUTH PLAIN, got %v", auths)
+	}
+}
+
+// The Auth implementations decide by session state alone: a plaintext session
+// is refused whatever the server calls itself (net/smtp always passes cfg.Host
+// as the name, so a name comparison can never trip).
+func TestAuthMechanismsRefusePlaintextSession(t *testing.T) {
+	plain := &smtp.ServerInfo{Name: "smtp.corp.local", TLS: false}
+	secure := &smtp.ServerInfo{Name: "smtp.corp.local", TLS: true}
+	for name, a := range map[string]smtp.Auth{
+		"login": loginAuth{user: "svc", pass: "pw"},
+		"plain": plainAuth{user: "svc", pass: "pw"},
+	} {
+		proto, _, err := a.Start(plain)
+		if err == nil || proto != "" {
+			t.Fatalf("%s over plaintext: proto=%q err=%v, want refusal", name, proto, err)
+		}
+		if _, _, err := a.Start(secure); err != nil {
+			t.Fatalf("%s over TLS: %v", name, err)
+		}
+	}
+	if proto, _, err := (loginAuth{user: "svc", pass: "pw", allowPlaintext: true}).Start(plain); err != nil || proto != "LOGIN" {
+		t.Fatalf("login with explicit none: proto=%q err=%v", proto, err)
+	}
+	if proto, resp, err := (plainAuth{user: "svc", pass: "pw", allowPlaintext: true}).Start(plain); err != nil || proto != "PLAIN" || string(resp) != "\x00svc\x00pw" {
+		t.Fatalf("plain with explicit none: proto=%q resp=%q err=%v", proto, resp, err)
+	}
+}
+
+// A relay on 127.0.0.1 that offers AUTH but no STARTTLS: under security=auto
+// (and starttls) no AUTH line may leave the client and the call must fail with
+// a configuration error; only an explicit security=none lets credentials go
+// over the plaintext session. The relay address is deliberately localhost so
+// the decision cannot hinge on the host name.
+func TestAuthNeverSentOverPlaintextUnlessSecurityNone(t *testing.T) {
+	for _, mechs := range []string{"PLAIN LOGIN", "LOGIN"} {
+		t.Run(mechs, func(t *testing.T) {
+			relay := newFakeRelay(t, true)
+			relay.mechs = mechs
+			cfg := relayConfig(relay)
+			cfg.Username, cfg.Password = "svc", "pw"
+			msg := Message{To: "a@example.test", Subject: "s", Body: "b"}
+
+			for _, sec := range []string{SecurityAuto, SecurityStartTLS} {
+				cfg.Security = sec
+				err := Deliver(context.Background(), cfg, msg)
+				if err == nil || !errors.Is(err, ErrInvalid) {
+					t.Fatalf("security=%s deliver: err=%v, want ErrInvalid", sec, err)
+				}
+				if sec == SecurityAuto && !strings.Contains(err.Error(), "STARTTLS 없이 인증 정보를 보낼 수 없습니다") {
+					t.Fatalf("security=auto error should explain the policy: %v", err)
+				}
+				if err := Verify(context.Background(), cfg); err == nil || !errors.Is(err, ErrInvalid) {
+					t.Fatalf("security=%s verify: err=%v, want ErrInvalid", sec, err)
+				}
+				if auths := relay.gotAuths(); len(auths) != 0 {
+					t.Fatalf("security=%s: AUTH must not be sent over plaintext, relay saw %v", sec, auths)
+				}
+				if len(relay.got()) != 0 {
+					t.Fatalf("security=%s: nothing may be delivered after a refused AUTH", sec)
+				}
+			}
+
+			cfg.Security = SecurityNone
+			if err := Verify(context.Background(), cfg); err != nil {
+				t.Fatalf("security=none verify: %v", err)
+			}
+			if err := Deliver(context.Background(), cfg, msg); err != nil {
+				t.Fatalf("security=none deliver: %v", err)
+			}
+			auths := relay.gotAuths()
+			wantFirst := "AUTH PLAIN"
+			if mechs == "LOGIN" {
+				wantFirst = "AUTH LOGIN"
+			}
+			// Verify + Deliver authenticate once each.
+			if len(auths) < 2 || !strings.HasPrefix(strings.ToUpper(auths[0]), wantFirst) {
+				t.Fatalf("security=none: expected %s handshakes, relay saw %v", wantFirst, auths)
+			}
+			if mechs == "LOGIN" {
+				user := base64.StdEncoding.EncodeToString([]byte("svc"))
+				pass := base64.StdEncoding.EncodeToString([]byte("pw"))
+				if len(auths) != 6 || auths[1] != user || auths[2] != pass {
+					t.Fatalf("LOGIN exchange: %v", auths)
+				}
+			}
+			if len(relay.got()) != 1 {
+				t.Fatalf("security=none: relay got %d messages", len(relay.got()))
+			}
+		})
 	}
 }
 
@@ -347,6 +463,76 @@ func TestServiceEventSwitchStopsOnlyThatEvent(t *testing.T) {
 	svc.Wait()
 	if len(sink.sent) != 1 || !strings.Contains(sink.sent[0].Subject, "동기화 실패") {
 		t.Fatalf("only the scheduler mail should go out: %+v", sink.sent)
+	}
+}
+
+// A relay that accepts connections and never sends a greeting pins each
+// session until its timeout. Notify must still record every recipient as
+// queued at once, but only maxInFlight sends may hold a connection at a time.
+func TestNotifyCapsConcurrentDeliveries(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var accepted atomic.Int32
+	var mu sync.Mutex
+	var conns []net.Conn
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			accepted.Add(1)
+			mu.Lock()
+			conns = append(conns, c) // held open, no "220" ever written
+			mu.Unlock()
+		}
+	}()
+	release := func() {
+		ln.Close()
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range conns {
+			c.Close()
+		}
+	}
+	t.Cleanup(release)
+
+	addr := ln.Addr().(*net.TCPAddr)
+	settings := memSettings{KeyEnabled: "true", KeyHost: addr.IP.String(), KeyPort: strconv.Itoa(addr.Port),
+		KeySecurity: "none", KeyFromAddress: "sqlon@example.test", KeyTimeout: "1"}
+	svc := New(settings, nil, "")
+	const n = 2 * maxInFlight
+	recipients := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		recipients = append(recipients, fmt.Sprintf("u%d@example.test", i))
+	}
+	svc.Notify(context.Background(), SchedulerFailed("prod", "down"), "", recipients)
+
+	// Every recipient is visible as queued before any send has finished.
+	if page := svc.Deliveries("", n); page.Total != n || page.Status["queued"] != n {
+		t.Fatalf("expected %d queued right after Notify, got %+v", n, page.Status)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for accepted.Load() < maxInFlight && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(300 * time.Millisecond) // give any uncapped goroutine time to dial
+	if got := accepted.Load(); got != maxInFlight {
+		t.Fatalf("stalled relay holds %d connections, want exactly %d (semaphore)", got, maxInFlight)
+	}
+
+	release()
+	done := make(chan struct{})
+	go func() { svc.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+		t.Fatal("deliveries did not finish after the relay was closed")
+	}
+	if page := svc.Deliveries("", n); page.Status["failed"] != n {
+		t.Fatalf("all %d deliveries should have failed, got %+v", n, page.Status)
 	}
 }
 
