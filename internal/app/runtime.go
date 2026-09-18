@@ -39,6 +39,8 @@ type config struct {
 	adminToken, feedbackTenant, metaDSN                string
 	bootstrapAdmin                                     string
 	oidcIssuer, oidcClientID, oidcSecret, oidcRedirect string
+	mcpOAuthEnabled                                    bool
+	mcpOAuthResource, mcpOAuthAudience, mcpOAuthScopes string
 	syncSource, digestWebhook                          string
 	syncInterval                                       time.Duration
 	observeInterval                                    time.Duration
@@ -119,7 +121,8 @@ func (rt Runtime) Run(ctx context.Context, args []string) error {
 		return fmt.Errorf("unsupported transport %q: use http or stdio", cfg.transport)
 	}
 
-	srv := mcp.NewServer(cat, mcp.Options{Endpoint: cfg.endpoint, AllowedOrigins: splitCSV(cfg.allowOrigins), Stateful: !cfg.stateless, SSEPost: cfg.ssePost, AdminToken: cfg.adminToken, FeedbackTenantID: cfg.feedbackTenant, OpenMetadataURL: cfg.omURL, OpenMetadataToken: cfg.omToken, AlertWebhookURL: cfg.digestWebhook})
+	srv := mcp.NewServer(cat, mcp.Options{Endpoint: cfg.endpoint, AllowedOrigins: splitCSV(cfg.allowOrigins), Stateful: !cfg.stateless, SSEPost: cfg.ssePost, AdminToken: cfg.adminToken, FeedbackTenantID: cfg.feedbackTenant, OpenMetadataURL: cfg.omURL, OpenMetadataToken: cfg.omToken, AlertWebhookURL: cfg.digestWebhook,
+		MCPOAuthEnabled: cfg.mcpOAuthEnabled, MCPOAuthResource: cfg.mcpOAuthResource, MCPOAuthAudience: cfg.mcpOAuthAudience, MCPOAuthScopes: cfg.mcpOAuthScopes})
 	if metaSvc != nil {
 		var oidc *mcp.OIDCProvider
 		if cfg.oidcIssuer != "" && cfg.oidcClientID != "" && cfg.oidcSecret != "" && cfg.oidcRedirect != "" {
@@ -184,6 +187,11 @@ func (rt Runtime) parse(args []string) (config, error) {
 	fs.StringVar(&c.oidcClientID, "oidc-client-id", rt.env("SQLON_OIDC_CLIENT_ID", "JAMYPG_OIDC_CLIENT_ID"), "OIDC client id")
 	fs.StringVar(&c.oidcSecret, "oidc-client-secret", rt.env("SQLON_OIDC_CLIENT_SECRET", "JAMYPG_OIDC_CLIENT_SECRET"), "OIDC client secret")
 	fs.StringVar(&c.oidcRedirect, "oidc-redirect-url", rt.env("SQLON_OIDC_REDIRECT_URL", "JAMYPG_OIDC_REDIRECT_URL"), "OIDC redirect URL")
+	// MCP SSO (OAuth) boot defaults; stored settings mcp.oauth.* override them.
+	fs.BoolVar(&c.mcpOAuthEnabled, "mcp-oauth-enabled", envBool(rt.Getenv("SQLON_MCP_OAUTH_ENABLED")), "Accept Keycloak access tokens on /mcp (default off)")
+	fs.StringVar(&c.mcpOAuthResource, "mcp-oauth-resource", rt.Getenv("SQLON_MCP_OAUTH_RESOURCE"), "MCP OAuth resource identifier (public MCP URL)")
+	fs.StringVar(&c.mcpOAuthAudience, "mcp-oauth-audience", rt.Getenv("SQLON_MCP_OAUTH_AUDIENCE"), "Space-separated accepted token aud/azp values")
+	fs.StringVar(&c.mcpOAuthScopes, "mcp-oauth-scopes", rt.Getenv("SQLON_MCP_OAUTH_SCOPES"), "Space-separated scope ceiling for SSO subjects (default mcp:read)")
 	fs.StringVar(&c.syncSource, "sync-source", rt.env("SQLON_SYNC_SOURCE", "JAMYPG_SYNC_SOURCE"), "Metadata sync profile")
 	fs.DurationVar(&c.syncInterval, "sync-interval", 0, "Metadata sync interval")
 	fs.DurationVar(&c.observeInterval, "observe-interval", observeInterval, "Workload/capacity collection interval (0 disables)")
@@ -213,6 +221,16 @@ func (rt Runtime) env(primary, legacy string) string {
 	}
 	return rt.Getenv(legacy)
 }
+
+// envBool reads a boolean environment value ("true"/"1"/"yes", case-insensitive).
+func envBool(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
 func splitCSV(s string) []string {
 	var out []string
 	for _, p := range strings.Split(s, ",") {

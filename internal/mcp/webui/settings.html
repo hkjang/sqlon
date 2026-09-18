@@ -34,6 +34,15 @@
   table.boot { width:100%; border-collapse:collapse; font-size:12.5px; }
   table.boot td { padding:5px 8px; border-bottom:1px solid var(--line); }
   #userchip { font-size:12px; color:#cfe0ff; }
+  .switch { display:flex; align-items:center; gap:8px; font-family:inherit; }
+  .switch input { width:auto; }
+  .kv { display:grid; grid-template-columns:150px 1fr auto; gap:6px 10px; align-items:center; font-size:12.5px; margin-top:10px; }
+  .kv .k { color:var(--sub); font-weight:600; }
+  .kv code { word-break:break-all; }
+  .kv .btn { padding:2px 8px; font-size:12px; }
+  .note { border-radius:8px; padding:9px 12px; font-size:12.5px; margin-top:10px; }
+  .note.warn { background:var(--amber-soft); color:var(--amber); }
+  .note.ok { background:var(--green-soft); color:var(--green); }
 </style>
 </head>
 <body>
@@ -44,7 +53,7 @@
 <main>
   <div class="card">
     <div class="mini">아래 설정은 <b>메타 DB(jasql_settings)에 저장</b>되며 저장 즉시 <b>재기동 없이 적용</b>됩니다
-      (마스터 토큰·허용 Origin·Keycloak SSO). 비밀 값은 <code>••••••(set)</code>로 표시되며, 입력란을 비워두면 기존 값이 유지됩니다.
+      (마스터 토큰·허용 Origin·Keycloak SSO·MCP SSO). 비밀 값은 <code>••••••(set)</code>로 표시되며, 입력란을 비워두면 기존 값이 유지됩니다.
       값을 지우려면 [비우기]를 누르세요. 플래그/환경변수로 준 값은 여기 저장된 값이 없을 때의 기본값으로 쓰입니다.</div>
   </div>
 
@@ -68,6 +77,7 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let DEFS = [];
+let ORIG = {}; // key → loaded value for bool switches (only changed switches are sent)
 
 async function api(method, path, body) {
   const res = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body });
@@ -83,25 +93,71 @@ async function load() {
   const d = await api('GET', '/api/settings');
   DEFS = d.settings || [];
   const groups = {};
+  ORIG = {};
   DEFS.forEach(s => { (groups[s.group] = groups[s.group] || []).push(s); });
+  const oa = d.mcp_oauth || null;
+  const groupBadge = g => {
+    if (g === 'MCP SSO (OAuth)' && oa) return ' <span class="setbadge ' + (oa.active ? 'on">활성' : (oa.enabled ? 'off">켜짐·미완성' : 'off">비활성')) + '</span>';
+    if (g.includes('SSO')) return ' <span class="setbadge ' + (d.sso_enabled ? 'on">활성' : 'off">비활성') + '</span>';
+    return '';
+  };
+  const field = s => {
+    if (s.type === 'bool') {
+      const on = String(s.value).toLowerCase() === 'true';
+      ORIG[s.key] = on ? 'true' : 'false';
+      return '<label class="switch"><input type="checkbox" data-key="' + esc(s.key) + '" data-bool="1"' + (on ? ' checked' : '') + '> ' + (on ? '켜짐' : '꺼짐') + '</label>';
+    }
+    return '<input data-key="' + esc(s.key) + '" placeholder="' + (s.secret ? (s.is_set ? '변경하려면 새 값 입력 (비우면 유지)' : '값 입력') : esc(s.value || '값 입력')) + '"' +
+        (s.secret ? ' type="password"' : (s.is_set ? ' value="' + esc(s.value) + '"' : '')) + '>';
+  };
   $('#groups').innerHTML = Object.entries(groups).map(([g, items]) =>
-    '<div class="card"><h2>' + esc(g) + (g.includes('SSO') ? ' <span class="setbadge ' + (d.sso_enabled ? 'on">활성' : 'off">비활성') + '</span>' : '') + '</h2>' +
+    '<div class="card"><h2>' + esc(g) + groupBadge(g) + '</h2>' +
     items.map(s =>
       '<div class="row"><label>' + esc(s.label) +
         '<span class="setbadge ' + (s.is_set ? 'on">설정됨' : 'off">미설정') + '</span></label>' +
       (s.help ? '<div class="help">' + esc(s.help) + '</div>' : '') +
-      '<input data-key="' + esc(s.key) + '" placeholder="' + (s.secret ? (s.is_set ? '변경하려면 새 값 입력 (비우면 유지)' : '값 입력') : esc(s.value || '값 입력')) + '"' +
-        (s.secret ? ' type="password"' : (s.is_set ? ' value="' + esc(s.value) + '"' : '')) + '>' +
-      (s.is_set ? '<button type="button" class="btn" style="margin-top:5px" onclick="clearOne(\'' + esc(s.key) + '\')">비우기</button>' : '') +
-      '</div>').join('') + '</div>').join('');
+      field(s) +
+      (s.is_set && s.type !== 'bool' ? '<button type="button" class="btn" style="margin-top:5px" onclick="clearOne(\'' + esc(s.key) + '\')">비우기</button>' : '') +
+      '</div>').join('') +
+    (g === 'MCP SSO (OAuth)' && oa ? oauthStatus(oa) : '') +
+    '</div>').join('');
+  document.querySelectorAll('#groups input[data-bool]').forEach(cb => cb.addEventListener('change', () => { cb.parentNode.lastChild.textContent = ' ' + (cb.checked ? '켜짐' : '꺼짐'); }));
   const b = d.boot_only || {};
   $('#bootTable').innerHTML = Object.entries(b).map(([k, v]) =>
     '<tr><td class="mini"><b>' + esc(k) + '</b></td><td class="mono">' + esc(v) + '</td></tr>').join('');
 }
+// oauthStatus renders what a client needs (MCP URL, metadata URL) and why the
+// feature is not active yet, if it is not. Everything shown here is public
+// metadata — the same document /.well-known/oauth-protected-resource serves.
+function oauthStatus(oa) {
+  const copyBtn = v => v ? '<button type="button" class="btn" data-copy="' + esc(v) + '">복사</button>' : '<span></span>';
+  const line = (k, v) => '<div class="k">' + esc(k) + '</div><div>' + (v ? '<code>' + esc(v) + '</code>' : '<span class="mini">—</span>') + '</div>' + copyBtn(v);
+  let note = '';
+  if (oa.enabled && !oa.active) note = '<div class="note warn">켜져 있지만 아직 동작하지 않습니다: ' + esc(oa.reason) + '</div>';
+  else if (oa.active) note = '<div class="note ok">동작 중 — MCP 클라이언트에 아래 MCP URL 만 주면 Keycloak 로그인으로 연결됩니다. 개인 키(ssk_)도 그대로 유효합니다.</div>';
+  else note = '<div class="mini" style="margin-top:8px">꺼짐 — /mcp 는 개인 키로만 열립니다. 켜려면 Keycloak SSO(Issuer) 가 먼저 구성되어 있어야 합니다.</div>';
+  return note + '<div class="kv">' +
+    line('MCP URL(resource)', oa.resource) +
+    line('메타데이터 주소', oa.metadata_url) +
+    line('인증 서버(issuer)', oa.issuer) +
+    line('허용 대상', (oa.audience || []).join(' ')) +
+    line('범위(천장)', (oa.scopes || []).join(' ')) +
+    '</div>';
+}
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-copy]');
+  if (!b) return;
+  navigator.clipboard.writeText(b.dataset.copy).then(() => { b.textContent = '✅'; setTimeout(() => { b.textContent = '복사'; }, 1200); });
+});
 async function save(ev) {
   ev.preventDefault();
   const payload = {};
   document.querySelectorAll('#groups input').forEach(inp => {
+    if (inp.dataset.bool) {
+      const v = inp.checked ? 'true' : 'false';
+      if (v !== ORIG[inp.dataset.key]) payload[inp.dataset.key] = v; // switches: send only when flipped
+      return;
+    }
     const v = inp.value;
     // secret with placeholder-only (unchanged) → skip; others send if non-empty or explicitly changed
     if (v !== '') payload[inp.dataset.key] = v;

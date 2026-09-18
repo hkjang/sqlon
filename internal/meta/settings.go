@@ -2,6 +2,9 @@ package meta
 
 import (
 	"context"
+	"errors"
+	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -19,7 +22,25 @@ const (
 	SetOIDCRedirect = "oidc_redirect_url"
 	SetAllowOrigins = "allow_origins"     // comma-separated
 	SetCacheTTL     = "cache_ttl_seconds" // result cache lifetime; 0 disables
+
+	// MCP SSO (OAuth 2.1 resource server). Key names follow the cross-service
+	// MCP-OAUTH standard verbatim so operators learn them once; the Keycloak
+	// issuer is shared with the web sign-in (SetOIDCIssuer) rather than
+	// duplicated here.
+	SetMCPOAuthEnabled  = "mcp.oauth.enabled"  // "true" opens /mcp to Keycloak access tokens
+	SetMCPOAuthResource = "mcp.oauth.resource" // RFC 8707 resource identifier, e.g. https://sqlon.example.com/mcp
+	SetMCPOAuthAudience = "mcp.oauth.audience" // space-separated aud/azp values accepted besides the resource
+	SetMCPOAuthScopes   = "mcp.oauth.scopes"   // space-separated ceiling for SSO subjects (mcp:read mcp:admin mcp:dba)
 )
+
+// MCPOAuthScopeVocabulary is the closed set of scope words mcp.oauth.scopes
+// accepts. mcp:read covers every tool that is not admin- or DBA-gated (plus
+// resources and prompts); mcp:admin and mcp:dba lift the ceiling for the
+// adminOnlyTools / dbaTools tiers — the caller's role is still required.
+var MCPOAuthScopeVocabulary = []string{"mcp:read", "mcp:admin", "mcp:dba"}
+
+// DefaultMCPOAuthScopes is the ceiling applied when mcp.oauth.scopes is unset.
+const DefaultMCPOAuthScopes = "mcp:read"
 
 // SettingDef describes a manageable setting for the admin UI.
 type SettingDef struct {
@@ -28,6 +49,12 @@ type SettingDef struct {
 	Secret bool   `json:"secret"`
 	Group  string `json:"group"`
 	Help   string `json:"help"`
+	// Type hints the console widget: "" (text) or "bool" (checkbox storing
+	// "true"/"false").
+	Type string `json:"type,omitempty"`
+	// Validate, when set, rejects a value at save time (ApplySetting) so a
+	// typo cannot silently disable a feature at the next ApplySettings.
+	Validate func(value string) error `json:"-"`
 }
 
 // SettingDefs is the catalog of editable settings (order = display order).
@@ -42,8 +69,63 @@ var SettingDefs = []SettingDef{
 	{Key: SetOIDCSecret, Label: "OIDC Client Secret", Secret: true, Group: "Keycloak SSO", Help: ""},
 	{Key: SetOIDCRedirect, Label: "OIDC Redirect URL", Group: "Keycloak SSO",
 		Help: "예: https://host:6767/auth/sso/callback"},
-	{Key: SetCacheTTL, Label: "쿼리 결과 캐시 TTL(초)", Group: "성능",
-		Help: "동일 (프로파일, SQL, max_rows) 결과를 재사용하는 시간. 0=캐시 비활성. 기본 60."},
+	{Key: SetMCPOAuthEnabled, Label: "MCP SSO(OAuth) 켜기", Group: "MCP SSO (OAuth)", Type: "bool",
+		Help:     "Keycloak 액세스 토큰으로 /mcp 에 들어오게 합니다(개인 키는 그대로 유효). OIDC Issuer 가 있어야 실제로 켜집니다. 기본 꺼짐.",
+		Validate: validateBoolSetting},
+	{Key: SetMCPOAuthResource, Label: "리소스 식별자(resource)", Group: "MCP SSO (OAuth)",
+		Help:     "클라이언트가 실제 접속하는 공개 MCP 주소. 예: https://sqlon.example.com/mcp. 비우면 OIDC Redirect URL 의 오리진 + MCP 경로로 만듭니다.",
+		Validate: validateMCPOAuthResource},
+	{Key: SetMCPOAuthAudience, Label: "허용 대상(aud/azp, 공백 구분)", Group: "MCP SSO (OAuth)",
+		Help:     "리소스 식별자 외에 받아들일 토큰 대상. 보통 Keycloak 의 MCP 클라이언트 ID(azp). 예: claude-mcp cursor-mcp",
+		Validate: validateMCPOAuthAudience},
+	{Key: SetMCPOAuthScopes, Label: "SSO 토큰에 주는 범위(공백 구분)", Group: "MCP SSO (OAuth)",
+		Help:     "mcp:read(기본) mcp:admin mcp:dba 중에서. 역할과의 교집합이 천장입니다 — 역할이 없는 권한을 열지 않습니다.",
+		Validate: validateMCPOAuthScopes},
+}
+
+func validateBoolSetting(v string) error {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "true", "false":
+		return nil
+	}
+	return errors.New("true 또는 false 여야 합니다")
+}
+
+// validateMCPOAuthResource accepts an absolute http(s) URL with a path and no
+// credentials, query or fragment — the shape RFC 8707 / RFC 9728 expect and
+// the one a Keycloak Audience mapper must reproduce byte-for-byte.
+func validateMCPOAuthResource(v string) error {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil
+	}
+	u, err := url.Parse(v)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
+		u.RawQuery != "" || u.Fragment != "" || strings.ContainsAny(v, " \t\r\n\"\\") {
+		return errors.New("리소스 식별자는 인증정보·쿼리·프래그먼트 없는 절대 http(s) URL 이어야 합니다 (예: https://sqlon.example.com/mcp)")
+	}
+	return nil
+}
+
+func validateMCPOAuthAudience(v string) error {
+	for _, a := range strings.Fields(v) {
+		if len(a) > 256 || strings.ContainsAny(a, "\"\\") {
+			return errors.New("허용 대상 항목이 너무 길거나 따옴표·역슬래시를 포함합니다: " + a)
+		}
+	}
+	return nil
+}
+
+// validateMCPOAuthScopes only admits the closed vocabulary; a stray word
+// would otherwise be silently dropped and the operator would wonder why the
+// ceiling never lifted.
+func validateMCPOAuthScopes(v string) error {
+	for _, sc := range strings.Fields(v) {
+		if !slices.Contains(MCPOAuthScopeVocabulary, sc) {
+			return errors.New("알 수 없는 범위 " + sc + " — 허용: " + strings.Join(MCPOAuthScopeVocabulary, " "))
+		}
+	}
+	return nil
 }
 
 func isKnownSetting(key string) bool {
@@ -53,6 +135,15 @@ func isKnownSetting(key string) bool {
 		}
 	}
 	return false
+}
+
+func settingDef(key string) (SettingDef, bool) {
+	for _, d := range SettingDefs {
+		if d.Key == key {
+			return d, true
+		}
+	}
+	return SettingDef{}, false
 }
 
 func isSecretSetting(key string) bool {
@@ -152,7 +243,7 @@ func (s *Service) SettingsView(ctx context.Context) ([]map[string]any, error) {
 	for _, d := range SettingDefs {
 		v := stored[d.Key]
 		out = append(out, map[string]any{
-			"key": d.Key, "label": d.Label, "secret": d.Secret, "group": d.Group,
+			"key": d.Key, "label": d.Label, "secret": d.Secret, "group": d.Group, "type": d.Type,
 			"help": d.Help, "value": MaskSettingValue(d.Key, v), "is_set": v != "",
 		})
 	}
@@ -161,8 +252,14 @@ func (s *Service) SettingsView(ctx context.Context) ([]map[string]any, error) {
 
 // ApplySetting validates and stores a single setting.
 func (s *Service) ApplySetting(ctx context.Context, key, value, updatedBy string) error {
-	if !isKnownSetting(key) {
+	d, ok := settingDef(key)
+	if !ok {
 		return ErrNotFound
+	}
+	if d.Validate != nil {
+		if err := d.Validate(value); err != nil {
+			return err
+		}
 	}
 	return s.Store.SetSetting(ctx, key, value, updatedBy)
 }

@@ -53,6 +53,13 @@ type Options struct {
 	OpenMetadataToken string
 
 	AlertWebhookURL string
+
+	// MCP SSO (OAuth) boot defaults (flags/env); the stored settings
+	// mcp.oauth.* override them like every other runtime setting.
+	MCPOAuthEnabled  bool
+	MCPOAuthResource string
+	MCPOAuthAudience string
+	MCPOAuthScopes   string
 }
 
 type Server struct {
@@ -66,8 +73,10 @@ type Server struct {
 	OIDC          *OIDCProvider // nil = SSO disabled
 	mu            sync.Mutex
 	dataMu        sync.Mutex        // serializes dataset mutations + catalog reloads
-	settingsMu    sync.RWMutex      // guards Options.AdminToken/AllowedOrigins/OIDC live updates
+	settingsMu    sync.RWMutex      // guards Options.AdminToken/AllowedOrigins/OIDC/mcpOAuth live updates
 	bootDefaults  map[string]string // flag/env setting values captured at EnableMeta
+	mcpOAuth      mcpOAuthConfig    // effective MCP SSO settings (see mcpoauth.go)
+	jwksKeys      *jwksCache        // Keycloak signing keys for MCP SSO tokens
 	sessions      map[string]time.Time
 	events        map[string]uint64
 	// pendingClar tracks blocking clarification questions per MCP session:
@@ -167,6 +176,7 @@ func NewServer(c *catalog.Catalog, opts Options) *Server {
 		asyncJobs:       newAsyncJobStore(),
 		feedbackLimiter: newFeedbackRateLimiter(feedbackDefaultLimit, feedbackDefaultWindow),
 		metrics:         newMetricsRegistry(),
+		jwksKeys:        newJWKSCache(),
 	}
 	s.setCatalog(c)
 	return s
@@ -175,6 +185,7 @@ func NewServer(c *catalog.Catalog, opts Options) *Server {
 func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc(s.Options.Endpoint, s.handleMCP)
 	mux.HandleFunc("/healthz", s.handleHealth)
+	s.registerMCPOAuth(mux)
 	s.registerAuth(mux)
 	s.registerAuthAPI(mux)
 	s.registerAdmin(mux)
@@ -208,16 +219,19 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(withSession(r.Context(), sid))
 	}
 	// With the meta DB active, MCP over HTTP requires an authenticated
-	// identity (MCP key / session / master token); the resolved user rides
+	// identity (MCP key / session / master token, or — on this path only —
+	// a Keycloak access token when MCP SSO is on); the resolved user rides
 	// the context so tools can enforce per-profile permissions and audit.
 	if s.authEnabled() {
-		u, err := s.authenticate(r)
+		u, oauthP, err := s.authenticateMCP(r)
 		if err != nil {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="sqlon"`)
-			http.Error(w, "authentication required: pass an MCP key via Authorization: Bearer ssk_... or X-MCP-Key (manage keys at /admin/keys)", http.StatusUnauthorized)
+			s.writeMCPUnauthorized(w, r, err)
 			return
 		}
 		r = r.WithContext(withUser(r.Context(), u))
+		if oauthP != nil {
+			r = r.WithContext(withOAuth(r.Context(), oauthP))
+		}
 	} else if strings.TrimSpace(s.Options.AdminToken) != "" {
 		// Standalone with a master token set: the same token that guards
 		// mutating REST endpoints must also gate mutating/DB-executing MCP
@@ -369,6 +383,9 @@ func (s *Server) handleRequest(ctx context.Context, msg rpcMessage) rpcResponse 
 	case "resources/templates/list":
 		return resultResponse(msg.ID, map[string]any{"resourceTemplates": s.resourceTemplates()})
 	case "resources/read":
+		if !oauthScopeAllows(ctx, "mcp:read") {
+			return errorResponse(msg.ID, -32002, "forbidden", oauthScopeDenied("resources/read", "mcp:read")["notice"])
+		}
 		result, err := s.readResource(msg.Params)
 		if err != nil {
 			return errorResponse(msg.ID, -32602, "invalid params", err.Error())
@@ -377,6 +394,9 @@ func (s *Server) handleRequest(ctx context.Context, msg rpcMessage) rpcResponse 
 	case "prompts/list":
 		return resultResponse(msg.ID, map[string]any{"prompts": s.prompts()})
 	case "prompts/get":
+		if !oauthScopeAllows(ctx, "mcp:read") {
+			return errorResponse(msg.ID, -32002, "forbidden", oauthScopeDenied("prompts/get", "mcp:read")["notice"])
+		}
 		result, err := s.getPrompt(msg.Params)
 		if err != nil {
 			return errorResponse(msg.ID, -32602, "invalid params", err.Error())
@@ -1001,6 +1021,18 @@ var dbaTools = map[string]bool{
 	"dba_execute":             true,
 }
 
+// oauthScopeForTool maps a tool to the scope word an SSO-token caller needs:
+// the privileged tiers map to their own word, everything else is mcp:read.
+func oauthScopeForTool(name string) string {
+	switch {
+	case adminOnlyTools[name]:
+		return "mcp:admin"
+	case dbaTools[name]:
+		return "mcp:dba"
+	}
+	return "mcp:read"
+}
+
 // internalDBAExecutors are retained as implementation helpers during the
 // migration window, but are neither advertised nor callable over MCP.
 var internalDBAExecutors = map[string]bool{
@@ -1121,6 +1153,13 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			"error":  "tool '" + req.Name + "' requires the dba or admin role",
 			"notice": "DBA 도구는 dba/admin 역할과 프로파일의 dba 자격증명(db_profiles.dba)이 모두 필요합니다.",
 		}, nil
+	}
+	// SSO-token callers additionally sit under the administrator's scope
+	// ceiling (mcp.oauth.scopes): mcp:admin / mcp:dba for the two privileged
+	// tiers above, mcp:read for everything else. Role checks stay as they
+	// are — the ceiling only ever narrows. Keys and sessions are unaffected.
+	if need := oauthScopeForTool(req.Name); !oauthScopeAllows(ctx, need) {
+		return oauthScopeDenied(req.Name, need), nil
 	}
 	if denied, err := s.authorizeDBProfileTool(ctx, req.Name, req.Arguments); err != nil {
 		return nil, err

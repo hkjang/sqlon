@@ -26,6 +26,34 @@ func TestRuntimeParsesFullSQLONCommandSurface(t *testing.T) {
 	}
 }
 
+func TestRuntimeMCPOAuthDefaultsOffAndReadFromEnvOrFlags(t *testing.T) {
+	rt := Runtime{Stderr: &bytes.Buffer{}, Getenv: func(string) string { return "" }}
+	cfg, err := rt.parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.mcpOAuthEnabled || cfg.mcpOAuthResource != "" || cfg.mcpOAuthAudience != "" || cfg.mcpOAuthScopes != "" {
+		t.Fatalf("MCP SSO must default to off/empty: %+v", cfg)
+	}
+	env := map[string]string{"SQLON_MCP_OAUTH_ENABLED": "true", "SQLON_MCP_OAUTH_RESOURCE": "https://sqlon.example.com/mcp",
+		"SQLON_MCP_OAUTH_AUDIENCE": "claude-mcp", "SQLON_MCP_OAUTH_SCOPES": "mcp:read mcp:dba"}
+	rt = Runtime{Stderr: &bytes.Buffer{}, Getenv: func(k string) string { return env[k] }}
+	cfg, err = rt.parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.mcpOAuthEnabled || cfg.mcpOAuthResource != env["SQLON_MCP_OAUTH_RESOURCE"] || cfg.mcpOAuthAudience != "claude-mcp" || cfg.mcpOAuthScopes != "mcp:read mcp:dba" {
+		t.Fatalf("env not honored: %+v", cfg)
+	}
+	cfg, err = rt.parse([]string{"-mcp-oauth-enabled=false", "-mcp-oauth-audience", "cursor-mcp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.mcpOAuthEnabled || cfg.mcpOAuthAudience != "cursor-mcp" {
+		t.Fatalf("flags must override env: %+v", cfg)
+	}
+}
+
 func TestRuntimeDisablesAutomaticMigrationForExplicitDataLocation(t *testing.T) {
 	tests := []struct {
 		name string
