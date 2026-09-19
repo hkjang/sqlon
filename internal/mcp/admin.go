@@ -1142,12 +1142,19 @@ func (s *Server) requireDBA(w http.ResponseWriter, r *http.Request) (*http.Reque
 }
 
 // adminAudit records REST mutations into the same audit JSONL as MCP calls.
+// When the gate that admitted the request carried the authenticated user in
+// its context (requireDBA in meta mode), the entry names that user as "actor"
+// — the same field change_execute/rollback use — so the log answers "who",
+// not just "from where". Standalone mode has no user, so the field is absent.
 func (s *Server) adminAudit(r *http.Request, action, detail string, callErr error) {
 	entry := map[string]any{
 		"ts":     time.Now().Format(time.RFC3339Nano),
 		"tool":   "admin:" + action,
 		"detail": detail,
 		"remote": r.RemoteAddr,
+	}
+	if u := userFrom(r.Context()); u != nil {
+		entry["actor"] = u.Username
 	}
 	if callErr != nil {
 		entry["is_error"] = true

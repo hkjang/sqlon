@@ -152,6 +152,96 @@ func TestChangeAPIApprovalActorIsAuthenticatedUser(t *testing.T) {
 	}
 }
 
+// readAuditEntries returns every entry written to the audit JSONL under the
+// server's data dir, in append order.
+func readAuditEntries(t *testing.T, dir string) []map[string]any {
+	t.Helper()
+	path, err := auditFilePath(dir)
+	if err != nil {
+		t.Fatalf("audit file: %v", err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		var e map[string]any
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			t.Fatalf("bad audit line %q: %v", line, err)
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+func TestRESTAuditNamesAuthenticatedActor(t *testing.T) {
+	s, mux, _, _ := newAuthServer(t)
+	if _, err := s.Meta.CreateLocalUser(t.Context(), "dan", "danpass1", meta.RoleDBA, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	rec := doReq(t, mux, "POST", "/auth/login", `{"username":"dan","password":"danpass1"}`, nil)
+	if rec.Code != 200 {
+		t.Fatalf("login dan: %d %s", rec.Code, rec.Body.String())
+	}
+	var danTok string
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == meta.SessionCookie {
+			danTok = c.Value
+		}
+	}
+	admin, _ := s.Meta.Store.GetUserByUsername(t.Context(), "admin")
+	// Dialect lookup only needs the profile record, not a live connection.
+	rec0 := &meta.ProfileRecord{ID: "prod-pg", OwnerID: admin.ID, Visibility: meta.VisibilityShared,
+		Definition: []byte(`{"name":"prod","type":"postgres","connect_string":"127.0.0.1:1/db","username":"u","password_ref":"plain:x"}`)}
+	if err := s.Meta.Store.UpsertProfile(t.Context(), rec0, true); err != nil {
+		t.Fatal(err)
+	}
+
+	rec = doReq(t, mux, "POST", "/api/changes/generate",
+		`{"profile":"prod-pg","action":"create_index","args":{"table":"public.orders","columns":["created_at"]}}`, withCookie(danTok))
+	if rec.Code != 201 {
+		t.Fatalf("generate: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var found map[string]any
+	for _, e := range readAuditEntries(t, s.opDir()) {
+		if e["tool"] == "admin:change_generate" {
+			found = e
+		}
+	}
+	if found == nil {
+		t.Fatal("no admin:change_generate audit entry written")
+	}
+	if found["actor"] != "dan" {
+		t.Fatalf("REST audit must name the authenticated user as actor, got %v", found)
+	}
+	if strings.Contains(found["detail"].(string), "CREATE INDEX") {
+		t.Fatalf("audit detail must not carry generated SQL: %v", found)
+	}
+}
+
+func TestRESTAuditOmitsActorInStandaloneMode(t *testing.T) {
+	s, mux := newAdminMux(t, "")
+	rec := doReq(t, mux, "PUT", "/api/datasets/glossary",
+		`{"entries":[{"term":"고객","synonyms":["cust_no"],"category":"entity"}]}`, nil)
+	if rec.Code != 200 {
+		t.Fatalf("put: %d %s", rec.Code, rec.Body.String())
+	}
+	var found map[string]any
+	for _, e := range readAuditEntries(t, s.opDir()) {
+		if e["tool"] == "admin:put_dataset" {
+			found = e
+		}
+	}
+	if found == nil {
+		t.Fatal("no admin:put_dataset audit entry written")
+	}
+	if _, has := found["actor"]; has {
+		t.Fatalf("standalone mode has no authenticated user; actor must be absent: %v", found)
+	}
+}
+
 func TestChangeTemplateRejectsIrreversibleAndPasswordOverHTTP(t *testing.T) {
 	// No DB profile is configured in the fixture, so the dialect lookup fails
 	// before any generation — assert the endpoint is wired and rejects cleanly
