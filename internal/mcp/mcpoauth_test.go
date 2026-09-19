@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -8,10 +9,12 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"log"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +29,26 @@ type fakeIdP struct {
 	srv  *httptest.Server
 	keys map[string]*rsa.PrivateKey // kid → key
 	kids []string
+
+	// Fault knobs for the JWKS cache tests: discoveries counts every discovery
+	// round trip, down makes discovery answer 503, and hold (when non-nil)
+	// parks discovery until the channel is closed — a slow IdP.
+	faultMu     sync.Mutex
+	discoveries int
+	down        bool
+	hold        chan struct{}
+}
+
+func (idp *fakeIdP) setFault(down bool, hold chan struct{}) {
+	idp.faultMu.Lock()
+	defer idp.faultMu.Unlock()
+	idp.down, idp.hold = down, hold
+}
+
+func (idp *fakeIdP) discoveryCount() int {
+	idp.faultMu.Lock()
+	defer idp.faultMu.Unlock()
+	return idp.discoveries
 }
 
 func newFakeIdP(t *testing.T) *fakeIdP {
@@ -34,6 +57,17 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 	idp.addKey(t, "k1")
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		idp.faultMu.Lock()
+		idp.discoveries++
+		down, hold := idp.down, idp.hold
+		idp.faultMu.Unlock()
+		if hold != nil {
+			<-hold
+		}
+		if down {
+			http.Error(w, "idp down", http.StatusServiceUnavailable)
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"issuer": idp.srv.URL, "jwks_uri": idp.srv.URL + "/jwks",
 			"authorization_endpoint": idp.srv.URL + "/auth", "token_endpoint": idp.srv.URL + "/token",
@@ -266,7 +300,9 @@ func TestMCPOAuthAcceptsTokenForThisResource(t *testing.T) {
 
 func TestMCPOAuthRejectsForeignAudience(t *testing.T) {
 	_, mux, idp, _ := newOAuthServer(t)
-	rec := mcpWithBearer(t, mux, idp.token(t, map[string]any{"aud": "account", "azp": "other-app"}), "")
+	logs := captureLog(t)
+	tok := idp.token(t, map[string]any{"aud": "account", "azp": "other-app"})
+	rec := mcpWithBearer(t, mux, tok, "")
 	if rec.Code != 401 {
 		t.Fatalf("foreign audience must be 401: %d", rec.Code)
 	}
@@ -276,6 +312,55 @@ func TestMCPOAuthRejectsForeignAudience(t *testing.T) {
 			t.Fatalf("refusal must name what it saw and what to set (%q): %s", want, b)
 		}
 	}
+	// The log line names the subject, the verbatim cause and the request id.
+	refusalLogLine(t, logs, "foreign audience", `audience [account] / azp "other-app" not accepted`, rec.Header().Get("X-Request-Id"), tok)
+	if !strings.Contains(logs.String(), `sub="sub-bob"`) {
+		t.Fatalf("refusal log must name the subject: %s", logs.String())
+	}
+}
+
+// captureLog routes the standard logger into a buffer for the test's
+// lifetime, the same logger the runtime points at stderr (log.New(rt.Stderr)
+// in internal/app/runtime.go), so refusal lines can be asserted on.
+func captureLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(prev) })
+	return &buf
+}
+
+// refusalLogLine finds the single "mcp oauth: refused" line in buf and
+// checks it carries the verbatim cause and a non-empty request id (wantID
+// when the client supplied one) — without the token itself.
+func refusalLogLine(t *testing.T, buf *bytes.Buffer, name, cause, wantID, token string) {
+	t.Helper()
+	var lines []string
+	for _, l := range strings.Split(buf.String(), "\n") {
+		if strings.Contains(l, "mcp oauth: refused:") {
+			lines = append(lines, l)
+		}
+	}
+	if len(lines) != 1 {
+		t.Errorf("%s: want exactly one refusal log line, got %d: %q", name, len(lines), buf.String())
+		return
+	}
+	line := lines[0]
+	if !strings.Contains(line, "cause="+cause) && !strings.Contains(line, cause) {
+		t.Errorf("%s: refusal log lacks cause %q: %s", name, cause, line)
+	}
+	_, after, ok := strings.Cut(line, "request_id=")
+	id, _, _ := strings.Cut(after, " ")
+	if !ok || id == "" {
+		t.Errorf("%s: refusal log lacks a request_id: %s", name, line)
+	}
+	if wantID != "" && id != wantID {
+		t.Errorf("%s: refusal log request_id %q, want the client's %q: %s", name, id, wantID, line)
+	}
+	if token != "" && strings.Contains(line, token) {
+		t.Errorf("%s: refusal log must never contain the token: %s", name, line)
+	}
 }
 
 func TestMCPOAuthRejectsBadTokens(t *testing.T) {
@@ -283,24 +368,34 @@ func TestMCPOAuthRejectsBadTokens(t *testing.T) {
 	other := newFakeIdP(t) // different issuer, different keys
 	foreignKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	cases := []struct {
-		name, token, want string
+		name, token, want, cause string
 	}{
-		{"expired", idp.token(t, map[string]any{"exp": time.Now().Add(-2 * time.Minute).Unix()}), "만료"},
-		{"no exp", idp.token(t, map[string]any{"exp": nil}), "만료"},
-		{"not yet valid", idp.token(t, map[string]any{"nbf": time.Now().Add(10 * time.Minute).Unix()}), "아직 유효하지"},
-		{"other issuer", other.token(t, nil), "유효하지 않습니다"},
-		{"issuer claim mismatch", idp.token(t, map[string]any{"iss": "https://elsewhere.example/realms/x"}), "발급자"},
-		{"id token", idp.token(t, map[string]any{"typ": "ID"}), "typ=ID"},
-		{"refresh token", idp.token(t, map[string]any{"typ": "Refresh"}), "액세스 토큰이 아닙니다"},
-		{"header typ ID", idp.token(t, map[string]any{"typ": nil, "_hdr_typ": "ID"}), "ID 토큰"},
-		{"hs256", idp.hs256(nil), "유효하지 않습니다"},
-		{"cnf", idp.token(t, map[string]any{"cnf": map[string]any{"jkt": "abc"}}), "cnf"},
-		{"no sub", idp.token(t, map[string]any{"sub": ""}), "sub"},
-		{"unknown key", idp.sign(t, "k1", foreignKey, nil), "유효하지 않습니다"},
-		{"garbage", "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.bm90LWEtc2ln", "유효하지 않습니다"},
+		{"expired", idp.token(t, map[string]any{"exp": time.Now().Add(-2 * time.Minute).Unix()}), "만료", "token expired at"},
+		{"no exp", idp.token(t, map[string]any{"exp": nil}), "만료", "(exp present=false)"},
+		{"not yet valid", idp.token(t, map[string]any{"nbf": time.Now().Add(10 * time.Minute).Unix()}), "아직 유효하지", "token not valid before"},
+		{"other issuer", other.token(t, nil), "유효하지 않습니다", "signature mismatch"},
+		{"issuer claim mismatch", idp.token(t, map[string]any{"iss": "https://elsewhere.example/realms/x"}), "발급자", `issuer "https://elsewhere.example/realms/x" is not "` + idp.srv.URL + `"`},
+		{"id token", idp.token(t, map[string]any{"typ": "ID"}), "typ=ID", `token typ "ID" is not Bearer`},
+		{"refresh token", idp.token(t, map[string]any{"typ": "Refresh"}), "액세스 토큰이 아닙니다", `token typ "Refresh" is not Bearer`},
+		{"header typ ID", idp.token(t, map[string]any{"typ": nil, "_hdr_typ": "ID"}), "ID 토큰", "header typ is ID"},
+		{"hs256", idp.hs256(nil), "유효하지 않습니다", `alg "HS256" not accepted`},
+		{"cnf", idp.token(t, map[string]any{"cnf": map[string]any{"jkt": "abc"}}), "cnf", "token carries cnf"},
+		{"no sub", idp.token(t, map[string]any{"sub": ""}), "sub", "sub missing"},
+		{"unknown key", idp.sign(t, "k1", foreignKey, nil), "유효하지 않습니다", "signature mismatch"},
+		{"garbage", "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.bm90LWEtc2ln", "유효하지 않습니다", `unknown kid ""`},
 	}
-	for _, tc := range cases {
-		rec := mcpWithBearer(t, mux, tc.token, "")
+	logs := captureLog(t)
+	for i, tc := range cases {
+		logs.Reset()
+		// Odd cases send their own correlation id, even ones let the server
+		// mint one: both must show up in the log and the response.
+		hdr := map[string]string{"Authorization": "Bearer " + tc.token, "Accept": "application/json"}
+		wantID := ""
+		if i%2 == 1 {
+			wantID = "client-req-" + strings.ReplaceAll(tc.name, " ", "-")
+			hdr["X-Request-Id"] = wantID
+		}
+		rec := doReq(t, mux, "POST", "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, hdr)
 		if rec.Code != 401 {
 			t.Errorf("%s: code %d, want 401 (%s)", tc.name, rec.Code, rec.Body.String())
 			continue
@@ -308,6 +403,11 @@ func TestMCPOAuthRejectsBadTokens(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), tc.want) {
 			t.Errorf("%s: body %q lacks %q", tc.name, rec.Body.String(), tc.want)
 		}
+		gotID := rec.Header().Get("X-Request-Id")
+		if gotID == "" || (wantID != "" && gotID != wantID) {
+			t.Errorf("%s: response X-Request-Id %q, want %q (or any non-empty)", tc.name, gotID, wantID)
+		}
+		refusalLogLine(t, logs, tc.name, tc.cause, gotID, tc.token)
 	}
 }
 
@@ -333,10 +433,14 @@ func TestMCPOAuthRequiresRegisteredActiveAccount(t *testing.T) {
 	if err := s.Meta.Store.UpdateUser(ctx, bob); err != nil {
 		t.Fatal(err)
 	}
-	rec = mcpWithBearer(t, mux, idp.token(t, nil), "")
+	logs := captureLog(t)
+	tok := idp.token(t, nil)
+	rec = doReq(t, mux, "POST", "/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`,
+		map[string]string{"Authorization": "Bearer " + tok, "Accept": "application/json", "X-Request-Id": "req-inactive-bob"})
 	if rec.Code != 401 || !strings.Contains(rec.Body.String(), "비활성") {
 		t.Fatalf("inactive: %d %s", rec.Code, rec.Body.String())
 	}
+	refusalLogLine(t, logs, "inactive", `account "bob" (sub "sub-bob") is deactivated`, "req-inactive-bob", tok)
 }
 
 func TestMCPOAuthTokenIsRefusedOutsideMCP(t *testing.T) {
@@ -584,5 +688,114 @@ func TestMCPOAuthJWKSRotationAndThrottle(t *testing.T) {
 	s.jwksKeys.mu.Unlock()
 	if !throttled {
 		t.Fatal("unknown-kid refetch must be throttled")
+	}
+}
+
+// A slow IdP must not stand between a cached key and the request that needs
+// it: the network round trip for an unknown kid happens outside the cache
+// lock, and a waiter that gives up (ctx) is not held hostage by it.
+func TestJWKSCacheFetchDoesNotBlockCachedKeys(t *testing.T) {
+	idp := newFakeIdP(t)
+	c := newJWKSCache()
+	ctx := context.Background()
+	if _, err := c.key(ctx, idp.srv.URL, "k1"); err != nil {
+		t.Fatal(err)
+	}
+	// From here on discovery hangs until released.
+	hold := make(chan struct{})
+	idp.setFault(false, hold)
+	c.mu.Lock()
+	c.nextRefetch = time.Time{}
+	c.mu.Unlock()
+	slowDone := make(chan error, 1)
+	go func() {
+		_, err := c.key(ctx, idp.srv.URL, "k-unknown")
+		slowDone <- err
+	}()
+	// Wait until the slow fetch has actually reached the IdP.
+	for deadline := time.Now().Add(3 * time.Second); idp.discoveryCount() < 2; {
+		if time.Now().After(deadline) {
+			t.Fatal("slow fetch never reached the IdP")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	start := time.Now()
+	if _, err := c.key(ctx, idp.srv.URL, "k1"); err != nil {
+		t.Fatalf("cached kid during a slow fetch: %v", err)
+	}
+	if d := time.Since(start); d > 500*time.Millisecond {
+		t.Fatalf("cached kid waited %v on the slow fetch", d)
+	}
+	// A second unknown-kid caller joins the in-flight fetch rather than
+	// starting another, and honours its own ctx while waiting.
+	wctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancel()
+	start = time.Now()
+	if _, err := c.key(wctx, idp.srv.URL, "k-other"); err == nil || !strings.Contains(err.Error(), "deadline") {
+		t.Fatalf("waiter must fail with its own ctx, got %v", err)
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Fatalf("waiter ignored its ctx: %v", d)
+	}
+	if n := idp.discoveryCount(); n != 2 {
+		t.Fatalf("discovery calls = %d, want 2 (warm-up + one shared slow fetch)", n)
+	}
+	close(hold)
+	if err := <-slowDone; err == nil || !strings.Contains(err.Error(), "unknown kid") {
+		t.Fatalf("slow fetch: %v", err)
+	}
+}
+
+// Failed discovery/JWKS is remembered like a success: within the refetch
+// window no further round trips are made, and keys already held keep
+// serving after the TTL has run out while the IdP is down.
+func TestJWKSCacheThrottlesFailedFetch(t *testing.T) {
+	idp := newFakeIdP(t)
+	ctx := context.Background()
+
+	// (a) Cold cache, IdP down: one round trip, then throttled refusals.
+	c := newJWKSCache()
+	idp.setFault(true, nil)
+	for i := 0; i < 5; i++ {
+		if _, err := c.key(ctx, idp.srv.URL, "k1"); err == nil {
+			t.Fatalf("call %d: down IdP must not yield a key", i)
+		}
+	}
+	if n := idp.discoveryCount(); n != 1 {
+		t.Fatalf("cold cache, down IdP: %d discovery calls, want 1", n)
+	}
+
+	// (b) Warm cache, TTL expired, IdP down: one refetch attempt, the old key
+	// keeps serving, further attempts wait for the throttle window.
+	idp.setFault(false, nil)
+	c = newJWKSCache()
+	if _, err := c.key(ctx, idp.srv.URL, "k1"); err != nil {
+		t.Fatal(err)
+	}
+	base := idp.discoveryCount()
+	idp.setFault(true, nil)
+	c.mu.Lock()
+	c.fetchedAt = time.Now().Add(-2 * jwksTTL)
+	c.nextRefetch = time.Time{}
+	c.mu.Unlock()
+	for i := 0; i < 5; i++ {
+		if _, err := c.key(ctx, idp.srv.URL, "k1"); err != nil {
+			t.Fatalf("call %d: known kid must survive a failed refetch: %v", i, err)
+		}
+		if _, err := c.key(ctx, idp.srv.URL, "k-unknown"); err == nil {
+			t.Fatalf("call %d: unknown kid must still be refused", i)
+		}
+	}
+	if n := idp.discoveryCount() - base; n != 1 {
+		t.Fatalf("expired cache, down IdP: %d discovery calls, want 1", n)
+	}
+	// Once the IdP is back and the window has passed, the refetch succeeds.
+	idp.setFault(false, nil)
+	idp.addKey(t, "k2")
+	c.mu.Lock()
+	c.nextRefetch = time.Time{}
+	c.mu.Unlock()
+	if _, err := c.key(ctx, idp.srv.URL, "k2"); err != nil {
+		t.Fatalf("recovered IdP: %v", err)
 	}
 }

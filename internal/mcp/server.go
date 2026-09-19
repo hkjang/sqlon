@@ -213,6 +213,9 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeCORS(w, r)
+	// A correlation id (X-Request-Id, minted when absent) rides the context
+	// and the response so a refusal log line can be matched to the call.
+	r = ensureRequestID(w, r)
 	// Session id rides the context in every mode: activity correlation and
 	// the clarification gate both key on it.
 	if sid := r.Header.Get("Mcp-Session-Id"); sid != "" {

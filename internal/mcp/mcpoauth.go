@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -238,12 +239,57 @@ type oauthRefusal struct {
 func (e *oauthRefusal) Error() string { return e.cause.Error() }
 func (e *oauthRefusal) Unwrap() error { return e.cause }
 
-// refuseOAuth is the only constructor: every refusal path logs its concrete
-// cause (signature, issuer, expiry, audience, account…) here, so the client
-// text can stay short without leaving operations blind.
-func refuseOAuth(cause error, message string) error {
-	log.Printf("sqlon: mcp oauth: refused: %v", cause)
+// oauthRefuser is the only way a refusal is made: every path logs its
+// concrete cause (signature, issuer, expiry, audience, account…) together
+// with the request id and, once the claims have been read, the subject — so
+// the short client text can be matched to one log line. The token itself
+// never reaches the log.
+type oauthRefuser struct {
+	requestID string
+	sub       string
+}
+
+func (f oauthRefuser) refuse(cause error, message string) error {
+	log.Printf("sqlon: mcp oauth: refused: request_id=%s sub=%q cause=%v", f.requestID, f.sub, cause)
 	return &oauthRefusal{cause: fmt.Errorf("%w: %v", meta.ErrUnauthorized, cause), message: message}
+}
+
+// ---- request correlation ----
+
+type ctxKeyRequestID struct{}
+
+// ensureRequestID gives the request a correlation id: the caller's
+// X-Request-Id when it is a sane header value, a fresh one otherwise. The id
+// is echoed in the response so client and server logs can be matched. Only
+// the MCP path uses it for now.
+func ensureRequestID(w http.ResponseWriter, r *http.Request) *http.Request {
+	id := strings.TrimSpace(r.Header.Get("X-Request-Id"))
+	if len(id) > 128 || strings.ContainsFunc(id, func(c rune) bool { return c < 0x21 || c > 0x7e }) {
+		id = ""
+	}
+	if id == "" {
+		id = newRequestID()
+	}
+	w.Header().Set("X-Request-Id", id)
+	return r.WithContext(context.WithValue(r.Context(), ctxKeyRequestID{}, id))
+}
+
+func newRequestID() string {
+	var b [12]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "req_" + time.Now().Format("20060102150405.000000000")
+	}
+	return "req_" + base64.RawURLEncoding.EncodeToString(b[:])
+}
+
+// requestIDFrom returns the request's correlation id; for contexts that did
+// not pass through ensureRequestID (stdio, tests calling oauthUser directly)
+// it mints one so a log line never goes out without an id.
+func requestIDFrom(ctx context.Context) string {
+	if id, _ := ctx.Value(ctxKeyRequestID{}).(string); id != "" {
+		return id
+	}
+	return newRequestID()
 }
 
 func bearerToken(r *http.Request) string {
@@ -281,57 +327,60 @@ func (s *Server) authenticateMCP(r *http.Request) (*meta.User, *oauthPrincipal, 
 // says exactly why it will not.
 func (s *Server) oauthUser(ctx context.Context, token string) (*meta.User, *oauthPrincipal, error) {
 	c := s.mcpOAuthConfigSnapshot()
+	ref := oauthRefuser{requestID: requestIDFrom(ctx)}
 	if !c.Enabled {
-		return nil, nil, refuseOAuth(errors.New("sso tokens disabled (mcp.oauth.enabled=false)"),
+		return nil, nil, ref.refuse(errors.New("sso tokens disabled (mcp.oauth.enabled=false)"),
 			"이 서버는 SSO 액세스 토큰을 받지 않습니다. 개인 MCP 키(ssk_)를 쓰거나, 관리자가 서버 설정에서 MCP SSO(OAuth)를 켜야 합니다.")
 	}
 	if !c.Active() {
-		return nil, nil, refuseOAuth(errors.New("sso tokens enabled but inactive: "+c.Reason),
+		return nil, nil, ref.refuse(errors.New("sso tokens enabled but inactive: "+c.Reason),
 			"MCP SSO(OAuth)가 켜져 있지만 구성이 불완전합니다("+c.Reason+"). 관리자에게 알리세요.")
 	}
 	if len(token) > 32<<10 {
-		return nil, nil, refuseOAuth(errors.New("token longer than 32KiB"), "SSO 액세스 토큰이 비정상적으로 큽니다.")
+		return nil, nil, ref.refuse(errors.New("token longer than 32KiB"), "SSO 액세스 토큰이 비정상적으로 큽니다.")
 	}
 	hdr, claims, err := verifyJWT(token, func(kid, alg string) (crypto.PublicKey, error) {
 		return s.jwksKeys.key(ctx, c.Issuer, kid)
 	})
 	if err != nil {
-		return nil, nil, refuseOAuth(fmt.Errorf("token rejected: %w", err),
+		return nil, nil, ref.refuse(fmt.Errorf("token rejected: %w", err),
 			"SSO 액세스 토큰이 유효하지 않습니다(서명·발급자 키). 클라이언트에서 다시 로그인하세요.")
 	}
+	// From here on the subject is known and goes into every refusal log line.
+	ref.sub = claimString(claims, "sub")
 	now := time.Now()
 	const leeway = 30 * time.Second
 	if iss := claimString(claims, "iss"); strings.TrimRight(iss, "/") != c.Issuer {
-		return nil, nil, refuseOAuth(fmt.Errorf("issuer %q is not %q", iss, c.Issuer),
+		return nil, nil, ref.refuse(fmt.Errorf("issuer %q is not %q", iss, c.Issuer),
 			"SSO 액세스 토큰의 발급자(iss)가 이 서버의 OIDC Issuer 와 다릅니다. 같은 Keycloak realm 으로 로그인하세요.")
 	}
 	exp, ok := claimTime(claims, "exp")
 	if !ok || !now.Before(exp.Add(leeway)) {
-		return nil, nil, refuseOAuth(fmt.Errorf("token expired at %v (exp present=%v)", exp, ok),
+		return nil, nil, ref.refuse(fmt.Errorf("token expired at %v (exp present=%v)", exp, ok),
 			"SSO 액세스 토큰이 만료되었습니다. 클라이언트에서 다시 로그인하세요.")
 	}
 	if nbf, ok := claimTime(claims, "nbf"); ok && now.Add(leeway).Before(nbf) {
-		return nil, nil, refuseOAuth(fmt.Errorf("token not valid before %v", nbf),
+		return nil, nil, ref.refuse(fmt.Errorf("token not valid before %v", nbf),
 			"SSO 액세스 토큰이 아직 유효하지 않습니다(nbf). 서버와 Keycloak 의 시계를 확인하세요.")
 	}
 	// An ID token is proof of login, not an API credential; Keycloak stamps
 	// the payload typ ("Bearer" for access tokens, "ID"/"Refresh"/… otherwise).
 	if typ := claimString(claims, "typ"); typ != "" && !strings.EqualFold(typ, "Bearer") {
-		return nil, nil, refuseOAuth(fmt.Errorf("token typ %q is not Bearer", typ),
+		return nil, nil, ref.refuse(fmt.Errorf("token typ %q is not Bearer", typ),
 			"SSO 토큰이 액세스 토큰이 아닙니다(typ="+typ+"). ID 토큰이 아니라 액세스 토큰을 보내세요.")
 	}
 	if typ, _ := hdr["typ"].(string); strings.EqualFold(typ, "ID") {
-		return nil, nil, refuseOAuth(errors.New("header typ is ID"), "SSO ID 토큰은 MCP 자격이 아닙니다. 액세스 토큰을 보내세요.")
+		return nil, nil, ref.refuse(errors.New("header typ is ID"), "SSO ID 토큰은 MCP 자격이 아닙니다. 액세스 토큰을 보내세요.")
 	}
 	// A sender-constrained token (DPoP / mTLS, RFC 7800 cnf) needs a proof we
 	// cannot verify; accepting it as a plain bearer would defeat the binding.
 	if _, has := claims["cnf"]; has {
-		return nil, nil, refuseOAuth(errors.New("token carries cnf (sender-constrained)"),
+		return nil, nil, ref.refuse(errors.New("token carries cnf (sender-constrained)"),
 			"소지자 증명(cnf)이 묶인 SSO 토큰은 이 서버가 검증할 수 없어 받지 않습니다. 일반 Bearer 액세스 토큰을 쓰세요.")
 	}
-	sub := claimString(claims, "sub")
+	sub := ref.sub
 	if sub == "" {
-		return nil, nil, refuseOAuth(errors.New("sub missing"), "SSO 액세스 토큰에 사용자 식별자(sub)가 없습니다.")
+		return nil, nil, ref.refuse(errors.New("sub missing"), "SSO 액세스 토큰에 사용자 식별자(sub)가 없습니다.")
 	}
 	// Whom the token was minted for. A real Keycloak 26 access token carries
 	// aud=["account"] and the client id in azp, so "aud names our resource"
@@ -343,7 +392,7 @@ func (s *Server) oauthUser(ctx context.Context, token string) (*meta.User, *oaut
 	accepted := append([]string{c.Resource}, c.Audiences...)
 	bound := append(slices.Clone(aud), azp)
 	if !slices.ContainsFunc(bound, func(v string) bool { return v != "" && slices.Contains(accepted, v) }) {
-		return nil, nil, refuseOAuth(fmt.Errorf("audience %v / azp %q not accepted (accepted %v)", aud, azp, accepted),
+		return nil, nil, ref.refuse(fmt.Errorf("audience %v / azp %q not accepted (accepted %v)", aud, azp, accepted),
 			fmt.Sprintf("SSO 토큰이 이 서버를 위해 발급된 것이 아닙니다(토큰의 aud=%v, azp=%q). 관리자가 서버 설정 mcp.oauth.audience 에 %q 를 더하거나, Keycloak 클라이언트의 Audience 매퍼에 %q 를 넣어야 합니다.",
 				aud, azp, azp, c.Resource))
 	}
@@ -355,7 +404,7 @@ func (s *Server) oauthUser(ctx context.Context, token string) (*meta.User, *oaut
 	if tokScopes := strings.Fields(claimString(claims, "scope")); slices.ContainsFunc(tokScopes, func(v string) bool { return strings.HasPrefix(v, "mcp:") }) {
 		scopes = slices.DeleteFunc(scopes, func(v string) bool { return !slices.Contains(tokScopes, v) })
 		if len(scopes) == 0 {
-			return nil, nil, refuseOAuth(fmt.Errorf("token scopes %v share nothing with ceiling %v", tokScopes, c.Scopes),
+			return nil, nil, ref.refuse(fmt.Errorf("token scopes %v share nothing with ceiling %v", tokScopes, c.Scopes),
 				fmt.Sprintf("SSO 토큰의 범위(%s)와 서버가 허용한 범위(%s)에 공통 항목이 없습니다. 클라이언트가 요청하는 scope 를 줄이거나 관리자가 mcp.oauth.scopes 를 넓혀야 합니다.",
 					strings.Join(tokScopes, " "), strings.Join(c.Scopes, " ")))
 		}
@@ -363,11 +412,11 @@ func (s *Server) oauthUser(ctx context.Context, token string) (*meta.User, *oaut
 	// The same lookup the web sign-in uses, without the provisioning half.
 	u, err := s.Meta.Store.GetUserByProviderSubject(ctx, meta.ProviderKeycloak, sub)
 	if err != nil {
-		return nil, nil, refuseOAuth(fmt.Errorf("no account for sso subject %q: %v", sub, err),
+		return nil, nil, ref.refuse(fmt.Errorf("no account for sso subject %q: %v", sub, err),
 			"이 SSO 계정은 sqlon 에 등록되어 있지 않습니다. 먼저 웹 콘솔에 Keycloak(SSO)으로 한 번 로그인한 뒤 다시 연결하세요.")
 	}
 	if !u.IsActive {
-		return nil, nil, refuseOAuth(fmt.Errorf("account %q (sub %q) is deactivated", u.Username, sub),
+		return nil, nil, ref.refuse(fmt.Errorf("account %q (sub %q) is deactivated", u.Username, sub),
 			"이 sqlon 계정은 비활성 상태입니다. 관리자에게 활성화를 요청하세요.")
 	}
 	return u, &oauthPrincipal{Scopes: scopes}, nil
@@ -511,6 +560,14 @@ func verifyJWT(token string, keyFor func(kid, alg string) (crypto.PublicKey, err
 // timer, and once more when a token names an unknown kid (rotation) — but
 // that unknown-kid refresh is rate limited so a stream of forged tokens
 // cannot turn this server into a JWKS hammer.
+//
+// The lock guards the fields only; the network round trip itself runs
+// outside it, so a request whose kid is already cached is never queued
+// behind a slow Keycloak. Concurrent callers that all need a fetch share the
+// one in flight (inflight), each waiting under its own ctx. A failed fetch
+// is remembered exactly like a successful one (nextRefetch): while Keycloak
+// is down the keys already held keep serving past their TTL, and retries are
+// spaced by jwksRefetchEvery instead of happening on every token.
 type jwksCache struct {
 	mu          sync.Mutex
 	hc          *http.Client
@@ -518,6 +575,7 @@ type jwksCache struct {
 	keys        map[string]crypto.PublicKey
 	fetchedAt   time.Time
 	nextRefetch time.Time
+	inflight    chan struct{} // closed when the running fetch has recorded its result; nil when none runs
 }
 
 const (
@@ -533,28 +591,68 @@ func newJWKSCache() *jwksCache {
 // key returns the public key for kid, fetching or refreshing the set as
 // described above.
 func (c *jwksCache) key(ctx context.Context, issuer, kid string) (crypto.PublicKey, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	now := time.Now()
-	stale := c.issuer != issuer || c.keys == nil || now.Sub(c.fetchedAt) > jwksTTL
-	if !stale {
-		if k, ok := c.keys[kid]; ok {
-			return k, nil
+	for {
+		c.mu.Lock()
+		now := time.Now()
+		held := c.issuer == issuer && c.keys != nil
+		if held {
+			if k, ok := c.keys[kid]; ok && now.Sub(c.fetchedAt) <= jwksTTL {
+				c.mu.Unlock()
+				return k, nil
+			}
+		}
+		if wait := c.inflight; wait != nil {
+			// Somebody is already talking to Keycloak; use their answer.
+			c.mu.Unlock()
+			select {
+			case <-wait:
+				continue
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
 		}
 		if now.Before(c.nextRefetch) {
+			// Inside the throttle window (after a refetch, successful or not):
+			// a key we still hold — even past its TTL — beats a refusal.
+			if held {
+				if k, ok := c.keys[kid]; ok {
+					c.mu.Unlock()
+					return k, nil
+				}
+			}
+			c.mu.Unlock()
 			return nil, fmt.Errorf("unknown kid %q (refetch throttled)", kid)
 		}
+		if c.issuer != issuer {
+			// A new issuer starts from nothing; the throttle below then
+			// applies to it, not to whatever was configured before.
+			c.issuer, c.keys, c.fetchedAt = issuer, nil, time.Time{}
+			held = false
+		}
+		done := make(chan struct{})
+		c.inflight = done
+		c.mu.Unlock()
+
+		keys, err := fetchJWKS(ctx, c.hc, issuer)
+
+		c.mu.Lock()
+		c.inflight = nil
+		c.nextRefetch = time.Now().Add(jwksRefetchEvery)
+		if err == nil {
+			c.keys, c.fetchedAt = keys, time.Now()
+		} else if held {
+			keys = c.keys // Keycloak is unreachable: the keys we have stay in service
+		}
+		close(done)
+		c.mu.Unlock()
+		if k, ok := keys[kid]; ok {
+			return k, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("unknown kid %q", kid)
 	}
-	keys, err := fetchJWKS(ctx, c.hc, issuer)
-	c.nextRefetch = now.Add(jwksRefetchEvery)
-	if err != nil {
-		return nil, err
-	}
-	c.issuer, c.keys, c.fetchedAt = issuer, keys, now
-	if k, ok := keys[kid]; ok {
-		return k, nil
-	}
-	return nil, fmt.Errorf("unknown kid %q", kid)
 }
 
 // fetchJWKS reads discovery for jwks_uri (which must live on the issuer's
