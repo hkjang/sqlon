@@ -267,17 +267,29 @@ func (s *Server) registerAuthAPI(mux *http.ServeMux) {
 			writeAPIError(w, http.StatusBadRequest, err)
 			return
 		}
+		// Validate the whole batch before writing anything: map iteration
+		// order is random, so a per-key save-then-fail would leave an
+		// arbitrary subset stored (and unapplied) on a 400.
+		for key, val := range req {
+			if val == nil {
+				continue
+			}
+			if err := meta.ValidateSetting(key, *val); err != nil {
+				msg := "unknown or invalid setting: " + key
+				if !errors.Is(err, meta.ErrNotFound) {
+					msg += " — " + err.Error()
+				}
+				writeAPIError(w, http.StatusBadRequest, errEmpty(msg))
+				return
+			}
+		}
 		for key, val := range req {
 			if val == nil {
 				_ = s.Meta.Store.DeleteSetting(r.Context(), key)
 				continue
 			}
 			if err := s.Meta.ApplySetting(r.Context(), key, *val, actorName(actor)); err != nil {
-				msg := "unknown or invalid setting: " + key
-				if !errors.Is(err, meta.ErrNotFound) {
-					msg += " — " + err.Error()
-				}
-				writeAPIError(w, http.StatusBadRequest, errEmpty(msg))
+				writeAPIError(w, http.StatusInternalServerError, err)
 				return
 			}
 		}

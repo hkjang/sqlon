@@ -81,6 +81,8 @@ var SettingDefs = []SettingDef{
 	{Key: SetMCPOAuthScopes, Label: "SSO 토큰에 주는 범위(공백 구분)", Group: "MCP SSO (OAuth)",
 		Help:     "mcp:read(기본) mcp:admin mcp:dba 중에서. 역할과의 교집합이 천장입니다 — 역할이 없는 권한을 열지 않습니다.",
 		Validate: validateMCPOAuthScopes},
+	{Key: SetCacheTTL, Label: "쿼리 결과 캐시 TTL(초)", Group: "성능",
+		Help: "동일 (프로파일, SQL, max_rows) 결과를 재사용하는 시간. 0=캐시 비활성. 기본 60."},
 }
 
 func validateBoolSetting(v string) error {
@@ -250,16 +252,25 @@ func (s *Service) SettingsView(ctx context.Context) ([]map[string]any, error) {
 	return out, nil
 }
 
-// ApplySetting validates and stores a single setting.
-func (s *Service) ApplySetting(ctx context.Context, key, value, updatedBy string) error {
+// ValidateSetting checks that key is a known setting and that value passes
+// its Validate hook, without touching the store. Callers saving several keys
+// at once run this over the whole batch first so a bad value rejects the
+// request as a unit instead of leaving part of it saved.
+func ValidateSetting(key, value string) error {
 	d, ok := settingDef(key)
 	if !ok {
 		return ErrNotFound
 	}
 	if d.Validate != nil {
-		if err := d.Validate(value); err != nil {
-			return err
-		}
+		return d.Validate(value)
+	}
+	return nil
+}
+
+// ApplySetting validates and stores a single setting.
+func (s *Service) ApplySetting(ctx context.Context, key, value, updatedBy string) error {
+	if err := ValidateSetting(key, value); err != nil {
+		return err
 	}
 	return s.Store.SetSetting(ctx, key, value, updatedBy)
 }

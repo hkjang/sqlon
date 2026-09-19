@@ -522,6 +522,44 @@ func TestMCPOAuthSettingsValidationAndView(t *testing.T) {
 	}
 }
 
+// A rejected PUT must leave the store untouched (the OpenAPI contract), and
+// the pre-existing cache TTL setting must still be manageable alongside the
+// MCP SSO entries.
+func TestSettingsPutValidatesBeforeStoringAndKeepsCacheTTL(t *testing.T) {
+	s, mux, adminTok, _ := newAuthServer(t)
+	body := `{"mcp.oauth.resource":"https://sqlon.example.com/mcp","mcp.oauth.audience":"claude-mcp","cache_ttl_seconds":"30","mcp.oauth.scopes":"mcp:write"}`
+	rec := doReq(t, mux, "PUT", "/api/settings", body, withCookie(adminTok))
+	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "mcp.oauth.scopes") {
+		t.Fatalf("invalid scope must reject the whole request: %d %s", rec.Code, rec.Body.String())
+	}
+	stored, _ := s.Meta.Store.GetSettings(context.Background())
+	for _, k := range []string{meta.SetMCPOAuthResource, meta.SetMCPOAuthAudience, meta.SetCacheTTL, meta.SetMCPOAuthScopes} {
+		if v, ok := stored[k]; ok {
+			t.Fatalf("rejected PUT must store nothing, but %s=%q was saved", k, v)
+		}
+	}
+	rec = doReq(t, mux, "PUT", "/api/settings", `{"cache_ttl_seconds":"30"}`, withCookie(adminTok))
+	if rec.Code != 200 {
+		t.Fatalf("cache_ttl_seconds must remain a known setting: %d %s", rec.Code, rec.Body.String())
+	}
+	if stored, _ = s.Meta.Store.GetSettings(context.Background()); stored[meta.SetCacheTTL] != "30" {
+		t.Fatalf("cache_ttl_seconds not stored: %v", stored)
+	}
+	var out struct {
+		Settings []struct {
+			Key string `json:"key"`
+		} `json:"settings"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	found := false
+	for _, d := range out.Settings {
+		found = found || d.Key == meta.SetCacheTTL
+	}
+	if !found {
+		t.Fatalf("cache_ttl_seconds missing from settings view: %s", rec.Body.String())
+	}
+}
+
 func TestMCPOAuthJWKSRotationAndThrottle(t *testing.T) {
 	s, mux, idp, _ := newOAuthServer(t)
 	if rec := mcpWithBearer(t, mux, idp.token(t, nil), ""); rec.Code != 200 {
