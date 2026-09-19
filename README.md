@@ -564,11 +564,19 @@ sqlon -transport http -addr 0.0.0.0:6767 \
   전체 키 관리
 - **MCP 키**: `/mcp` 접근용 `ssk_...` 키를 발급·회전·폐기(`/admin/keys`).
   클라이언트는 `Authorization: Bearer ssk_...` 또는 `X-MCP-Key`로 접속
+- **MCP SSO(OAuth 2.1, 기본 꺼짐)**: 관리자가 `mcp.oauth.enabled` 를 켜면
+  `/mcp` 가 Keycloak **액세스 토큰**도 받습니다(키는 그대로). 이 서버는 리소스
+  서버일 뿐이라 `/.well-known/oauth-protected-resource` 메타데이터와 401 의
+  `resource_metadata` 도전만 내고, 로그인·토큰 발급은 Keycloak 이 합니다.
+  토큰은 서명·`iss`·`exp`·`nbf`·`typ`·`cnf`·**대상(aud/azp)** 을 검사한 뒤
+  **웹 콘솔에 SSO 로 로그인한 적 있는 활성 계정**에만 연결되고(계정 생성 없음),
+  `/mcp` 밖(REST·관리 API)에서는 받지 않습니다. 설정 표·Keycloak 설정·확인
+  방법은 [docs/admin_guide.md §3.4](docs/admin_guide.md)
 - **DB 프로파일 권한**: 사용자별 소유 + `use`/`manage` grant + `shared`
   공개. Postgres에 저장되어 사용자마다 접근 범위가 다름
 - 첫 기동 시 부트스트랩 관리자를 생성(비밀번호 미지정 시 로그에 1회 출력)
 
-- **서버 설정 관리**: 마스터 토큰·허용 Origin·Keycloak SSO를 `/admin/settings`
+- **서버 설정 관리**: 마스터 토큰·허용 Origin·Keycloak SSO·MCP SSO 를 `/admin/settings`
   에서 메타 DB에 저장하고 **재기동 없이 즉시 적용**(플래그/env는 기본값)
 - **데이터셋도 메타 DB에서 관리**: 편집 가능한 카탈로그 JSON 14종의 진실
   원본이 Postgres(`sqlon_meta.datasets`)가 되어 `/admin`·MCP 도구 편집이 DB에

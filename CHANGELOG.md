@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- **MCP SSO(OAuth 2.1) — Keycloak 액세스 토큰으로 `/mcp` 열기(기본 꺼짐).**
+  관리자가 `/admin/settings` 의 「MCP SSO (OAuth)」 카드에서 `mcp.oauth.enabled`
+  를 켜면(환경변수 `SQLON_MCP_OAUTH_ENABLED`/플래그 `-mcp-oauth-enabled` 는
+  기본값) 이 서버는 RFC 9728 보호 리소스 메타데이터를
+  `/.well-known/oauth-protected-resource`(및 `…/mcp`)에서 인증 없이 내고,
+  `/mcp` 의 401 에 `WWW-Authenticate: Bearer resource_metadata="…"` 를 붙여
+  OAuth 지원 MCP 클라이언트가 URL 하나로 스스로 Keycloak 로그인을 거치게
+  합니다. 같은 `Authorization: Bearer` 헤더에서 `ssk_` 접두사면 키, JWT
+  모양이면 토큰으로 갈라 Keycloak JWKS 로 서명(RS/PS/ES 만)·`iss`·`exp`·
+  `nbf`·`typ`(Bearer 아니면 거부)·`cnf`(있으면 거부)·대상(`aud` 에 리소스
+  식별자, 또는 `aud`/`azp` 가 `mcp.oauth.audience` 에 있음)을 검사하며, 거부
+  메시지에 본 `aud`/`azp` 와 고칠 값을 적습니다. 토큰은 웹 콘솔에 SSO 로
+  로그인한 적 있는 **활성 계정**에만 연결되고(계정 생성·복구·role 승격 없음),
+  관리자 설정 `mcp.oauth.scopes`(기본 `mcp:read`; `mcp:admin`·`mcp:dba` 로
+  관리·DBA 도구 계층 개방)가 역할 위의 천장이 되며, `/mcp` 밖(REST·관리
+  API·`/auth/me`)에서는 받지 않습니다. 개인 키 흐름은 그대로입니다.
+- 설정 정의에 `Type`(bool → 체크박스)과 저장 시 검증(`Validate`)을 두어
+  잘못된 값은 `PUT /api/settings` 가 400 과 사유로 거부합니다.
+
 ## v0.1.5 — 2026-09-14
 
 - PII 노출 리포트(`get_pii_exposure`)의 짧은 ASCII 단서(`pan`·`dob`·`ssn`·

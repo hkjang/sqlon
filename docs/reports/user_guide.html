@@ -376,6 +376,14 @@ hr {
   }
 }
 </code></pre>
+<h3>2.3 키 없이 SSO 로 연결하기 (MCP SSO / OAuth)</h3>
+<p>관리자가 <strong>MCP SSO(OAuth)</strong> 를 켠 서버라면(<code>/admin/keys</code> 상단에 「키 없이 SSO 로 연결하기」 카드가 보입니다), OAuth 를 지원하는 MCP 클라이언트(Claude, Cursor 등)에는 키 대신 <strong>MCP URL 하나만</strong> 넣으면 됩니다. 클라이언트가 스스로 Keycloak 로그인 화면을 띄우고 토큰을 받아 오며, 이미 Keycloak 에 로그인돼 있으면 화면조차 거의 보지 않습니다.</p>
+<ol>
+<li><strong>먼저 웹 콘솔에 Keycloak(SSO) 으로 한 번 로그인</strong>합니다. 이 로그인이 등록입니다 — 토큰만으로는 계정이 만들어지지 않습니다.</li>
+<li><code>/admin/keys</code> 카드의 MCP URL(예: <code>https://sqlon.example.com/mcp</code>)을 복사해 클라이언트의 원격 MCP 서버 주소로 넣습니다. 헤더·키는 비워 둡니다.</li>
+<li>클라이언트가 Keycloak 로그인 창을 열면 평소처럼 로그인합니다.</li>
+</ol>
+<p>권한은 키로 들어왔을 때와 같습니다(역할·프로파일 grant). 다만 관리자가 정한 범위(기본 <code>mcp:read</code>)가 천장이라, 관리·DBA 도구는 관리자가 <code>mcp:admin</code>/<code>mcp:dba</code> 를 열어 주어야 합니다. 거부되면 401 본문에 이유와 조치가 적혀 있습니다(예: "먼저 웹 콘솔에 로그인하세요", "관리자가 허용 대상에 … 를 더해야 합니다"). 키가 필요한 자동화 스크립트·폐쇄망 클라이언트는 지금처럼 <code>/admin/keys</code> 에서 키를 발급하면 됩니다.</p>
 <hr/>
 <h2>3. 핵심 기능 및 사용법</h2>
 <p>SQLON은 사용자가 데이터를 안전하게 탐색하고 분석할 수 있도록 단계별 도구를 제공합니다.</p>

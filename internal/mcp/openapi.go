@@ -183,14 +183,21 @@ var openAPISpec = `{
       "get": {
         "tags": ["settings"], "summary": "런타임 설정 조회 (admin) — 시크릿은 마스킹",
         "security": [{"SessionCookie":[]},{"AdminToken":[]}],
-        "responses": { "200": {"description":"{settings[], sso_enabled, boot_only}"}, "403": {"description":"admin 아님"} } },
+        "responses": { "200": {"description":"{settings[], sso_enabled, mcp_oauth{enabled,active,reason,resource,metadata_url,audience,scopes}, boot_only}"}, "403": {"description":"admin 아님"} } },
       "put": {
         "tags": ["settings"], "summary": "설정 저장·즉시 적용 (admin)",
-        "description": "본문은 key→value 맵. 값=설정, \"\"=빈값, null=삭제(플래그/env 기본값으로 복귀). 마스터 토큰·허용 Origin·OIDC(SSO)는 재기동 없이 적용됩니다.",
+        "description": "본문은 key→value 맵. 값=설정, \"\"=빈값, null=삭제(플래그/env 기본값으로 복귀). 마스터 토큰·허용 Origin·OIDC(SSO)·MCP SSO(mcp.oauth.*)는 재기동 없이 적용됩니다. 값 검증에 실패하면 400 과 사유를 돌려주고 아무것도 저장하지 않습니다.",
         "security": [{"SessionCookie":[]},{"AdminToken":[]}],
         "requestBody": { "required": true, "content": { "application/json": { "schema": {"type":"object","additionalProperties":{"type":["string","null"]}},
-          "examples": { "oidc": { "value": { "oidc_issuer":"https://kc/realms/x","oidc_client_id":"sqlon","oidc_client_secret":"...","oidc_redirect_url":"https://host:6767/auth/sso/callback" } } } } } },
+          "examples": { "oidc": { "value": { "oidc_issuer":"https://kc/realms/x","oidc_client_id":"sqlon","oidc_client_secret":"...","oidc_redirect_url":"https://host:6767/auth/sso/callback" } },
+                        "mcp_oauth": { "value": { "mcp.oauth.enabled":"true","mcp.oauth.resource":"https://sqlon.example.com/mcp","mcp.oauth.audience":"claude-mcp","mcp.oauth.scopes":"mcp:read" } } } } } },
         "responses": { "200": {"description":"{ok, settings[], note}"}, "403": {"description":"admin 아님"} } }
+    },
+    "/.well-known/oauth-protected-resource": {
+      "get": {
+        "tags": ["settings"], "summary": "MCP SSO(OAuth) 보호 리소스 메타데이터 (RFC 9728) — 인증 없음, 맨 JSON",
+        "description": "mcp.oauth.enabled 가 켜지고 구성이 완전할 때만 200. {resource, authorization_servers[Keycloak issuer], bearer_methods_supported[header], scopes_supported, resource_name}. 같은 문서를 /.well-known/oauth-protected-resource/mcp 에서도 냅니다. 꺼져 있으면 404.",
+        "responses": { "200": {"description":"RFC 9728 문서 (Access-Control-Allow-Origin: *)"}, "404": {"description":"MCP SSO 꺼짐 또는 미완성"} } }
     },
     "/api/health": {
       "get": {

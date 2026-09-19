@@ -51,6 +51,25 @@
     </div>
   </div>
 
+  <div class="card" id="ssoCard" style="display:none">
+    <b>키 없이 SSO 로 연결하기</b>
+    <div class="mini" style="margin-top:4px">
+      이 서버는 <b>MCP SSO(OAuth 2.1)</b> 가 켜져 있습니다. OAuth 를 지원하는 MCP 클라이언트(Claude, Cursor 등)에는 키 대신
+      아래 <b>MCP URL 하나만</b> 넣으세요 — 클라이언트가 스스로 Keycloak 로그인 화면을 띄우고 토큰을 받아 옵니다.
+      이미 Keycloak 에 로그인돼 있으면 화면조차 거의 보지 않습니다.
+      <ul style="margin:6px 0 0 18px; padding:0">
+        <li>계정은 만들어지지 않습니다 — <b>이 웹 콘솔에 SSO 로 한 번 로그인한 계정</b>만 연결됩니다.</li>
+        <li>권한은 키로 들어왔을 때와 같은 문을 지나며, 관리자가 정한 범위(기본 <code>mcp:read</code>)를 넘지 않습니다.</li>
+        <li>키가 필요한 자동화·폐쇄망 클라이언트는 아래에서 지금처럼 키를 발급하면 됩니다.</li>
+      </ul>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px">
+      <span class="mini"><b>MCP URL</b></span> <code id="ssoResource"></code>
+      <button type="button" class="btn" id="ssoCopy">📋 복사</button>
+    </div>
+    <div class="mini" style="margin-top:4px">메타데이터: <code id="ssoMeta"></code></div>
+  </div>
+
   <div class="card">
     <b>새 키 발급</b>
     <form onsubmit="return createKey(event)" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; align-items:center">
@@ -104,6 +123,12 @@ function fmt(t) { return t ? String(t).slice(0, 19).replace('T', ' ') : '—'; }
 async function init(me) {
   if (!me.auth_enabled) { document.querySelector('main').innerHTML = '<div class="card">단독 모드(메타 DB 미설정) — MCP 키가 필요 없습니다. /mcp는 인증 없이 접근됩니다.</div>'; return; }
   ME = me.user;
+  if (me.mcp_oauth && me.mcp_oauth.active) {
+    $('#ssoCard').style.display = '';
+    $('#ssoResource').textContent = me.mcp_oauth.resource;
+    $('#ssoMeta').textContent = me.mcp_oauth.metadata_url;
+    $('#ssoCopy').onclick = () => { navigator.clipboard.writeText(me.mcp_oauth.resource); $('#ssoCopy').textContent = '✅ 복사됨'; };
+  }
   if (ME.role === 'admin') {
     $('#allWrap').style.display = '';
     try {

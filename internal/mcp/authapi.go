@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -247,6 +248,7 @@ func (s *Server) registerAuthAPI(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"settings":    view,
 			"sso_enabled": s.OIDC != nil,
+			"mcp_oauth":   s.mcpOAuthConfigSnapshot().view(),
 			"boot_only": map[string]any{ // 읽기전용 안내
 				"meta_db":   "환경변수 JAMYPG_META_DB / -meta-db (부팅 전용)",
 				"addr":      "-addr (부팅 전용, 재기동 필요)",
@@ -265,13 +267,29 @@ func (s *Server) registerAuthAPI(mux *http.ServeMux) {
 			writeAPIError(w, http.StatusBadRequest, err)
 			return
 		}
+		// Validate the whole batch before writing anything: map iteration
+		// order is random, so a per-key save-then-fail would leave an
+		// arbitrary subset stored (and unapplied) on a 400.
+		for key, val := range req {
+			if val == nil {
+				continue
+			}
+			if err := meta.ValidateSetting(key, *val); err != nil {
+				msg := "unknown or invalid setting: " + key
+				if !errors.Is(err, meta.ErrNotFound) {
+					msg += " — " + err.Error()
+				}
+				writeAPIError(w, http.StatusBadRequest, errEmpty(msg))
+				return
+			}
+		}
 		for key, val := range req {
 			if val == nil {
 				_ = s.Meta.Store.DeleteSetting(r.Context(), key)
 				continue
 			}
 			if err := s.Meta.ApplySetting(r.Context(), key, *val, actorName(actor)); err != nil {
-				writeAPIError(w, http.StatusBadRequest, errEmpty("unknown or invalid setting: "+key))
+				writeAPIError(w, http.StatusInternalServerError, err)
 				return
 			}
 		}
@@ -282,7 +300,8 @@ func (s *Server) registerAuthAPI(mux *http.ServeMux) {
 		s.adminAudit(r, "settings_update", strings.Join(keysOf(req), ","), nil)
 		view, _ := s.Meta.SettingsView(r.Context())
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "settings": view, "sso_enabled": s.OIDC != nil,
-			"note": "런타임 적용됨(재기동 불필요): 마스터 토큰·허용 Origin·OIDC(SSO)."})
+			"mcp_oauth": s.mcpOAuthConfigSnapshot().view(),
+			"note":      "런타임 적용됨(재기동 불필요): 마스터 토큰·허용 Origin·OIDC(SSO)·MCP SSO(OAuth)."})
 	})
 
 	// ---- profile grants ----
@@ -770,6 +789,19 @@ func (s *Server) EnableMeta(svc *meta.Service, oidc *OIDCProvider) {
 		s.bootDefaults[meta.SetOIDCSecret] = oidc.ClientSecret
 		s.bootDefaults[meta.SetOIDCRedirect] = oidc.RedirectURL
 	}
+	// MCP SSO (OAuth): off unless the flag/env or a stored setting says so.
+	if s.Options.MCPOAuthEnabled {
+		s.bootDefaults[meta.SetMCPOAuthEnabled] = "true"
+	}
+	for k, v := range map[string]string{
+		meta.SetMCPOAuthResource: s.Options.MCPOAuthResource,
+		meta.SetMCPOAuthAudience: s.Options.MCPOAuthAudience,
+		meta.SetMCPOAuthScopes:   s.Options.MCPOAuthScopes,
+	} {
+		if v = strings.TrimSpace(v); v != "" {
+			s.bootDefaults[k] = v
+		}
+	}
 }
 
 // ApplySettings loads effective settings (stored over bootstrap) and applies
@@ -804,6 +836,14 @@ func (s *Server) ApplySettings(ctx context.Context) error {
 		s.OIDC = &OIDCProvider{Issuer: iss, ClientID: cid, ClientSecret: sec, RedirectURL: red}
 	} else {
 		s.OIDC = nil
+	}
+	// MCP SSO (OAuth): derived from the same effective map so the switch, the
+	// issuer and the resource identifier always move together. An enabled but
+	// incomplete configuration is logged once per apply and behaves as off.
+	prev := s.mcpOAuth
+	s.mcpOAuth = buildMCPOAuthConfig(eff, s.Options.Endpoint)
+	if s.mcpOAuth.Enabled && !s.mcpOAuth.Active() && (prev.Reason != s.mcpOAuth.Reason || !prev.Enabled) {
+		log.Printf("sqlon: mcp oauth: enabled but inactive: %s", s.mcpOAuth.Reason)
 	}
 	// result cache TTL (blank → default, invalid → left unchanged)
 	if v := strings.TrimSpace(eff[meta.SetCacheTTL]); v != "" {

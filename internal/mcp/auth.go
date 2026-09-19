@@ -219,8 +219,12 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 			"version": Version, "sso_enabled": s.OIDC != nil})
 		return
 	}
+	// mcp_oauth tells the key page whether "connect with SSO, no key" is on
+	// offer and which URL to hand the client (all of it public metadata).
+	oc := s.mcpOAuthConfigSnapshot()
 	writeJSON(w, http.StatusOK, map[string]any{"auth_enabled": true, "authenticated": true,
-		"version": Version, "user": u, "sso_enabled": s.OIDC != nil})
+		"version": Version, "user": u, "sso_enabled": s.OIDC != nil,
+		"mcp_oauth": map[string]any{"active": oc.Active(), "resource": oc.Resource, "metadata_url": oc.MetadataURL()}})
 }
 
 // handleUpdateProfile lets a logged-in local user edit their own display name

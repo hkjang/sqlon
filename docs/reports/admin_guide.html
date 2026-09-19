@@ -481,6 +481,158 @@ GRANT CREATE SESSION TO sqlon_ro;
 GRANT SELECT ANY TABLE TO sqlon_ro;
 </code></pre>
 <hr/>
+<h3>3.4 MCP SSO(OAuth) — Keycloak 액세스 토큰으로 <code>/mcp</code> 열기</h3>
+<p>메타 DB 모드에서 <code>/mcp</code> 는 기본적으로 <strong>개인 MCP 키(<code>ssk_…</code>)</strong> 로만 열립니다. MCP 인가 규격(2025-06-18 이후)은 OAuth 2.1 이라, 이 기능을 켜면 OAuth 를 지원하는 MCP 클라이언트(Claude, Cursor 등)에 <strong>MCP URL 하나만</strong> 주어도 클라이언트가 스스로 Keycloak 로그인을 거쳐 토큰을 받아 옵니다. 키 체계는 그대로 둡니다 — 키가 필요한 자동화·폐쇄망 클라이언트는 지금처럼 키를 씁니다.</p>
+<p>이 서버는 <strong>리소스 서버</strong>입니다. 로그인·토큰 발급·클라이언트 등록은 Keycloak 이 하고, sqlon 은 (1) 보호 리소스 메타데이터(RFC 9728)를 내고, (2) <code>/mcp</code> 의 401 에 그 위치를 알리며, (3) 제시된 토큰이 <strong>이 서버를 위해 발급된 것인지</strong> 검사합니다. <code>/authorize</code>·<code>/token</code>·동적 클라이언트 등록 엔드포인트는 만들지 않습니다. 토큰을 저장하거나 세션으로 바꾸지도 않습니다.</p>
+<h4>설정 (<code>/admin/settings</code> → 「MCP SSO (OAuth)」 카드, 저장 즉시 적용)</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">설정 키</th>
+<th style="text-align:left">기본값</th>
+<th style="text-align:left">뜻</th>
+<th style="text-align:left">환경변수 / 플래그(기본값 층)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><code>mcp.oauth.enabled</code></td>
+<td style="text-align:left"><code>false</code></td>
+<td style="text-align:left"><strong>기본 꺼짐.</strong> 켜면 <code>/mcp</code> 가 Keycloak 액세스 토큰도 받습니다</td>
+<td style="text-align:left"><code>SQLON_MCP_OAUTH_ENABLED</code> / <code>-mcp-oauth-enabled</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><code>mcp.oauth.resource</code></td>
+<td style="text-align:left">빈 값</td>
+<td style="text-align:left">리소스 식별자(RFC 8707) = 클라이언트가 실제 접속하는 <strong>공개 MCP 주소</strong>. 비우면 <code>oidc_redirect_url</code> 의 오리진 + MCP 경로(<code>/mcp</code>)로 만듭니다. 요청의 <code>Host</code> 헤더는 쓰지 않습니다</td>
+<td style="text-align:left"><code>SQLON_MCP_OAUTH_RESOURCE</code> / <code>-mcp-oauth-resource</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><code>mcp.oauth.audience</code></td>
+<td style="text-align:left">빈 값</td>
+<td style="text-align:left">공백 구분 허용 대상. 토큰의 <code>aud</code> 또는 <code>azp</code> 와 비교. 보통 Keycloak 의 MCP 클라이언트 ID</td>
+<td style="text-align:left"><code>SQLON_MCP_OAUTH_AUDIENCE</code> / <code>-mcp-oauth-audience</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><code>mcp.oauth.scopes</code></td>
+<td style="text-align:left"><code>mcp:read</code></td>
+<td style="text-align:left">공백 구분. SSO 토큰 주체에게 주는 범위의 <strong>천장</strong>. <code>mcp:read</code>(관리·DBA 계층 밖 모든 도구·리소스·프롬프트) <code>mcp:admin</code>(관리 도구 계층) <code>mcp:dba</code>(DBA 도구 계층). 계정 역할과의 교집합만 열립니다</td>
+<td style="text-align:left"><code>SQLON_MCP_OAUTH_SCOPES</code> / <code>-mcp-oauth-scopes</code></td>
+</tr>
+<tr>
+<td style="text-align:left">(재사용) <code>oidc_issuer</code> · <code>oidc_redirect_url</code></td>
+<td style="text-align:left">웹 로그인 설정</td>
+<td style="text-align:left">인증 서버와 공개 오리진은 Keycloak SSO 카드의 값을 그대로 씁니다. 새로 만들지 않습니다</td>
+<td style="text-align:left"></td>
+</tr>
+</tbody>
+</table>
+<p>켜지는 조건은 셋이 다 있을 때입니다 — <code>oidc_issuer</code> 가 있고, 리소스 식별자를 만들 수 있고, 메타 DB 모드입니다. 하나라도 빠지면 켜 두어도 꺼진 것처럼 동작하며(메타데이터 404, 401 에 도전 헤더 없음) 카드에 「켜짐·미완성」과 이유가, 서버 로그에 <code>mcp oauth: enabled but inactive: …</code> 가 남습니다. 잘못된 값(<code>mcp.oauth.scopes</code> 의 모르는 낱말, 쿼리가 붙은 리소스 URL 등)은 저장 시 400 으로 거부됩니다.</p>
+<p>카드에는 클라이언트에 줄 <strong>MCP URL(resource)</strong> 과 <strong>메타데이터 주소</strong>가 복사 단추와 함께 표시됩니다. 사용자 쪽 안내는 <code>/admin/keys</code> 의 「키 없이 SSO 로 연결하기」와 사용자 가이드 §2.3 에 있습니다.</p>
+<h4>Keycloak 쪽 할 일</h4>
+<ol>
+<li>MCP 클라이언트용 <strong>공개(public) 클라이언트</strong>를 만듭니다(예: <code>sqlon-mcp</code>). Standard Flow 켬, PKCE <code>S256</code>, Direct Access Grants·Implicit·Service accounts 끔. <strong>웹 로그인 클라이언트(<code>oidc_client_id</code>)와 다른 클라이언트</strong>입니다.</li>
+<li>Valid Redirect URIs 에 쓰는 MCP 클라이언트의 콜백을 <strong>정확히</strong> 적습니다(Claude 는 <code>https://claude.ai/api/mcp/auth_callback</code>, 로컬 클라이언트는 <code>http://127.0.0.1:*/callback</code> 류). <code>*</code> 하나로 다 여는 것은 금지입니다.</li>
+<li>대상(audience) — 둘 중 하나:
+<ul>
+<li><strong>정식 경로</strong>: 그 클라이언트(또는 전용 client scope)에 <strong>Audience 매퍼</strong> 추가 — Mapper type <code>Audience</code>, Included Custom Audience = 리소스 식별자(예: <code>https://sqlon.example.com/mcp</code>), Add to access token <strong>ON</strong>, Add to ID token OFF.</li>
+<li><strong>호환 경로</strong>: 매퍼 없이 이 서버의 <code>mcp.oauth.audience</code> 에 클라이언트 ID(<code>sqlon-mcp</code>)를 적습니다. 실제 Keycloak 26 액세스 토큰은 <code>aud</code> 에 <code>account</code> 만 싣고 클라이언트 ID 는 <code>azp</code> 에 담으므로 이 값으로 통과합니다.</li>
+</ul>
+</li>
+<li>액세스 토큰 수명은 짧게(5분 안팎). 이 서버는 introspection 을 하지 않으므로 <strong>Keycloak 에서 로그아웃하거나 사용자를 끄더라도 이미 발급된 토큰은 만료까지 삽니다.</strong> 즉시 차단이 필요하면 sqlon 의 사용자 비활성화(다음 요청부터 거부)를 함께 쓰세요.</li>
+</ol>
+<p>사용자는 <strong>먼저 웹 콘솔에 Keycloak(SSO) 으로 한 번 로그인</strong>해야 합니다. 그 순간이 등록이며, 토큰의 <code>sub</code> 로 그 계정을 찾습니다. 토큰만으로는 계정을 만들지 않고, 비활성 계정을 되살리지 않으며, 토큰의 role claim 을 권한으로 옮기지 않습니다.</p>
+<h4>curl 로 확인하기</h4>
+<pre><code class="language-bash"># 1) 메타데이터 — 인증 없이 맨 JSON (꺼져 있으면 404)
+curl -s https://sqlon.example.com/.well-known/oauth-protected-resource/mcp
+# {"resource":"https://sqlon.example.com/mcp","authorization_servers":["https://kc.example.com/realms/corp"],
+#  "bearer_methods_supported":["header"],"scopes_supported":["mcp:read"],"resource_name":"sqlon MCP"}
+
+# 2) 401 도전 — MCP 경로에서만 resource_metadata 가 붙습니다
+curl -si -X POST https://sqlon.example.com/mcp -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | grep -i www-authenticate
+# WWW-Authenticate: Bearer realm="sqlon", resource_metadata="https://sqlon.example.com/.well-known/oauth-protected-resource/mcp"
+
+# 3) 토큰으로 tools/list (토큰은 클라이언트가 받아 옵니다; 손으로 확인할 때만)
+curl -s -X POST https://sqlon.example.com/mcp -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+</code></pre>
+<p>REST 경로(<code>/api/*</code>)에 같은 토큰을 보내면 401 입니다 — OAuth 토큰은 <code>/mcp</code> 에서만 받습니다.</p>
+<h4>거부 메시지별 조치</h4>
+<p>401 본문에 이유가 적히고, 하위 원인(서명·발급자·만료·대상 등)은 서버 로그 <code>sqlon: mcp oauth: refused: …</code> 에 남습니다.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">401 본문</th>
+<th style="text-align:left">뜻</th>
+<th style="text-align:left">조치</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><code>이 서버는 SSO 액세스 토큰을 받지 않습니다</code></td>
+<td style="text-align:left"><code>mcp.oauth.enabled</code> 꺼짐</td>
+<td style="text-align:left">카드에서 켜기</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>켜져 있지만 구성이 불완전합니다(…)</code></td>
+<td style="text-align:left">issuer 또는 리소스 식별자 없음</td>
+<td style="text-align:left">괄호 안 이유대로 <code>oidc_issuer</code> / <code>mcp.oauth.resource</code>(또는 <code>oidc_redirect_url</code>) 채우기</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>유효하지 않습니다(서명·발급자 키)</code></td>
+<td style="text-align:left">서명 불일치, 모르는 <code>kid</code>, <code>HS256</code>/<code>none</code>, 다른 realm 키, JWKS 조회 실패</td>
+<td style="text-align:left">같은 realm 으로 재로그인; 로그의 원인 확인(<code>discovery</code>/<code>jwks</code> 오류면 sqlon → Keycloak 네트워크·CA)</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>발급자(iss)가 … 다릅니다</code></td>
+<td style="text-align:left">다른 realm 토큰</td>
+<td style="text-align:left">클라이언트가 이 서버의 메타데이터를 다시 읽도록 재연결</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>만료되었습니다</code> / <code>아직 유효하지 않습니다(nbf)</code></td>
+<td style="text-align:left">수명 경과 / 시계 차이</td>
+<td style="text-align:left">재로그인 / 서버·Keycloak 시각 동기화</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>액세스 토큰이 아닙니다(typ=ID)</code> / <code>ID 토큰은 MCP 자격이 아닙니다</code></td>
+<td style="text-align:left">ID 토큰 또는 Refresh 토큰을 보냄</td>
+<td style="text-align:left">클라이언트가 access_token 을 보내도록 확인</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>소지자 증명(cnf)이 묶인 …</code></td>
+<td style="text-align:left">DPoP/mTLS 토큰</td>
+<td style="text-align:left">일반 Bearer 토큰으로 발급되는 클라이언트 설정 사용</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>이 서버를 위해 발급된 것이 아닙니다(토큰의 aud=[…], azp="…")</code></td>
+<td style="text-align:left">대상 불일치 — 다른 앱용 토큰</td>
+<td style="text-align:left">메시지의 <code>azp</code> 값을 <code>mcp.oauth.audience</code> 에 더하거나, Audience 매퍼에 메시지의 리소스 식별자를 넣기</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>범위(…)와 서버가 허용한 범위(…)에 공통 항목이 없습니다</code></td>
+<td style="text-align:left">토큰이 <code>mcp:*</code> 범위를 실어 왔는데 천장과 교집합 없음</td>
+<td style="text-align:left">클라이언트 요청 scope 를 줄이거나 <code>mcp.oauth.scopes</code> 넓히기</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>등록되어 있지 않습니다. 먼저 웹 콘솔에 … 로그인</code></td>
+<td style="text-align:left">이 <code>sub</code> 로 로그인한 계정 없음</td>
+<td style="text-align:left">사용자가 웹 콘솔에 SSO 로 한 번 로그인</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>이 sqlon 계정은 비활성 상태입니다</code></td>
+<td style="text-align:left">관리자가 끈 계정</td>
+<td style="text-align:left"><code>/admin/users</code> 에서 활성화</td>
+</tr>
+<tr>
+<td style="text-align:left">(200, 도구 결과) <code>requires SSO scope mcp:admin</code> / <code>mcp:dba</code></td>
+<td style="text-align:left">천장 미달</td>
+<td style="text-align:left"><code>mcp.oauth.scopes</code> 에 해당 낱말 추가(계정 역할도 필요)</td>
+</tr>
+</tbody>
+</table>
+<hr/>
 <h2>4. 메타데이터 동기화 및 관측성(Observability)</h2>
 <h3>4.1 스키마 메타데이터 자동 동기화 (<code>metasync</code>)</h3>
 <p>SQLON은 데이터베이스 테이블 구조, 인덱스 현황 및 테이블/컬럼 Comment 정보를 지속적으로 캡처하여 메타 DB에 저장합니다.</p>
