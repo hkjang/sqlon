@@ -666,7 +666,11 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, res)
 	})
 	mux.HandleFunc("GET /api/profile-catalogs", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, s.listProfileCatalogs(r.Context()))
+		actor, ok := s.requireActor(w, r)
+		if !ok {
+			return
+		}
+		writeJSON(w, http.StatusOK, s.listProfileCatalogs(withUser(r.Context(), actor)))
 	})
 	mux.HandleFunc("POST /api/profile-catalogs/{profile}/openmetadata-import", func(w http.ResponseWriter, r *http.Request) {
 		if !s.requireAdmin(w, r) {
@@ -702,6 +706,10 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, res)
 	})
 	mux.HandleFunc("GET /api/profile-catalogs/active", func(w http.ResponseWriter, r *http.Request) {
+		_, ok := s.requireActor(w, r)
+		if !ok {
+			return
+		}
 		writeJSON(w, http.StatusOK, s.activeCatalogInfo())
 	})
 	mux.HandleFunc("POST /api/profile-catalogs/active", func(w http.ResponseWriter, r *http.Request) {
@@ -719,16 +727,24 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, res)
 	})
 	mux.HandleFunc("GET /api/profile-catalogs/{profile}", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := s.requireActor(w, r)
+		if !ok {
+			return
+		}
 		profile := r.PathValue("profile")
-		if err := s.canUseProfileID(r.Context(), userFrom(r.Context()), profile); err != nil {
+		if err := s.canUseProfileID(r.Context(), actor, profile); err != nil {
 			writeAPIError(w, http.StatusForbidden, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, s.getProfileCatalog(profile))
 	})
 	mux.HandleFunc("GET /api/profile-catalogs/{profile}/schemas", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := s.requireActor(w, r)
+		if !ok {
+			return
+		}
 		profile := r.PathValue("profile")
-		if err := s.canUseProfileID(r.Context(), userFrom(r.Context()), profile); err != nil {
+		if err := s.canUseProfileID(r.Context(), actor, profile); err != nil {
 			writeAPIError(w, http.StatusForbidden, err)
 			return
 		}
@@ -756,8 +772,12 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, res)
 	})
 	mux.HandleFunc("GET /api/profile-catalogs/{profile}/dataset/{name}", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := s.requireActor(w, r)
+		if !ok {
+			return
+		}
 		profile := r.PathValue("profile")
-		if err := s.canUseProfileID(r.Context(), userFrom(r.Context()), profile); err != nil {
+		if err := s.canUseProfileID(r.Context(), actor, profile); err != nil {
 			writeAPIError(w, http.StatusForbidden, err)
 			return
 		}
