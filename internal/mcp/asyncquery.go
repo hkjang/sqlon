@@ -117,6 +117,7 @@ func (s *Server) submitAsyncQuery(profile, sql, user string, opts dbconn.ExecOpt
 func (st *asyncJobStore) jobView(id string) (*asyncJob, bool) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	st.prune()
 	j, ok := st.jobs[id]
 	if !ok {
 		return nil, false
@@ -129,6 +130,7 @@ func (st *asyncJobStore) jobView(id string) (*asyncJob, bool) {
 func (st *asyncJobStore) cancelJob(id, user string, isAdmin bool) bool {
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	st.prune()
 	j, ok := st.jobs[id]
 	if !ok || (!isAdmin && j.User != user) {
 		return false
