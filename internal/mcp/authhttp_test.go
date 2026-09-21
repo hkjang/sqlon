@@ -680,3 +680,149 @@ func TestMCPActivityHistoryAndStatsScope(t *testing.T) {
 		t.Fatalf("admin all stats should be per_user: %s", rec.Body.String())
 	}
 }
+
+func TestProfileUpdatePreservesVisibility(t *testing.T) {
+	s, mux, adminTok, ownerTok := newAuthServer(t)
+	loginUser := func(username string) string {
+		t.Helper()
+		if _, err := s.Meta.CreateLocalUser(t.Context(), username, "testpass12", meta.RoleUser, "", ""); err != nil {
+			t.Fatal(err)
+		}
+		r := doReq(t, mux, "POST", "/auth/login", `{"username":"`+username+`","password":"testpass12"}`, nil)
+		if r.Code != http.StatusOK {
+			t.Fatalf("login %s: %d", username, r.Code)
+		}
+		for _, c := range r.Result().Cookies() {
+			if c.Name == meta.SessionCookie {
+				return c.Value
+			}
+		}
+		t.Fatalf("missing session cookie for %s", username)
+		return ""
+	}
+	managerTok, useTok, viewerTok := loginUser("manager"), loginUser("reader"), loginUser("viewer")
+	body := func(id, name, visibilityField string) string {
+		return `{"id":"` + id + `","name":"` + name + `","connect_string":"h:1521/S","username":"APP_RO","password_ref":"env:X"` + visibilityField + `}`
+	}
+	assertState := func(t *testing.T, id, visibility, name string) {
+		t.Helper()
+		stored, err := s.Meta.Store.GetProfile(t.Context(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var definition struct{ Name string }
+		if err := json.Unmarshal(stored.Definition, &definition); err != nil {
+			t.Fatal(err)
+		}
+		if stored.Visibility != visibility || definition.Name != name {
+			t.Errorf("stored visibility/name = %q/%q, want %q/%q", stored.Visibility, definition.Name, visibility, name)
+		}
+		for _, tok := range []string{ownerTok, adminTok, viewerTok} {
+			r := doReq(t, mux, "GET", "/api/db-profiles", "", withCookie(tok))
+			if r.Code != http.StatusOK {
+				t.Fatalf("list: %d", r.Code)
+			}
+			var out struct {
+				Profiles []struct{ ID, Name, Visibility string }
+			}
+			if err := json.Unmarshal(r.Body.Bytes(), &out); err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, p := range out.Profiles {
+				if p.ID == id {
+					found = true
+					if p.Visibility != visibility || p.Name != name {
+						t.Errorf("listed visibility/name = %q/%q, want %q/%q", p.Visibility, p.Name, visibility, name)
+					}
+				}
+			}
+			wantVisible := tok != viewerTok || visibility == meta.VisibilityShared
+			if found != wantVisible {
+				t.Errorf("list presence = %v, want %v (ungranted viewer=%v)", found, wantVisible, tok == viewerTok)
+			}
+		}
+	}
+	create := func(t *testing.T, id, field, visibility string) {
+		t.Helper()
+		r := doReq(t, mux, "POST", "/api/db-profiles", body(id, "original", field), withCookie(ownerTok))
+		if r.Code != http.StatusOK {
+			t.Fatalf("create: %d %s", r.Code, r.Body.String())
+		}
+		var out struct{ Visibility string }
+		if err := json.Unmarshal(r.Body.Bytes(), &out); err != nil || out.Visibility != visibility {
+			t.Fatalf("create visibility: %s (err=%v)", r.Body.String(), err)
+		}
+		assertState(t, id, visibility, "original")
+	}
+	for _, tc := range []struct{ name, field string }{{"omitted", ""}, {"empty", `,"visibility":""`}} {
+		t.Run("create/"+tc.name, func(t *testing.T) {
+			create(t, "default-"+tc.name, tc.field, meta.VisibilityPrivate)
+		})
+	}
+	for _, initial := range []string{meta.VisibilityShared, meta.VisibilityPrivate} {
+		other := meta.VisibilityShared
+		if initial == meta.VisibilityShared {
+			other = meta.VisibilityPrivate
+		}
+		for _, actor := range []struct{ name, token string }{
+			{"owner", ownerTok}, {"admin", adminTok}, {"manager", managerTok}, {"reader", useTok}, {"anonymous", ""},
+		} {
+			for _, input := range []struct{ name, field, effective string }{
+				{"omitted", "", initial}, {"empty", `,"visibility":""`, initial},
+				{"same", `,"visibility":"` + initial + `"`, initial},
+				{"change", `,"visibility":"` + other + `"`, other},
+				{"invalid", `,"visibility":"public"`, initial},
+			} {
+				t.Run(initial+"/"+actor.name+"/"+input.name, func(t *testing.T) {
+					id := initial + "-" + actor.name + "-" + input.name
+					create(t, id, `,"visibility":"`+initial+`"`, initial)
+					for _, grant := range []struct{ user, permission string }{{"manager", "manage"}, {"reader", "use"}} {
+						r := doReq(t, mux, "PUT", "/api/db-profiles/"+id+"/grants", `{"username":"`+grant.user+`","permission":"`+grant.permission+`"}`, withCookie(ownerTok))
+						if r.Code != http.StatusOK {
+							t.Fatalf("grant: %d %s", r.Code, r.Body.String())
+						}
+					}
+					before, err := s.Meta.Store.GetProfile(t.Context(), id)
+					if err != nil {
+						t.Fatal(err)
+					}
+					beforeDefinition := string(before.Definition)
+					wantCode := http.StatusOK
+					switch {
+					case actor.name == "anonymous":
+						wantCode = http.StatusUnauthorized
+					case input.name == "invalid":
+						wantCode = http.StatusBadRequest
+					case actor.name == "reader" || (actor.name == "manager" && input.name == "change"):
+						wantCode = http.StatusForbidden
+					}
+					var headers map[string]string
+					if actor.token != "" {
+						headers = withCookie(actor.token)
+					}
+					r := doReq(t, mux, "PUT", "/api/db-profiles/"+id, body(id, "updated", input.field), headers)
+					if r.Code != wantCode {
+						t.Fatalf("update: %d %s, want %d", r.Code, r.Body.String(), wantCode)
+					}
+					if wantCode == http.StatusOK {
+						var out struct{ Visibility string }
+						if err := json.Unmarshal(r.Body.Bytes(), &out); err != nil || out.Visibility != input.effective {
+							t.Errorf("update visibility: %s, want %q (err=%v)", r.Body.String(), input.effective, err)
+						}
+						assertState(t, id, input.effective, "updated")
+					} else {
+						assertState(t, id, initial, "original")
+						after, err := s.Meta.Store.GetProfile(t.Context(), id)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if string(after.Definition) != beforeDefinition {
+							t.Error("rejected update changed the stored definition")
+						}
+					}
+				})
+			}
+		}
+	}
+}

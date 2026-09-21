@@ -1007,10 +1007,10 @@ func (s *Server) upsertProfileMeta(w http.ResponseWriter, r *http.Request, pathI
 		p.ID = pathID
 	}
 	visibility := req.Visibility
-	if visibility == "" {
+	if create && visibility == "" {
 		visibility = meta.VisibilityPrivate
 	}
-	if visibility != meta.VisibilityPrivate && visibility != meta.VisibilityShared {
+	if visibility != "" && visibility != meta.VisibilityPrivate && visibility != meta.VisibilityShared {
 		writeAPIError(w, http.StatusBadRequest, errEmpty("visibility must be private or shared"))
 		return
 	}
@@ -1040,8 +1040,11 @@ func (s *Server) upsertProfileMeta(w http.ResponseWriter, r *http.Request, pathI
 			writeAPIError(w, http.StatusForbidden, errEmpty("manage permission required (owner, admin, or manage grant)"))
 			return
 		}
+		if visibility == "" {
+			visibility = rec.Visibility
+		}
 		// visibility 변경은 소유자/admin만
-		if req.Visibility != "" && req.Visibility != rec.Visibility && !actor.IsAdmin() && rec.OwnerID != actor.ID {
+		if visibility != rec.Visibility && !actor.IsAdmin() && rec.OwnerID != actor.ID {
 			writeAPIError(w, http.StatusForbidden, errEmpty("only the owner or an admin can change visibility"))
 			return
 		}

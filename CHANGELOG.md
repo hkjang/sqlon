@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 메타 DB 모드에서 프로파일 PUT 요청의 visibility를 생략하거나 빈 값으로 보내도 기존 공개 범위를 유지합니다.
+
 ## v0.1.5 — 2026-09-14
 
 - PII 노출 리포트(`get_pii_exposure`)의 짧은 ASCII 단서(`pan`·`dob`·`ssn`·
