@@ -46,7 +46,7 @@ func TestMaskPIIResult(t *testing.T) {
 
 func TestResultCachePutGetExpiry(t *testing.T) {
 	rc := newResultCache()
-	key := cacheKey("p1", "SELECT 1", 100)
+	key := cacheKey("p1", "SELECT 1", dbconn.ExecOptions{MaxRows: 100})
 	res := &dbconn.QueryResult{RowCount: 1}
 	rc.put(key, res, []string{"C"})
 
@@ -55,10 +55,10 @@ func TestResultCachePutGetExpiry(t *testing.T) {
 		t.Fatalf("cache miss after put: ok=%v", ok)
 	}
 	// different key → miss
-	if _, _, ok := rc.get(cacheKey("p1", "SELECT 2", 100)); ok {
+	if _, _, ok := rc.get(cacheKey("p1", "SELECT 2", dbconn.ExecOptions{MaxRows: 100})); ok {
 		t.Fatal("different SQL must miss")
 	}
-	if _, _, ok := rc.get(cacheKey("p2", "SELECT 1", 100)); ok {
+	if _, _, ok := rc.get(cacheKey("p2", "SELECT 1", dbconn.ExecOptions{MaxRows: 100})); ok {
 		t.Fatal("different profile must miss")
 	}
 	// expiry
@@ -120,7 +120,7 @@ func TestResultCacheSetTTLDisables(t *testing.T) {
 	if !rc.enabled() {
 		t.Fatal("default cache should be enabled")
 	}
-	key := cacheKey("p", "SELECT 1", 10)
+	key := cacheKey("p", "SELECT 1", dbconn.ExecOptions{MaxRows: 10})
 	res := &dbconn.QueryResult{RowCount: 1}
 
 	// TTL 0 → disabled: put is a no-op, get always misses, entries flushed
@@ -141,5 +141,70 @@ func TestResultCacheSetTTLDisables(t *testing.T) {
 	rc.put(key, res, nil)
 	if _, _, ok := rc.get(key); !ok {
 		t.Fatal("re-enabled cache should hit")
+	}
+}
+
+// POST /api/query passes bind variables through to the driver, so two requests
+// that share profile/SQL/max_rows but differ in binds are different queries.
+// The result cache must not answer one with the other's rows.
+func TestExecuteGuardedDoesNotServeAnotherBindsResultFromCache(t *testing.T) {
+	s, _ := newFixtureServer(t)
+	const sqlText = "SELECT CUST_NO FROM TS.TBL1 WHERE CUST_NO = ?"
+	first := dbconn.ExecOptions{MaxRows: 100, Binds: []any{float64(1)}}
+	second := dbconn.ExecOptions{MaxRows: 100, Binds: []any{float64(2)}}
+
+	cached := &dbconn.QueryResult{
+		Columns:  []dbconn.ColumnMeta{{Name: "CUST_NO"}},
+		Rows:     []map[string]any{{"CUST_NO": "customer-1"}},
+		RowCount: 1,
+	}
+	s.queryCache.put(cacheKey("dev-01", sqlText, first), cached, nil)
+
+	got, _, hit, err := s.executeGuarded(t.Context(), "dev-01", sqlText, first, false)
+	if err != nil || !hit || got != cached {
+		t.Fatalf("the same binds must reuse the cached result: hit=%v err=%v", hit, err)
+	}
+
+	got, _, hit, err = s.executeGuarded(t.Context(), "dev-01", sqlText, second, false)
+	if hit || got == cached {
+		t.Fatalf("binds=%v was answered with the cached rows of binds=%v", second.Binds, first.Binds)
+	}
+	// the miss has to reach the driver: with no DB configured that surfaces
+	// as an execution error, never as somebody else's rows
+	if err == nil && got == nil {
+		t.Fatal("cache miss returned neither a result nor an error")
+	}
+}
+
+func TestCacheKeySeparatesDifferentBinds(t *testing.T) {
+	key := func(binds ...any) string {
+		return cacheKey("p", "SELECT 1", dbconn.ExecOptions{MaxRows: 10, Binds: binds})
+	}
+	if key("1", 2.0) != key("1", 2.0) {
+		t.Fatal("identical binds must share one key")
+	}
+	cases := []struct {
+		name string
+		a, b []any
+	}{
+		{"value", []any{1.0}, []any{2.0}},
+		{"type", []any{"1"}, []any{1.0}},
+		{"nil vs empty string", []any{nil}, []any{""}},
+		{"order", []any{"a", "b"}, []any{"b", "a"}},
+		{"split", []any{"a", "b"}, []any{"ab"}},
+		{"count", []any{"a"}, []any{"a", "a"}},
+		{"unbound vs bound", nil, []any{""}},
+	}
+	for _, c := range cases {
+		if key(c.a...) == key(c.b...) {
+			t.Fatalf("%s: %v and %v must not share a cache key", c.name, c.a, c.b)
+		}
+	}
+	// options that cannot change the rows must not fragment the cache
+	base := dbconn.ExecOptions{MaxRows: 10, Binds: []any{1.0}}
+	other := base
+	other.User, other.TraceID, other.TimeoutSeconds, other.ApprovePlan = "bob", "t-9", 7, true
+	if cacheKey("p", "SELECT 1", base) != cacheKey("p", "SELECT 1", other) {
+		t.Fatal("user/trace/timeout/approval must not change the cache key")
 	}
 }
