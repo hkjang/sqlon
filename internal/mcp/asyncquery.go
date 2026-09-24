@@ -35,6 +35,9 @@ type asyncJob struct {
 	StartedAt  time.Time           `json:"started_at"`
 	FinishedAt *time.Time          `json:"finished_at,omitempty"`
 	cancel     context.CancelFunc
+	// opts is the exact execution contract the background run was launched
+	// with; unexported so the polled job view keeps its shape.
+	opts dbconn.ExecOptions
 }
 
 type asyncJobStore struct {
@@ -89,12 +92,12 @@ func (s *Server) submitAsyncQuery(profile, sql, user string, opts dbconn.ExecOpt
 	ctx, cancel := context.WithCancel(context.Background())
 	job := &asyncJob{
 		ID: newJobID(), ProfileID: profile, SQL: sql, User: user,
-		Status: "running", StartedAt: time.Now(), cancel: cancel,
+		Status: "running", StartedAt: time.Now(), cancel: cancel, opts: opts,
 	}
 	st.jobs[job.ID] = job
 
 	go func() {
-		res, masked, _, err := s.executeGuarded(ctx, profile, sql, opts, true)
+		res, masked, _, err := s.executeGuarded(ctx, profile, sql, job.opts, true)
 		now := time.Now()
 		st.mu.Lock()
 		defer st.mu.Unlock()

@@ -567,7 +567,7 @@ var openAPISpec = `{
     "/api/query/submit": {
       "post": { "tags": ["query"], "summary": "비동기 쿼리 제출 — 즉시 job_id 반환, 백그라운드 실행 (사용자당 5개, 결과 10분 보관)",
         "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
-        "requestBody": {"required":true,"content":{"application/json":{"schema":{"type":"object","required":["profile_id","sql"],"properties":{"profile_id":{"type":"string"},"sql":{"type":"string"},"max_rows":{"type":"integer"},"timeout_seconds":{"type":"integer"}}}}}},
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"type":"object","required":["profile_id","sql"],"properties":{"profile_id":{"type":"string"},"sql":{"type":"string"},"max_rows":{"type":"integer"},"timeout_seconds":{"type":"integer"},"binds":{"type":"array"}}}}}},
         "responses": { "202": {"description":"{submitted, job_id, poll}"}, "200": {"description":"검증 실패 시 {submitted:false, validation}"}, "429": {"description":"동시 실행 한도"} } }
     },
     "/api/query/job/{jobId}": {

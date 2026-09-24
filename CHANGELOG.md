@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- 비동기 쿼리 제출(`POST /api/query/submit`)이 `binds` 를 받아 동기
+  실행(`POST /api/query/execute`)과 같은 실행 계약을 갖습니다. 그동안 같은
+  플레이스홀더 SQL 이 동기에서는 바인드되어, 비동기에서는 인자 0개로
+  실행됐습니다. `binds` 를 생략한 요청의 동작과 응답은 그대로입니다.
+
 ## v0.1.5 — 2026-09-14
 
 - PII 노출 리포트(`get_pii_exposure`)의 짧은 ASCII 단서(`pan`·`dob`·`ssn`·

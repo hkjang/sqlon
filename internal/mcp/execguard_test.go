@@ -1,6 +1,9 @@
 package mcp
 
 import (
+	"encoding/json"
+	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -112,6 +115,139 @@ func TestAsyncJobLifecycleWithStubDriver(t *testing.T) {
 	}
 	if _, refuse := s.submitAsyncQuery("dev-01", "SELECT 1", "carol", dbconn.ExecOptions{}); refuse == "" {
 		t.Fatal("per-user limit must refuse the 6th running job")
+	}
+}
+
+// asyncJobOpts returns the ExecOptions the background job was launched with —
+// the very struct handed to executeGuarded.
+func asyncJobOpts(t *testing.T, s *Server, id string) (dbconn.ExecOptions, bool) {
+	t.Helper()
+	s.asyncJobs.mu.Lock()
+	defer s.asyncJobs.mu.Unlock()
+	j, ok := s.asyncJobs.jobs[id]
+	if !ok {
+		return dbconn.ExecOptions{}, false
+	}
+	return j.opts, true
+}
+
+// submitJob posts to the real async submit endpoint and returns the job id.
+func submitJob(t *testing.T, mux *http.ServeMux, body, tok string) string {
+	t.Helper()
+	rec := doReq(t, mux, "POST", "/api/query/submit", body, withCookie(tok))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("submit: %d %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Submitted bool   `json:"submitted"`
+		JobID     string `json:"job_id"`
+		Poll      string `json:"poll"`
+		TTL       int    `json:"result_ttl_minutes"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode submit response: %v (%s)", err, rec.Body.String())
+	}
+	if !out.Submitted || out.JobID == "" || out.Poll != "/api/query/job/"+out.JobID || out.TTL != 10 {
+		t.Fatalf("submit response contract changed: %s", rec.Body.String())
+	}
+	return out.JobID
+}
+
+// newBindServer boots a meta-mode server with a profile alice may query.
+func newBindServer(t *testing.T) (*Server, *http.ServeMux, string) {
+	t.Helper()
+	s, mux, _, aliceTok := newAuthServer(t)
+	profile := `{"id":"alice-db","connect_string":"h:1521/S","username":"APP_RO","password_ref":"env:X","visibility":"private"}`
+	if rec := doReq(t, mux, "POST", "/api/db-profiles", profile, withCookie(aliceTok)); rec.Code != 200 {
+		t.Fatalf("create profile: %d %s", rec.Code, rec.Body.String())
+	}
+	return s, mux, aliceTok
+}
+
+// The async submit endpoint must build the same ExecOptions.Binds as the sync
+// one: a placeholder query submitted with binds has to reach the driver bound,
+// not with zero arguments.
+func TestAsyncSubmitPassesBindsToExecOptions(t *testing.T) {
+	s, mux, aliceTok := newBindServer(t)
+
+	const sql = "SELECT CUST_NO FROM TS.TBL1 WHERE CUST_NO = $1 AND USE_AMT > $2"
+	body := `{"profile_id":"alice-db","sql":"` + sql + `","max_rows":33,"timeout_seconds":7,` +
+		`"binds":["C-1",1500],"user":"mallory"}`
+	id := submitJob(t, mux, body, aliceTok)
+
+	opts, ok := asyncJobOpts(t, s, id)
+	if !ok {
+		t.Fatal("job vanished from the store right after submit")
+	}
+	want := []any{"C-1", float64(1500)} // JSON numbers decode to float64, as on the sync path
+	if !reflect.DeepEqual(opts.Binds, want) {
+		t.Fatalf("job ran with Binds=%#v, want %#v", opts.Binds, want)
+	}
+	if opts.MaxRows != 33 || opts.TimeoutSeconds != 7 {
+		t.Fatalf("limits not propagated: %+v", opts)
+	}
+	// the async path must keep forcing the authenticated actor, never the body's user
+	if opts.User != "alice" {
+		t.Fatalf("User must be the authenticated actor, got %q", opts.User)
+	}
+}
+
+// Both query endpoints have to accept one and the same request body, so that a
+// caller can move a placeholder query from sync to async without rewriting it
+// (or concatenating parameters into the SQL).
+func TestSyncAndAsyncAcceptTheSameQueryBody(t *testing.T) {
+	s, mux, aliceTok := newBindServer(t)
+	const body = `{"profile_id":"alice-db","sql":"SELECT CUST_NO FROM TS.TBL1 WHERE CUST_NO = $1",` +
+		`"max_rows":11,"timeout_seconds":3,"binds":[42]}`
+
+	// sync: reaches the driver (which cannot connect here) rather than being rejected
+	rec := doReq(t, mux, "POST", "/api/query/execute", body, withCookie(aliceTok))
+	if rec.Code != 200 {
+		t.Fatalf("sync execute: %d %s", rec.Code, rec.Body.String())
+	}
+	var sync map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &sync); err != nil {
+		t.Fatal(err)
+	}
+	if reason, _ := sync["reason"].(string); reason != "" {
+		t.Fatalf("sync execute refused the body before execution: %s", rec.Body.String())
+	}
+
+	// async: same body, and the binds in it reach the job's ExecOptions
+	opts, ok := asyncJobOpts(t, s, submitJob(t, mux, body, aliceTok))
+	if !ok {
+		t.Fatal("job vanished from the store right after submit")
+	}
+	if !reflect.DeepEqual(opts.Binds, []any{float64(42)}) {
+		t.Fatalf("async lost the binds the sync path accepts: %#v", opts.Binds)
+	}
+}
+
+// Omitting binds keeps the old behaviour byte for byte: nil Binds, 202 body
+// unchanged.
+func TestAsyncSubmitWithoutBindsStaysNil(t *testing.T) {
+	s, mux, aliceTok := newBindServer(t)
+	id := submitJob(t, mux, `{"profile_id":"alice-db","sql":"SELECT CUST_NO FROM TS.TBL1"}`, aliceTok)
+	opts, ok := asyncJobOpts(t, s, id)
+	if !ok {
+		t.Fatal("job vanished from the store right after submit")
+	}
+	if opts.Binds != nil {
+		t.Fatalf("omitted binds must stay nil, got %#v", opts.Binds)
+	}
+	// the polled view must not have grown a binds field
+	rec := doReq(t, mux, "GET", "/api/query/job/"+id, "", withCookie(aliceTok))
+	if rec.Code != 200 {
+		t.Fatalf("poll: %d %s", rec.Code, rec.Body.String())
+	}
+	var view map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &view); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"binds", "opts", "exec_options"} {
+		if _, bad := view[k]; bad {
+			t.Fatalf("job view must not expose %q: %s", k, rec.Body.String())
+		}
 	}
 }
 

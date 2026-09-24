@@ -341,3 +341,29 @@ func TestSkeletonAndDialectValidation(t *testing.T) {
 		t.Fatalf("expected bounded SQL, got %q", res.BoundedSQL)
 	}
 }
+
+// TestExecuteBindsReachDriver pins the contract the async submit endpoint
+// depends on: ExecOptions.Binds are handed to the driver as query arguments,
+// so a placeholder query returns the bound value instead of failing for want
+// of parameters.
+func TestExecuteBindsReachDriver(t *testing.T) {
+	m := newManager(t)
+	cases := map[string]string{
+		"pg-meta":      "SELECT $1::int AS n",
+		"mysql-meta":   "SELECT ? AS n",
+		"mariadb-meta": "SELECT ? AS n",
+	}
+	for id, q := range cases {
+		res, err := m.Execute(ctxT(t), id, q, dbconn.ExecOptions{Binds: []any{7}})
+		if err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+		if len(res.Rows) != 1 || fmt.Sprint(res.Rows[0]["n"]) != "7" {
+			t.Fatalf("%s: bound value did not reach the driver: %+v", id, res.Rows)
+		}
+		// and the same SQL without binds must not silently succeed
+		if _, err := m.Execute(ctxT(t), id, q, dbconn.ExecOptions{}); err == nil {
+			t.Fatalf("%s: placeholder query with no binds should fail", id)
+		}
+	}
+}
