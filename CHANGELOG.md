@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- 쿼리 결과 캐시 키에 바인드 변수를 포함하도록 고쳤습니다. 이전에는
+  프로파일·SQL 문자열·max_rows만 키로 써서 `POST /api/query`가 같은
+  SQL을 다른 `binds`로 실행하면 앞선 파라미터의 결과를 `cached: true`로
+  돌려주었습니다. 감사·게이팅에만 쓰이는 값(`user`, `trace_id`,
+  `timeout_seconds`, `approve_plan`)은 캐시를 쪼개지 않도록 키에서
+  제외합니다.
+
 ## v0.1.5 — 2026-09-14
 
 - PII 노출 리포트(`get_pii_exposure`)의 짧은 ASCII 단서(`pan`·`dob`·`ssn`·

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -85,8 +86,28 @@ func (rc *resultCache) SetTTL(seconds int) {
 
 func (rc *resultCache) enabled() bool { return rc.ttlSeconds.Load() > 0 }
 
-func cacheKey(profile, sql string, maxRows int) string {
-	return profile + "\x00" + strings.TrimSpace(sql) + "\x00" + strconv.Itoa(maxRows)
+// cacheKey covers everything that can change the rows a query returns:
+// profile, SQL text, row cap and the bind variables the driver substitutes
+// into it. Leaving binds out would let a request be answered with the rows of
+// the same statement run for a different parameter. Fields that only affect
+// auditing or gating (User, TraceID, TimeoutSeconds, ApprovePlan) stay out so
+// they do not fragment the cache; Preview never reads or writes it.
+func cacheKey(profile, sql string, opts dbconn.ExecOptions) string {
+	key := profile + "\x00" + strings.TrimSpace(sql) + "\x00" + strconv.Itoa(opts.MaxRows)
+	if len(opts.Binds) == 0 {
+		return key
+	}
+	var b strings.Builder
+	b.WriteString(key)
+	b.WriteString("\x00")
+	b.WriteString(strconv.Itoa(len(opts.Binds)))
+	for _, v := range opts.Binds {
+		// %T=%#v keeps the type visible (string "1" is not number 1) and
+		// escapes strings, so no bind value can forge the separator.
+		b.WriteString("\x00")
+		fmt.Fprintf(&b, "%T=%#v", v, v)
+	}
+	return b.String()
 }
 
 func (rc *resultCache) get(key string) (*dbconn.QueryResult, []string, bool) {
@@ -131,7 +152,7 @@ func (rc *resultCache) put(key string, res *dbconn.QueryResult, masked []string)
 // both the MCP tool and the REST endpoints: TTL cache → execute → PII mask.
 // fresh=true bypasses the cache read (the result still refreshes it).
 func (s *Server) executeGuarded(ctx context.Context, profile, sql string, opts dbconn.ExecOptions, fresh bool) (*dbconn.QueryResult, []string, bool, error) {
-	key := cacheKey(profile, sql, opts.MaxRows)
+	key := cacheKey(profile, sql, opts)
 	if !fresh && !opts.Preview {
 		if res, masked, ok := s.queryCache.get(key); ok {
 			return res, masked, true, nil
