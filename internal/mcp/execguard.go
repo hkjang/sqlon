@@ -2,6 +2,9 @@ package mcp
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"sync"
@@ -85,8 +88,22 @@ func (rc *resultCache) SetTTL(seconds int) {
 
 func (rc *resultCache) enabled() bool { return rc.ttlSeconds.Load() > 0 }
 
-func cacheKey(profile, sql string, maxRows int) string {
-	return profile + "\x00" + strings.TrimSpace(sql) + "\x00" + strconv.Itoa(maxRows)
+// cacheKey identifies a cached result. The bind values are part of the query's
+// identity: the same SQL text with different placeholder values is a different
+// query, and sharing one entry across bind sets hands one caller another
+// caller's rows. ok=false → the binds have no canonical encoding, so the result
+// must not be cached at all (a miss is always safe, a wrong hit is not).
+func cacheKey(profile, sql string, maxRows int, binds []any) (string, bool) {
+	key := profile + "\x00" + strings.TrimSpace(sql) + "\x00" + strconv.Itoa(maxRows)
+	if len(binds) == 0 {
+		return key, true
+	}
+	enc, err := json.Marshal(binds)
+	if err != nil {
+		return "", false
+	}
+	sum := sha256.Sum256(enc)
+	return key + "\x00" + hex.EncodeToString(sum[:]), true
 }
 
 func (rc *resultCache) get(key string) (*dbconn.QueryResult, []string, bool) {
@@ -131,8 +148,8 @@ func (rc *resultCache) put(key string, res *dbconn.QueryResult, masked []string)
 // both the MCP tool and the REST endpoints: TTL cache → execute → PII mask.
 // fresh=true bypasses the cache read (the result still refreshes it).
 func (s *Server) executeGuarded(ctx context.Context, profile, sql string, opts dbconn.ExecOptions, fresh bool) (*dbconn.QueryResult, []string, bool, error) {
-	key := cacheKey(profile, sql, opts.MaxRows)
-	if !fresh && !opts.Preview {
+	key, cacheable := cacheKey(profile, sql, opts.MaxRows, opts.Binds)
+	if cacheable && !fresh && !opts.Preview {
 		if res, masked, ok := s.queryCache.get(key); ok {
 			return res, masked, true, nil
 		}
@@ -142,7 +159,7 @@ func (s *Server) executeGuarded(ctx context.Context, profile, sql string, opts d
 		return nil, nil, false, err
 	}
 	masked := s.maskPIIResult(res)
-	if !opts.Preview {
+	if cacheable && !opts.Preview {
 		s.queryCache.put(key, res, masked)
 	}
 	return res, masked, false, nil
