@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- 인증 없이 `GET /api/metrics` 를 호출하면 커넥터 스냅샷의 `pools`·`breakers` 키에 담긴 DB 프로파일
+  목록(비공개 포함)과 풀 사용량·서킷브레이커 상태가 그대로 노출되던 문제를 고쳤습니다. 메타 DB
+  모드에서는 `GET /api/db/alerts`·`GET /api/query/history` 와 동일하게 인증을 요구하며(역할은
+  추가로 요구하지 않아 일반 사용자도 그대로 조회합니다), 단독 모드 동작은 그대로입니다.
+
 ## v0.1.5 — 2026-09-14
 
 - PII 노출 리포트(`get_pii_exposure`)의 짧은 ASCII 단서(`pan`·`dob`·`ssn`·
