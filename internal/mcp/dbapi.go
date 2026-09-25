@@ -809,6 +809,7 @@ func (s *Server) registerDBAPI(mux *http.ServeMux) {
 			SQL            string `json:"sql"`
 			MaxRows        int    `json:"max_rows"`
 			TimeoutSeconds int    `json:"timeout_seconds"`
+			Binds          []any  `json:"binds"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 			writeAPIError(w, http.StatusBadRequest, err)
@@ -829,6 +830,7 @@ func (s *Server) registerDBAPI(mux *http.ServeMux) {
 		}
 		job, refuse := s.submitAsyncQuery(req.ProfileID, req.SQL, actorName(actor), dbconn.ExecOptions{
 			MaxRows: req.MaxRows, TimeoutSeconds: req.TimeoutSeconds, User: actorName(actor),
+			Binds: req.Binds, // 동기 실행과 같은 실행 계약 (플레이스홀더를 문자열로 잇지 않도록)
 		})
 		if refuse != "" {
 			writeJSON(w, http.StatusTooManyRequests, map[string]any{"submitted": false, "reason": refuse})
