@@ -867,7 +867,12 @@ func (s *Server) registerDBAPI(mux *http.ServeMux) {
 	})
 
 	// ---- metrics ----
-	mux.HandleFunc("GET /api/metrics", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /api/metrics", func(w http.ResponseWriter, r *http.Request) {
+		// pools/breakers are keyed by profile ID: gate like the sibling
+		// operational reads (GET /api/db/alerts, GET /api/query/history).
+		if _, ok := s.requireActor(w, r); !ok {
+			return
+		}
 		writeJSON(w, http.StatusOK, s.DB.Snapshot())
 	})
 	mux.HandleFunc("GET /metrics", s.serveMetrics)

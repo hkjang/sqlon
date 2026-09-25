@@ -173,3 +173,48 @@ func TestDBAPITokenEnforcement(t *testing.T) {
 		t.Fatalf("/admin/workload: %d", rec.Code)
 	}
 }
+
+// GET /api/metrics returns the connector snapshot, whose "pools"/"breakers"
+// maps are keyed by profile ID — i.e. the configured DB profile inventory.
+// In meta mode it must be gated like the sibling operational reads
+// (GET /api/db/alerts, GET /api/query/history): authentication required, but
+// no extra role.
+func TestMetricsRequiresAuthenticationInMetaMode(t *testing.T) {
+	_, mux, _, aliceTok := newAuthServer(t)
+
+	// anonymous → 401, and no snapshot leaks into the body
+	rec := doReq(t, mux, "GET", "/api/metrics", "", nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous GET /api/metrics must be 401, got %d %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "pools") || strings.Contains(rec.Body.String(), "driver_available") {
+		t.Fatalf("401 body must not carry the snapshot: %s", rec.Body.String())
+	}
+
+	// bogus session cookie → 401 too
+	rec = doReq(t, mux, "GET", "/api/metrics", "", withCookie("not-a-session"))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("invalid cookie GET /api/metrics must be 401, got %d %s", rec.Code, rec.Body.String())
+	}
+
+	// a plain (non-admin) logged-in user still gets the snapshot
+	rec = doReq(t, mux, "GET", "/api/metrics", "", withCookie(aliceTok))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "driver_available") {
+		t.Fatalf("regular user GET /api/metrics must stay 200 with the snapshot: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// Standalone (master-token) mode keeps its existing behaviour: actor-level
+// reads stay open whether or not AdminToken is configured, exactly like
+// GET /api/db/alerts.
+func TestMetricsOpenInStandaloneMode(t *testing.T) {
+	for _, token := range []string{"", "sekrit"} {
+		_, mux := newAdminMux(t, token)
+		for _, path := range []string{"/api/metrics", "/api/db/alerts"} {
+			rec := doReq(t, mux, "GET", path, "", nil)
+			if rec.Code != 200 {
+				t.Fatalf("standalone(token=%q) GET %s: %d %s", token, path, rec.Code, rec.Body.String())
+			}
+		}
+	}
+}
