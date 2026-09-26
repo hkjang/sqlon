@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `.github/workflows/ci.yml` 을 추가해 push(main)와 pull_request 에서
+  `go build ./...`·`go vet ./...`·`go test ./... -count=1`·`sh scripts/build.sh` 를
+  동일하게 실행합니다. Go 버전은 go.mod 의 값을 그대로 사용합니다.
+
 ## v0.1.5 — 2026-09-14
 
 - PII 노출 리포트(`get_pii_exposure`)의 짧은 ASCII 단서(`pan`·`dob`·`ssn`·

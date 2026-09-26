@@ -1,0 +1,53 @@
+name: CI
+
+# 러너가 이 저장소에서 돌리는 검증을 그대로 옮긴 것이다:
+#   go build ./... / go vet ./... / go test ./... -count=1 / sh scripts/build.sh
+# 여기에 없는 것은 일부러 빠져 있다 — 아래 주석 참고.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: build / vet / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # go.mod 의 `go 1.25.0` 을 그대로 쓴다 (버전을 두 곳에 적지 않는다).
+          go-version-file: go.mod
+
+      - name: go mod download
+        run: go mod download
+
+      - name: go build
+        run: go build ./...
+
+      - name: go vet
+        run: go vet ./...
+
+      # golden set 평가를 포함한 전체 테스트. -count=1 로 캐시를 끈다.
+      # `integration` 태그 테스트(test/integration)는 실제 PostgreSQL/MySQL/MariaDB
+      # 컨테이너(deploy/test/docker-compose.yml)가 필요하므로 여기서 돌리지 않는다.
+      - name: go test
+        run: go test ./... -count=1
+
+      # 릴리즈와 같은 크로스 컴파일 경로(CGO_ENABLED=0, windows/amd64 + linux/amd64,arm64).
+      # Oracle 빌드(scripts/build-oracle.sh)는 OCI 런타임이 필요해 제외한다.
+      - name: cross-platform build
+        run: sh scripts/build.sh
+
+      # gofmt 전체 검사는 일부러 넣지 않았다: 저장소에 CRLF 파일이 많아
+      # 현재 `gofmt -l .` 이 87개 파일을 뱉는다. 통과하지 않는 검사를 CI 로
+      # 옮기면 모든 PR 이 막힌다. 줄바꿈 정리는 별도 과제다.
