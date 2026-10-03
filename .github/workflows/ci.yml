@@ -1,0 +1,43 @@
+# 러너가 이 저장소에서 이미 돌리는 검증 명령을 그대로 옮긴 워크플로.
+# 새 검사를 추가하지 않는다 — 지금 통과하는 것만 CI 로 옮긴 것이다.
+# (gofmt 는 저장소에 CRLF 파일이 많아 현재 통과하지 않고, integration 태그
+#  테스트와 Oracle 빌드는 실 DB 컨테이너·OCI 런타임이 필요해 제외했다.)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: build / vet / test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # go.mod 의 `go 1.25.0` 을 그대로 쓴다 (버전을 두 곳에 적지 않는다).
+          go-version-file: go.mod
+          cache: true
+
+      - name: go mod download
+        run: go mod download
+
+      - name: go build ./...
+        run: go build ./...
+
+      - name: go vet ./...
+        run: go vet ./...
+
+      - name: go test ./... -count=1
+        run: go test ./... -count=1
+
+      - name: scripts/build.sh (크로스 빌드)
+        run: sh scripts/build.sh
