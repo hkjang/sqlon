@@ -93,12 +93,15 @@ PostgreSQL 볼륨이 가득 차는 장애를 막기 위해, SQLON은 1분마다 
 저장공간 고갈 시점을 예측하고(최근 6시간·7일 회귀), 디스크를 채우는 원인(실패·적체된
 WAL 아카이브, WAL을 붙잡는 복제 슬롯, 재활용되지 못한 `pg_wal`, VACUUM 을 막는 장기
 트랜잭션, 임시파일), 테이블 급증·급감, 변경계획 없는 스키마 변경, 관측 중단을
-Mattermost·Slack 웹훅과 `/admin/alerts` 로 알립니다. 설정은 세 가지입니다.
+Mattermost·Slack 웹훅과 `/admin/alerts` 로 알립니다. 매일 아침 용량 리포트를 보내고,
+DB별 팀 채널·계획 작업 중 무음을 지원합니다. 설정은 세 가지(+권장 하나)입니다.
 
 ```sh
-GRANT pg_monitor TO <모니터링 계정>;                        # WAL·임시파일 크기 측정
+GRANT pg_monitor TO <모니터링 계정>;                        # WAL·임시파일 크기 측정 (MySQL: REPLICATION CLIENT)
 # DB 프로파일 → "저장공간 한도": 데이터 볼륨 크기 (예: 500GiB)
 SQLON_ALERT_WEBHOOK=https://mattermost.example.com/hooks/…   # 알림 채널
+# 권장: DB 서버 cron 에서 디스크 실측 보고 — DB 밖 파일(덤프 백업 등)까지 감시
+* * * * * SQLON_URL=… SQLON_TOKEN=… SQLON_PROFILE=orders-prod sqlon-disk-report.sh /var/lib/postgresql
 ```
 
 상세: [docs/early-warning.md](docs/early-warning.md)
