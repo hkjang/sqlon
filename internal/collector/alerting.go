@@ -102,8 +102,18 @@ func ClearAlerts() {
 // RunAlertingEngine compares the current snapshot with the previous snapshot
 // to detect query regressions and schema drifts, raising alerts as needed.
 func RunAlertingEngine(ctx context.Context, current *Snapshot, previous *Snapshot, webhookURL string) {
+	raised := EvaluateAlerts(ctx, current, previous)
+	if webhookURL != "" && len(raised) > 0 {
+		go sendWebhookAlerts(webhookURL, raised)
+	}
+}
+
+// EvaluateAlerts records alerts for the snapshot in the in-memory alert log
+// and returns the ones raised this time (after cooldown dedup), leaving
+// delivery to the caller.
+func EvaluateAlerts(ctx context.Context, current *Snapshot, previous *Snapshot) []Alert {
 	if current == nil {
-		return
+		return nil
 	}
 	now := current.CollectedAt
 	if now.IsZero() {
@@ -206,10 +216,7 @@ func RunAlertingEngine(ctx context.Context, current *Snapshot, previous *Snapsho
 		}, "evidence:"+e.Code)
 	}
 
-	// 5. Dispatch to webhook if configured
-	if webhookURL != "" && len(raisedAlerts) > 0 {
-		go sendWebhookAlerts(webhookURL, raisedAlerts)
-	}
+	return raisedAlerts
 }
 
 func truncateFingerprint(fp string) string {

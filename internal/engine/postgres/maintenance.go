@@ -19,8 +19,11 @@ import (
 //     forces the database into single-user recovery).
 //   - Table bloat: high dead-tuple ratio on sizeable tables (pg_stat_user_tables),
 //     a proxy for tables that need aggressive VACUUM or pg_repack.
-//   - Inactive replication slots: a slot with active=false keeps pinning WAL,
-//     silently filling the disk (pg_replication_slots).
+//   - Replication slots pinning WAL: an abandoned slot, a connected consumer
+//     that fell far behind, or (13+) a slot PostgreSQL is about to invalidate.
+//   - WAL that cannot be recycled: a failing or backlogged archive_command and
+//     a pg_wal directory far above max_wal_size (pg_monitor needed for sizes).
+//   - Transactions open for hours, which stop VACUUM from reclaiming space.
 //
 // All queries are compile-time constants against base-license catalog views.
 type Maintenance struct{}
@@ -71,8 +74,10 @@ LIMIT 20`
 
 // slotSQL reports replication slots and, for inactive ones, how much WAL they
 // are pinning relative to the current insert position.
+// The LSN base is chosen by CASE: pg_current_wal_insert_lsn() raises on a
+// standby. PostgreSQL 13+ uses slotSQL13 (maintenance_disk.go).
 const slotSQL = `SELECT slot_name, slot_type, active,
-       COALESCE(pg_wal_lsn_diff(pg_current_wal_insert_lsn(), restart_lsn), 0)::bigint AS retained_bytes
+       COALESCE(pg_wal_lsn_diff(CASE WHEN pg_is_in_recovery() THEN pg_last_wal_replay_lsn() ELSE pg_current_wal_insert_lsn() END, restart_lsn), 0)::bigint AS retained_bytes
 FROM pg_catalog.pg_replication_slots
 ORDER BY retained_bytes DESC
 LIMIT 50`
@@ -82,7 +87,7 @@ LIMIT 50`
 const (
 	bloatWarnRatio       = 20.0 // % dead tuples
 	bloatCriticalRatio   = 40.0
-	bloatMinDeadTuples   = 100000 // ignore small churny tables below this many dead rows
+	bloatMinDeadTuples   = 100000  // ignore small churny tables below this many dead rows
 	slotWarnBytes        = 1 << 30 // 1 GiB retained by an inactive slot
 	slotCriticalBytes    = 8 << 30 // 8 GiB
 	wraparoundWarnFrac   = 0.90    // fraction of freeze_max_age consumed
@@ -125,15 +130,15 @@ func (Maintenance) Maintenance(ctx context.Context, q observability.SystemQuerye
 			continue
 		}
 		data.Findings = append(data.Findings, observability.MaintenanceFinding{
-			Category:  "wraparound",
-			Object:    kind + " " + object,
-			Detail:    fmt.Sprintf("frozen XID age %.0f, autovacuum_freeze_max_age %.0f (2^31 대비 %.0f%%)", age, freezeMax, fracCeiling*100),
-			Metric:    "xid_age",
-			Value:     age,
-			Threshold: freezeMax,
+			Category:       "wraparound",
+			Object:         kind + " " + object,
+			Detail:         fmt.Sprintf("frozen XID age %.0f, autovacuum_freeze_max_age %.0f (2^31 대비 %.0f%%)", age, freezeMax, fracCeiling*100),
+			Metric:         "xid_age",
+			Value:          age,
+			Threshold:      freezeMax,
 			Recommendation: "VACUUM (FREEZE) 를 변경계획으로 수행하세요. 임박 시 autovacuum_freeze_max_age·autovacuum_vacuum_cost_limit 재조정을 검토하세요.",
-			Severity:    severity,
-			CollectedAt: now,
+			Severity:       severity,
+			CollectedAt:    now,
 		})
 	}
 
@@ -183,40 +188,12 @@ func (Maintenance) Maintenance(ctx context.Context, q observability.SystemQuerye
 		}
 	}
 
-	// ---- 3. inactive replication slots retaining WAL — soft ----
-	if rows, err := q.SystemQuery(ctx, p.ID, slotSQL); err != nil {
-		data.Limitations = append(data.Limitations, "복제 슬롯(pg_replication_slots) 수집을 건너뜀: "+err.Error())
-	} else {
-		data.Checks++
-		for _, row := range rows {
-			active := observability.Text(row, "active")
-			if active == "true" || active == "1" {
-				continue
-			}
-			retained := observability.Number(row, "retained_bytes")
-			severity := ""
-			switch {
-			case retained >= slotCriticalBytes:
-				severity = "critical"
-			case retained >= slotWarnBytes:
-				severity = "warning"
-			}
-			if severity == "" {
-				continue
-			}
-			data.Findings = append(data.Findings, observability.MaintenanceFinding{
-				Category:       "replication_slot",
-				Object:         observability.Text(row, "slot_name"),
-				Detail:         fmt.Sprintf("비활성 %s 슬롯이 WAL %.0f bytes 를 붙잡고 있습니다", observability.Text(row, "slot_type"), retained),
-				Metric:         "retained_bytes",
-				Value:          retained,
-				Threshold:      slotWarnBytes,
-				Recommendation: "소비자가 사라진 슬롯이면 SELECT pg_drop_replication_slot(...) 을 변경계획으로 제거하세요. WAL 디스크 포화로 인한 정지를 예방합니다.",
-				Severity:       severity,
-				CollectedAt:    now,
-			})
-		}
-	}
+	// ---- 3..5. what fills the data volume: slots, WAL archiving, and
+	// transactions that hold back VACUUM — all soft (maintenance_disk.go) ----
+	env := probeServer(ctx, q, p, &data)
+	checkSlots(ctx, q, p, env, &data, now)
+	checkWALArchiving(ctx, q, p, env, &data, now)
+	checkVacuumBlockers(ctx, q, p, env, &data, now)
 
 	return data, nil
 }

@@ -73,3 +73,28 @@ func TestFreshnessThresholdTracksCollectionInterval(t *testing.T) {
 		t.Fatalf("configured freshness threshold = %s", got)
 	}
 }
+
+func TestApplyDeclaredLimitTargetsTheFootprint(t *testing.T) {
+	p := dbconn.Profile{ID: "p", Capacity: &dbconn.CapacityConfig{StorageLimit: "100GiB"}}
+	snap := Snapshot{Capacity: []Capacity{
+		{Scope: "database", Name: "app", UsedBytes: 10 << 30},
+		{Scope: "table", Name: "public.t", UsedBytes: 5 << 30},
+		{Scope: ScopeStorage, Name: FootprintName, UsedBytes: 40 << 30},
+	}}
+	ApplyDeclaredLimit(&snap, p)
+	if snap.Capacity[2].MaxBytes != 100<<30 || snap.Capacity[2].UsagePercent != 40 || snap.Capacity[0].MaxBytes != 0 {
+		t.Fatalf("the limit belongs on the footprint: %+v", snap.Capacity)
+	}
+
+	mysql := Snapshot{Capacity: []Capacity{{Scope: "table", Name: "t"}, {Scope: "database", Name: "app", UsedBytes: 50 << 30}}}
+	ApplyDeclaredLimit(&mysql, p)
+	if mysql.Capacity[1].UsagePercent != 50 {
+		t.Fatalf("without a footprint the database row carries the limit: %+v", mysql.Capacity)
+	}
+
+	oracle := Snapshot{Capacity: []Capacity{{Scope: "database", Name: "x", UsedBytes: 1, MaxBytes: 7}}}
+	ApplyDeclaredLimit(&oracle, p)
+	if oracle.Capacity[0].MaxBytes != 7 {
+		t.Fatalf("an engine-reported limit must never be overridden")
+	}
+}

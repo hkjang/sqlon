@@ -97,7 +97,7 @@ func (s *FileStore) Query(ctx context.Context, query Query) (QueryResult, error)
 		if err := ctx.Err(); err != nil {
 			return QueryResult{}, err
 		}
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") || dayBefore(entry.Name(), query.Since) {
 			continue
 		}
 		path := filepath.Join(s.dir, entry.Name())
@@ -132,6 +132,70 @@ func (s *FileStore) Query(ctx context.Context, query Query) (QueryResult, error)
 		result.Warnings = append(result.Warnings, "조회 결과가 요청 상한에 도달했습니다.")
 	}
 	return result, nil
+}
+
+// dayBefore reports whether a YYYYMMDD.jsonl day file holds only records
+// older than since, so a bounded query never parses it.
+func dayBefore(name string, since time.Time) bool {
+	if since.IsZero() {
+		return false
+	}
+	day, err := time.Parse("20060102", strings.TrimSuffix(name, ".jsonl"))
+	return err == nil && day.Add(24*time.Hour).Before(since.UTC())
+}
+
+// Scan streams matching records oldest first without holding them in
+// memory; fn returning an error stops the scan with that error. Corrupt
+// lines are skipped.
+func (s *FileStore) Scan(ctx context.Context, query Query, fn func(Record) error) error {
+	s.mu.Lock()
+	entries, err := os.ReadDir(s.dir)
+	s.mu.Unlock()
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read operational store: %w", err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".jsonl") && !dayBefore(entry.Name(), query.Since) {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if err := s.scanFile(ctx, filepath.Join(s.dir, name), query, fn); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *FileStore) scanFile(ctx context.Context, path string, query Query, fn func(Record) error) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil // pruned between listing and opening
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 64<<10), 4<<20)
+	for scanner.Scan() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		var record Record
+		if json.Unmarshal(scanner.Bytes(), &record) != nil {
+			continue
+		}
+		if query.Kind != "" && record.Kind != query.Kind || query.ProfileID != "" && record.ProfileID != query.ProfileID || !query.Since.IsZero() && record.CollectedAt.Before(query.Since) {
+			continue
+		}
+		if err := fn(record); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *FileStore) Prune(ctx context.Context, before time.Time) (int, error) {

@@ -48,6 +48,10 @@ type config struct {
 	omURL, omToken, omScope                            string
 	omSync                                             bool
 	autoMigrate                                        bool
+	earlyWarning                                       bool
+	alertWebhook, alertConsoleURL, alertMinSeverity    string
+	alertTZ                                            string
+	alertRenotify, schemaWatch, maintenanceEvery       time.Duration
 }
 
 func (rt Runtime) Run(ctx context.Context, args []string) error {
@@ -119,7 +123,22 @@ func (rt Runtime) Run(ctx context.Context, args []string) error {
 		return fmt.Errorf("unsupported transport %q: use http or stdio", cfg.transport)
 	}
 
-	srv := mcp.NewServer(cat, mcp.Options{Endpoint: cfg.endpoint, AllowedOrigins: splitCSV(cfg.allowOrigins), Stateful: !cfg.stateless, SSEPost: cfg.ssePost, AdminToken: cfg.adminToken, FeedbackTenantID: cfg.feedbackTenant, OpenMetadataURL: cfg.omURL, OpenMetadataToken: cfg.omToken, AlertWebhookURL: cfg.digestWebhook})
+	schemaEvery := cfg.schemaWatch
+	if schemaEvery == 0 {
+		schemaEvery = -1 // 0 on the command line means "off"
+	}
+	srv := mcp.NewServer(cat, mcp.Options{Endpoint: cfg.endpoint, AllowedOrigins: splitCSV(cfg.allowOrigins), Stateful: !cfg.stateless, SSEPost: cfg.ssePost, AdminToken: cfg.adminToken, FeedbackTenantID: cfg.feedbackTenant, OpenMetadataURL: cfg.omURL, OpenMetadataToken: cfg.omToken, AlertWebhookURL: cfg.digestWebhook,
+		EarlyWarning: mcp.EarlyWarningOptions{Disabled: !cfg.earlyWarning, WebhookURL: cfg.alertWebhook, ConsoleURL: cfg.alertConsoleURL, MinSeverity: cfg.alertMinSeverity, Renotify: cfg.alertRenotify, MaintenanceEvery: cfg.maintenanceEvery, SchemaEvery: schemaEvery, TimeZone: cfg.alertTZ}})
+	if srv.EarlyWarning != nil {
+		target := "none (console only; set SQLON_ALERT_WEBHOOK)"
+		if srv.EarlyWarning.Notifier != nil {
+			target = srv.EarlyWarning.Notifier.Target()
+		}
+		logger.Printf("SQLON early warning: on (notify=%s, min=%s, maintenance every %s, schema watch %s)", target, srv.EarlyWarning.Config().MinNotifySeverity, srv.EarlyWarning.Config().MaintenanceEvery, describeSchemaWatch(schemaEvery))
+		if cfg.observeInterval <= 0 {
+			logger.Printf("WARNING: early warning needs the observation collector; -observe-interval is 0 so no cycle will run")
+		}
+	}
 	if metaSvc != nil {
 		var oidc *mcp.OIDCProvider
 		if cfg.oidcIssuer != "" && cfg.oidcClientID != "" && cfg.oidcSecret != "" && cfg.oidcRedirect != "" {
@@ -196,8 +215,52 @@ func (rt Runtime) parse(args []string) (config, error) {
 	fs.StringVar(&c.omToken, "openmetadata-token", rt.env("SQLON_OPENMETADATA_TOKEN", "JAMYPG_OPENMETADATA_TOKEN"), "OpenMetadata token")
 	fs.BoolVar(&c.omSync, "openmetadata-sync", false, "Sync OpenMetadata")
 	fs.StringVar(&c.omScope, "openmetadata-scope", rt.env("SQLON_OPENMETADATA_SCOPE", "JAMYPG_OPENMETADATA_SCOPE"), "OpenMetadata scope")
+	ewDefault := true
+	if raw := strings.ToLower(strings.TrimSpace(rt.Getenv("SQLON_EARLY_WARNING"))); raw != "" {
+		ewDefault = !(raw == "off" || raw == "false" || raw == "0" || raw == "no")
+	}
+	durations := map[string]*time.Duration{}
+	for _, spec := range []struct {
+		env  string
+		def  time.Duration
+		into *time.Duration
+	}{
+		{"SQLON_ALERT_RENOTIFY", 6 * time.Hour, &c.alertRenotify},
+		{"SQLON_SCHEMA_WATCH_INTERVAL", 15 * time.Minute, &c.schemaWatch},
+		{"SQLON_MAINTENANCE_INTERVAL", 5 * time.Minute, &c.maintenanceEvery},
+	} {
+		*spec.into = spec.def
+		if raw := strings.TrimSpace(rt.Getenv(spec.env)); raw != "" {
+			parsed, err := time.ParseDuration(raw)
+			if err != nil {
+				return c, fmt.Errorf("invalid %s: %w", spec.env, err)
+			}
+			*spec.into = parsed
+		}
+		durations[spec.env] = spec.into
+	}
+	fs.BoolVar(&c.earlyWarning, "early-warning", ewDefault, "Early-warning engine: capacity forecasts, disk-fill causes, schema-change alerts (SQLON_EARLY_WARNING)")
+	fs.StringVar(&c.alertWebhook, "alert-webhook", rt.Getenv("SQLON_ALERT_WEBHOOK"), "Early-warning webhook (Mattermost/Slack incoming webhook compatible); defaults to -digest-webhook")
+	fs.StringVar(&c.alertConsoleURL, "alert-console-url", rt.Getenv("SQLON_ALERT_CONSOLE_URL"), "Console URL linked from notifications, e.g. https://sqlon.example/admin/alerts")
+	fs.StringVar(&c.alertMinSeverity, "alert-min-severity", envOr(rt.Getenv("SQLON_ALERT_MIN_SEVERITY"), "warning"), "Lowest severity sent to the webhook: info, warning, critical")
+	fs.StringVar(&c.alertTZ, "alert-timezone", envOr(rt.Getenv("SQLON_ALERT_TZ"), "Asia/Seoul"), "Time zone for times in notifications")
+	fs.DurationVar(&c.alertRenotify, "alert-renotify", *durations["SQLON_ALERT_RENOTIFY"], "Re-send a still-firing, unacknowledged alert after this long (0 = never)")
+	fs.DurationVar(&c.schemaWatch, "schema-watch-interval", *durations["SQLON_SCHEMA_WATCH_INTERVAL"], "Schema-change detection interval (0 disables)")
+	fs.DurationVar(&c.maintenanceEvery, "maintenance-interval", *durations["SQLON_MAINTENANCE_INTERVAL"], "Interval of the periodic maintenance-risk check (WAL, slots, archiver, bloat, wraparound)")
 	if err := fs.Parse(args); err != nil {
 		return c, err
+	}
+	switch strings.ToLower(strings.TrimSpace(c.alertMinSeverity)) {
+	case "info", "warning", "critical":
+		c.alertMinSeverity = strings.ToLower(strings.TrimSpace(c.alertMinSeverity))
+	default:
+		return c, fmt.Errorf("invalid -alert-min-severity %q: use info, warning, or critical", c.alertMinSeverity)
+	}
+	if c.alertRenotify < 0 || c.maintenanceEvery < 0 || c.schemaWatch < 0 {
+		return c, fmt.Errorf("early-warning intervals must not be negative")
+	}
+	if c.alertRenotify == 0 {
+		c.alertRenotify = -1 // engine: negative = never re-send
 	}
 	fs.Visit(func(f *flag.Flag) {
 		if f.Name == "data" {
@@ -256,4 +319,18 @@ func isLoopbackListenAddress(addr string) (bool, error) {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback(), nil
+}
+
+func envOr(v, def string) string {
+	if strings.TrimSpace(v) != "" {
+		return v
+	}
+	return def
+}
+
+func describeSchemaWatch(every time.Duration) string {
+	if every < 0 {
+		return "off"
+	}
+	return "every " + every.String()
 }

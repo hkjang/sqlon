@@ -117,6 +117,12 @@
             <div><label>태그 (콤마 구분)</label><input id="f_tags" placeholder="payment, pci, tier-1"></div>
           </div>
           <div class="field-hint">운영(production) 프로파일은 평문 비밀번호를 저장할 수 없습니다. env: 또는 file: Secret 참조를 사용하세요.</div>
+          <div class="row" style="margin-top:12px">
+            <div><label>저장공간 한도 (데이터 볼륨 크기)</label><input id="f_storage_limit" placeholder="500GiB"></div>
+            <div><label>사용률 경고 / 긴급 (%)</label><div style="display:flex;gap:6px"><input id="f_cap_warn_pct" type="number" min="1" max="100" placeholder="80"><input id="f_cap_crit_pct" type="number" min="1" max="100" placeholder="90"></div></div>
+            <div><label>고갈 예측 경고 / 긴급 (일)</label><div style="display:flex;gap:6px"><input id="f_cap_warn_days" type="number" min="0.1" step="0.1" placeholder="14"><input id="f_cap_crit_days" type="number" min="0.1" step="0.1" placeholder="3"></div></div>
+          </div>
+          <div class="field-hint">PostgreSQL·MySQL은 SQL로 디스크 여유 공간을 알려주지 않습니다. PGDATA·WAL이 있는 볼륨 크기(df 의 Size, 예: 500GiB·2TB)를 입력해야 <a href="/admin/alerts">예방 경보</a>가 "며칠 후 가득 차는지" 예측합니다. 비워 두면 증가 추세만 감시합니다.</div>
         </div>
         <div class="field-section"><h3>3. 기본 접속 정보</h3><p id="engineHelp">PostgreSQL 접속 정보를 입력하세요.</p>
         <div class="cols2">
@@ -437,6 +443,12 @@ function openForm(id) {
   $('#f_location').value = p.location || '';
   $('#f_maintenance').value = p.maintenance_window || '';
   $('#f_tags').value = (p.tags || []).join(', ');
+  const cap = p.capacity || {};
+  $('#f_storage_limit').value = cap.storage_limit || '';
+  $('#f_cap_warn_pct').value = cap.warn_percent || '';
+  $('#f_cap_crit_pct').value = cap.critical_percent || '';
+  $('#f_cap_warn_days').value = cap.warn_days || '';
+  $('#f_cap_crit_days').value = cap.critical_days || '';
   $('#f_conn').value = p.connect_string || '';
   $('#f_user').value = p.username || '';
   $('#f_pw').value = id ? (p.password_ref.startsWith('plain:') ? '' : p.password_ref) : '';
@@ -509,6 +521,14 @@ async function saveProfile(ev) {
       wallet_dir: $('#f_ora_wallet').value.trim(), client_lib_dir: $('#f_ora_client').value.trim() };
     body.license_policy = { diagnostics_pack: $('#f_ora_diag').value,
       tuning_pack: $('#f_ora_tuning').value, source: 'operator_declared' };
+  }
+  const capacity = { storage_limit: $('#f_storage_limit').value.trim(), warn_percent: num('#f_cap_warn_pct'), critical_percent: num('#f_cap_crit_pct'),
+    warn_days: num('#f_cap_warn_days'), critical_days: num('#f_cap_crit_days') };
+  if (Object.values(capacity).some(v => v)) body.capacity = capacity;
+  if (EDIT_ID) {
+    // fields this form does not edit must survive a save
+    const cur = PROFILES.find(x => x.id === EDIT_ID);
+    if (cur && cur.config_baseline) body.config_baseline = cur.config_baseline;
   }
   if (window.AUTH) body.visibility = $('#f_visibility').value;
   // DBA credentials (optional)

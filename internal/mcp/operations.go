@@ -110,6 +110,10 @@ func (s *Server) StartObservationCollector(ctx context.Context, interval time.Du
 				removed, pruneErr := s.Collector.Store.Prune(runCtx, time.Now().UTC().AddDate(0, 0, -retentionDays))
 				cancel()
 				entry := map[string]any{"ts": time.Now().UTC().Format(time.RFC3339Nano), "tool": "sqlon:observation_collect", "succeeded": batch.Succeeded, "failed": batch.Failed, "retention_files_removed": removed}
+				if s.EarlyWarning != nil {
+					report := s.evaluateEarlyWarning(ctx, batch, false)
+					entry["early_warning"] = map[string]any{"firing": report.Firing, "notifications": report.Notifications, "delivered": report.Delivered, "delivery_error": report.DeliveryError, "error": report.Error}
+				}
 				if batch.Failed > 0 || pruneErr != nil {
 					entry["is_error"] = true
 					if pruneErr != nil {

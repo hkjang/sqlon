@@ -35,6 +35,10 @@ type Service struct {
 	// before serving requests; collection scheduling remains owned by the app.
 	ExpectedInterval time.Duration
 	AlertWebhookURL  string
+	// AlertSink, when set, receives the alerts this service raises instead
+	// of AlertWebhookURL, so they share the early-warning lifecycle and
+	// delivery. Called from collection workers concurrently.
+	AlertSink func(profileID string, alerts []Alert)
 }
 
 // New builds the collection service. providers is the engine-name→provider
@@ -69,6 +73,7 @@ func (s *Service) CollectProfile(ctx context.Context, raw dbconn.Profile, persis
 	}
 	snapshot, err := provider.Collect(ctx, s.Queryer, p)
 	snapshot.CollectedAt = s.now()
+	ApplyDeclaredLimit(&snapshot, p)
 	snapshot.TraceID = collectorTraceID()
 	if snapshot.Counters == nil {
 		snapshot.Counters = []Metric{}
@@ -109,7 +114,13 @@ func (s *Service) CollectProfile(ctx context.Context, raw dbconn.Profile, persis
 		result.Snapshot.Limitations = append(result.Snapshot.Limitations, "첫 스냅숏이므로 QPS/TPS와 용량 증가율은 다음 수집부터 계산됩니다.")
 	}
 	addEvidence(&result.Snapshot)
-	RunAlertingEngine(ctx, &result.Snapshot, previous, s.AlertWebhookURL)
+	raised := EvaluateAlerts(ctx, &result.Snapshot, previous)
+	switch {
+	case s.AlertSink != nil:
+		s.AlertSink(result.Snapshot.ProfileID, raised)
+	case s.AlertWebhookURL != "" && len(raised) > 0:
+		go sendWebhookAlerts(s.AlertWebhookURL, raised)
+	}
 	if len(result.Snapshot.Warnings) > 0 || len(result.Snapshot.Limitations) > 0 {
 		result.Status = "partial"
 	}
@@ -280,6 +291,40 @@ func addEvidence(snapshot *Snapshot) {
 			snapshot.Evidence = append(snapshot.Evidence, Evidence{Code: "CAPACITY_EXHAUSTION_RISK", Severity: severity, Summary: "현재 증가율 기준 30일 내 용량 고갈 가능", Attributes: map[string]any{"scope": capacity.Scope, "asset": capacity.Name, "days_to_exhaustion": round(days), "growth_bytes_per_day": growth}, CollectedAt: now})
 		}
 	}
+}
+
+// StorageAssetIndex returns the capacity row that stands for the whole
+// storage volume: the engine's measured footprint when it reports one
+// (PostgreSQL: every database + WAL + temp + logs), otherwise the database
+// row. -1 when the snapshot has neither.
+func StorageAssetIndex(capacity []Capacity) int {
+	database := -1
+	for i, c := range capacity {
+		switch {
+		case c.Scope == ScopeStorage && c.Name == FootprintName:
+			return i
+		case c.Scope == "database" && database < 0:
+			database = i
+		}
+	}
+	return database
+}
+
+// ApplyDeclaredLimit stamps the profile's declared storage limit onto the
+// storage asset so every downstream percentage, alert and forecast sees it.
+// An engine-reported limit (Oracle tablespace max) is never overridden.
+func ApplyDeclaredLimit(snapshot *Snapshot, p dbconn.Profile) {
+	limit, err := p.Capacity.LimitBytes()
+	if err != nil || limit <= 0 {
+		return
+	}
+	idx := StorageAssetIndex(snapshot.Capacity)
+	if idx < 0 || snapshot.Capacity[idx].MaxBytes > 0 {
+		return
+	}
+	c := &snapshot.Capacity[idx]
+	c.MaxBytes = float64(limit)
+	c.UsagePercent = round(c.UsedBytes / c.MaxBytes * 100)
 }
 
 func classifyError(err error) (string, string, string) {

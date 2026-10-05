@@ -20,6 +20,7 @@ var openAPISpec = `{
     { "name": "datasets", "description": "데이터셋 조회/교체/제거/복원" },
     { "name": "catalog", "description": "카탈로그 상태와 리로드" },
     { "name": "fleet", "description": "권한 범위의 DB 플릿 인벤토리와 근거 기반 연결·구성 위험 상태" },
+    { "name": "early-warning", "description": "예방 경보: 저장공간 고갈 예측, 디스크를 채우는 원인(WAL·슬롯·아카이브·장기 트랜잭션), 테이블 급증/급감, 계획 외 스키마 변경, 관측 중단 — 발생·격상·해소 수명주기와 웹훅 알림" },
     { "name": "changes", "description": "승인 기반 변경 통제: 변경계획 생성·제출·승인·실행·롤백·취소 (DBA 권한 필요)" },
     { "name": "db-profiles", "description": "DB 접속 프로파일(PostgreSQL/MySQL/MariaDB/Oracle) CRUD와 접속 테스트 (/admin/db 화면과 동일 기능)" },
     { "name": "query", "description": "Read-Only 쿼리 실행: 검증/실행/미리보기/실행계획/메타데이터/이력/취소" },
@@ -213,6 +214,41 @@ var openAPISpec = `{
         "description": "접근 가능한 프로파일을 독립적으로 병렬 점검합니다. 부분 실패도 HTTP 200의 degraded 응답으로 반환하며 각 인스턴스에 수집 시각, 위험 점수, 근거와 구조화된 실패 원인을 포함합니다.",
         "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
         "responses": { "200": {"description":"fleet health envelope"}, "401": {"description":"인증 필요"} }
+      }
+    },
+    "/api/early-warning": {
+      "get": {
+        "tags": ["early-warning"], "summary": "예방 경보 현황",
+        "description": "접근 가능한 프로파일의 저장공간 예측(사용·한도·6시간/7일 회귀 증가율·가득 차는 시점), 발생 중 경보, 스키마 변경 이력, 최근 해소 경보, 알림 전달 상태를 반환합니다. 저장된 평가 결과만 읽으며 DB에 접속하지 않습니다. profile 쿼리로 한 프로파일만 볼 수 있습니다.",
+        "parameters": [{"name":"profile","in":"query","required":false,"schema":{"type":"string"}}],
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{generated_at,last_cycle_at,headline,settings,delivery,summary,profiles[],firing[],recent[],schema_events[]}"}, "401": {"description":"인증 필요"} }
+      }
+    },
+    "/api/early-warning/alerts/{id}/ack": {
+      "post": {
+        "tags": ["early-warning"], "summary": "경보 확인(ack)",
+        "description": "지속 경보는 해소되거나 더 심각해질 때까지 재알림을 멈추고, 이벤트(스키마 변경)는 종료됩니다. 감사 로그에 기록됩니다.",
+        "parameters": [{"name":"id","in":"path","required":true,"schema":{"type":"string"}}],
+        "requestBody": {"content":{"application/json":{"schema":{"type":"object","properties":{"note":{"type":"string"}}}}}},
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{acknowledged,alert}"}, "404": {"description":"없거나 권한 없음"}, "409": {"description":"이미 해소됨"} }
+      }
+    },
+    "/api/early-warning/evaluate": {
+      "post": {
+        "tags": ["early-warning"], "summary": "지금 평가 (admin)",
+        "description": "모든 프로파일을 즉시 수집하고 예방 점검·스키마 점검까지 주기와 무관하게 실행한 뒤 알림을 보냅니다.",
+        "security": [{"SessionCookie":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{report,collected,collection_failed,board}"} }
+      }
+    },
+    "/api/early-warning/test-notification": {
+      "post": {
+        "tags": ["early-warning"], "summary": "알림 경로 테스트 (admin)",
+        "description": "설정된 웹훅(SQLON_ALERT_WEBHOOK)으로 테스트 메시지를 보냅니다.",
+        "security": [{"SessionCookie":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{delivered:true,target}"}, "409": {"description":"웹훅 미설정"}, "502": {"description":"전달 실패 {delivered:false,error}"} }
       }
     },
     "/api/observability/sessions": {

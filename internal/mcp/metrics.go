@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"sqlon/internal/earlywarning"
 )
 
 // Prometheus text-exposition metrics (improvement: 관측성). A dependency-free
@@ -77,6 +79,9 @@ func (s *Server) serveMetrics(w http.ResponseWriter, _ *http.Request) {
 
 	_, _ = w.Write([]byte(b.String()))
 
+	if s.EarlyWarning != nil {
+		_, _ = io.WriteString(w, earlyWarningMetrics(s.EarlyWarning))
+	}
 	// DB connector metrics (per-profile query counts/latency/circuit state).
 	if s.DB != nil {
 		_, _ = io.WriteString(w, s.DB.PrometheusText())
@@ -108,4 +113,43 @@ func writeProductMetrics(b *strings.Builder, prefix, helpPrefix string, tools []
 	fmt.Fprintf(b, "# TYPE %s_metadata_quality_score gauge\n%s_metadata_quality_score %.1f\n", prefix, prefix, quality)
 	fmt.Fprintf(b, "# HELP %s_metadata_quality_gate_pass %s1 if the release quality gate passes.\n", prefix, helpPrefix)
 	fmt.Fprintf(b, "# TYPE %s_metadata_quality_gate_pass gauge\n%s_metadata_quality_gate_pass %d\n", prefix, prefix, gatePass)
+}
+
+// earlyWarningMetrics exposes forecasts and alert counts so an existing
+// Prometheus/Grafana stack can alert on the same projections.
+func earlyWarningMetrics(eng *earlywarning.Engine) string {
+	forecasts, firing, delivery := eng.Metrics()
+	var b strings.Builder
+	b.WriteString("# HELP sqlon_storage_used_bytes Bytes used by a storage asset at the last collection.\n# TYPE sqlon_storage_used_bytes gauge\n")
+	for _, f := range forecasts {
+		fmt.Fprintf(&b, "sqlon_storage_used_bytes{profile=%q,asset=%q} %.0f\n", f.ProfileID, f.Forecast.Asset, f.Forecast.UsedBytes)
+	}
+	b.WriteString("# HELP sqlon_storage_limit_bytes Declared or engine-reported limit of a storage asset.\n# TYPE sqlon_storage_limit_bytes gauge\n")
+	for _, f := range forecasts {
+		if f.Forecast.LimitBytes > 0 {
+			fmt.Fprintf(&b, "sqlon_storage_limit_bytes{profile=%q,asset=%q,source=%q} %.0f\n", f.ProfileID, f.Forecast.Asset, f.Forecast.LimitSource, f.Forecast.LimitBytes)
+		}
+	}
+	b.WriteString("# HELP sqlon_storage_growth_bytes_per_day Least-squares growth of a storage asset over a window.\n# TYPE sqlon_storage_growth_bytes_per_day gauge\n")
+	for _, f := range forecasts {
+		for _, fit := range []*earlywarning.Fit{f.Forecast.GrowthShort, f.Forecast.GrowthLong} {
+			if fit != nil && fit.Valid {
+				fmt.Fprintf(&b, "sqlon_storage_growth_bytes_per_day{profile=%q,asset=%q,window=%q} %.0f\n", f.ProfileID, f.Forecast.Asset, fit.Window, fit.BytesPerDay)
+			}
+		}
+	}
+	b.WriteString("# HELP sqlon_storage_days_to_full Projected days until a storage asset fills (absent when not growing or no limit).\n# TYPE sqlon_storage_days_to_full gauge\n")
+	for _, f := range forecasts {
+		if f.Forecast.DaysToFull != nil {
+			fmt.Fprintf(&b, "sqlon_storage_days_to_full{profile=%q,asset=%q,basis=%q} %.2f\n", f.ProfileID, f.Forecast.Asset, f.Forecast.Basis, *f.Forecast.DaysToFull)
+		}
+	}
+	b.WriteString("# HELP sqlon_early_warning_alerts_firing Early-warning alerts currently firing.\n# TYPE sqlon_early_warning_alerts_firing gauge\n")
+	for _, sev := range []string{earlywarning.SevCritical, earlywarning.SevWarning, earlywarning.SevInfo} {
+		fmt.Fprintf(&b, "sqlon_early_warning_alerts_firing{severity=%q} %d\n", sev, firing[sev])
+	}
+	b.WriteString("# HELP sqlon_early_warning_notifications_total Notifications by delivery outcome.\n# TYPE sqlon_early_warning_notifications_total counter\n")
+	fmt.Fprintf(&b, "sqlon_early_warning_notifications_total{outcome=\"delivered\"} %d\n", delivery.Delivered)
+	fmt.Fprintf(&b, "sqlon_early_warning_notifications_total{outcome=\"failed\"} %d\n", delivery.Failed)
+	return b.String()
 }

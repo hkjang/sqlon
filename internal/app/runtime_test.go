@@ -101,3 +101,28 @@ func TestValidateHTTPExposureUsesSQLONGuidance(t *testing.T) {
 		t.Fatalf("unexpected guidance: %v", err)
 	}
 }
+
+func TestRuntimeEarlyWarningSettings(t *testing.T) {
+	parse := func(env map[string]string, args ...string) (config, error) {
+		rt := Runtime{Stderr: &bytes.Buffer{}, Getenv: func(k string) string { return env[k] }}
+		return rt.parse(args)
+	}
+	cfg, err := parse(nil)
+	if err != nil || !cfg.earlyWarning || cfg.alertMinSeverity != "warning" || cfg.alertRenotify != 6*time.Hour || cfg.schemaWatch != 15*time.Minute || cfg.maintenanceEvery != 5*time.Minute || cfg.alertTZ != "Asia/Seoul" {
+		t.Fatalf("defaults: %+v %v", cfg, err)
+	}
+	cfg, err = parse(map[string]string{"SQLON_EARLY_WARNING": "off", "SQLON_ALERT_WEBHOOK": "https://mm/hooks/x", "SQLON_ALERT_RENOTIFY": "0", "SQLON_ALERT_MIN_SEVERITY": "CRITICAL"})
+	if err != nil || cfg.earlyWarning || cfg.alertWebhook != "https://mm/hooks/x" || cfg.alertRenotify >= 0 || cfg.alertMinSeverity != "critical" {
+		t.Fatalf("env overrides: %+v %v", cfg, err)
+	}
+	cfg, err = parse(map[string]string{"SQLON_EARLY_WARNING": "off"}, "-early-warning=true", "-schema-watch-interval", "0")
+	if err != nil || !cfg.earlyWarning || cfg.schemaWatch != 0 {
+		t.Fatalf("flags win over env: %+v %v", cfg, err)
+	}
+	if _, err := parse(nil, "-alert-min-severity", "loud"); err == nil {
+		t.Fatalf("an unknown severity must be rejected")
+	}
+	if _, err := parse(map[string]string{"SQLON_MAINTENANCE_INTERVAL": "soon"}); err == nil {
+		t.Fatalf("an unparseable interval must be rejected")
+	}
+}

@@ -2,45 +2,95 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SQLON SRE & DBA 경고 알림</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<title>SQLON 예방 경보</title>
 <style>
-:root{--bg:#f4f7fb;--card:#fff;--line:#dce4ee;--ink:#172033;--sub:#607086;--blue:#2563eb;--ok:#15803d;--warn:#a16207;--bad:#b91c1c}
+:root{--bg:#f4f7fb;--card:#fff;--line:#dce4ee;--ink:#172033;--sub:#607086;--blue:#2563eb;--ok:#15803d;--warn:#a16207;--bad:#b91c1c;--mono:ui-monospace,'Cascadia Code',Consolas,monospace}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif}
-header{padding:13px 26px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}input,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff}button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}
-main{max-width:1600px;margin:auto;padding:20px 26px 60px}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:11px;margin-bottom:14px;overflow:hidden}.panel h2{font-size:15px;margin:0;padding:13px 15px;border-bottom:1px solid var(--line)}.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap}th{font-size:12px;color:#536176;background:#f8fafc}.muted{color:var(--sub);font-size:12px}
-.badge{display:inline-block;padding:2px 7px;border-radius:10px;background:#eef2f7;font-size:11px;font-weight:bold;}
-.badge.critical{background:#fee2e2;color:#991b1b}
-.badge.warning{background:#fef3c7;color:#854d0e}
-.badge.info{background:#e0f2fe;color:#0369a1}
-.empty{padding:48px;text-align:center;color:var(--sub);font-size:15px}
-.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}
-.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}
+header{padding:13px 26px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10;flex-wrap:wrap}h1{font-size:19px;margin:0}header .grow{flex:1}
+input,button,select{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff;font:inherit}button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}button:disabled{opacity:.55;cursor:wait}
+main{max-width:1500px;margin:auto;padding:20px 26px 60px}
+.headline{padding:13px 16px;border-radius:11px;margin-bottom:14px;font-size:15px;font-weight:600;background:#e9f7ef;border:1px solid #b5e0c4;color:#14532d}
+.headline.warning{background:#fff8df;border-color:#efd486;color:#74580b}.headline.critical{background:#fff0f0;border-color:#efb0b0;color:#991b1b}
+.cards{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px}.card small{display:block;color:var(--sub)}.card b{font-size:22px}.card.bad b{color:var(--bad)}.card.warn b{color:var(--warn)}.card .muted{display:block;margin-top:2px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:11px;margin-bottom:14px;overflow:hidden}.panel h2{font-size:15px;margin:0;padding:13px 15px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}.panel h2 .grow{flex:1}
+.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #edf1f5;text-align:left;vertical-align:top}th{font-size:12px;color:#536176;background:#f8fafc;white-space:nowrap}
+td.nowrap{white-space:nowrap}.detail{white-space:pre-wrap;max-width:560px;font-size:13px}.rec{color:#334155;font-size:12.5px;margin-top:5px;max-width:560px}
+.muted{color:var(--sub);font-size:12px}.empty{padding:30px;text-align:center;color:var(--sub)}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:700;background:#eef2f7;color:#475569;white-space:nowrap}
+.sev-critical{background:#fee2e2;color:#991b1b}.sev-warning{background:#fef3c7;color:#854d0e}.sev-info{background:#e0f2fe;color:#075985}.sev-ok{background:#dcfce7;color:#166534}.sev-unknown,.sev-pending{background:#eef2f7;color:#475569}
+.bar{position:relative;width:180px;height:9px;background:#edf1f5;border-radius:5px;overflow:hidden;margin-top:5px}.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--ok)}.bar i.warning{background:#d97706}.bar i.critical{background:var(--bad)}
+.mono{font-family:var(--mono);font-size:12.5px}
+.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}.message.ok{background:#e9f7ef;border-color:#b5e0c4;color:#14532d}
+.delivery{padding:10px 15px;font-size:13px;border-bottom:1px solid var(--line);background:#fbfcfe}
+details{padding:0}details summary{cursor:pointer;padding:13px 15px;font-weight:700;font-size:15px}
+.ack{font-size:12px;padding:4px 9px}
+@media(max-width:1100px){.cards{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.cards{grid-template-columns:repeat(2,1fr)}main{padding:14px}header{padding:12px 14px}}
 </style>
 </head>
 <body>
-<header><h1>🚨 장애 · 경고 알림 (SRE Alerts)</h1><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><button class="primary" id="refresh">새로고침</button><span class="grow"></span><span class="muted" id="fresh">조회 전</span></header>
+<header>
+  <h1>🚨 예방 경보</h1>
+  <input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)">
+  <button class="primary" id="refresh">새로고침</button>
+  <button id="evaluate" title="모든 프로파일을 지금 수집하고 예방 점검·스키마 점검까지 즉시 실행합니다 (관리자)">지금 평가</button>
+  <button id="testNotify" title="설정된 웹훅으로 테스트 메시지를 보냅니다 (관리자)">알림 테스트</button>
+  <span class="grow"></span><span class="muted" id="fresh">조회 전</span>
+</header>
 <main>
   <div id="messages"></div>
+  <div class="headline" id="headline">불러오는 중…</div>
+  <section class="cards">
+    <div class="card bad"><small>긴급</small><b id="kCritical">-</b><span class="muted">즉시 조치</span></div>
+    <div class="card warn"><small>경고</small><b id="kWarning">-</b><span class="muted">근무시간 내 조치</span></div>
+    <div class="card"><small>정보</small><b id="kInfo">-</b><span class="muted">알림 없이 표시만</span></div>
+    <div class="card"><small>감시 중인 DB</small><b id="kProfiles">-</b><span class="muted" id="kCycle">-</span></div>
+    <div class="card warn"><small>용량 한도 미선언</small><b id="kNoLimit">-</b><span class="muted">고갈 예측 불가</span></div>
+    <div class="card bad"><small>관측 실패 중</small><b id="kDown">-</b><span class="muted">경보가 동작하지 않음</span></div>
+  </section>
+
   <section class="panel">
-    <h2>실시간 수집 장애 및 쿼리 latency 회귀 알림 목록</h2>
-    <div class="scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>알림 ID</th>
-            <th>프로파일</th>
-            <th>위험도</th>
-            <th>유형</th>
-            <th>내용</th>
-            <th>발생 시각</th>
-          </tr>
-        </thead>
-        <tbody id="alertRows">
-          <tr><td colspan="6" class="empty">조회 전</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <h2>저장공간 예측<span class="grow"></span><span class="muted">최근 6시간·7일 회귀 추세 × 선언된 볼륨 한도</span></h2>
+    <div class="scroll"><table>
+      <thead><tr><th>DB 프로파일</th><th>상태</th><th>사용 / 한도</th><th>증가 (6시간 추세)</th><th>증가 (7일 추세)</th><th>가득 차는 시점</th><th>점검</th></tr></thead>
+      <tbody id="forecastRows"><tr><td colspan="7" class="empty">조회 전</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section class="panel">
+    <h2>발생 중인 경보<span class="grow"></span><span class="muted" id="firingCount"></span></h2>
+    <div class="delivery" id="delivery">알림 채널 확인 중…</div>
+    <div class="scroll"><table>
+      <thead><tr><th>위험도</th><th>DB</th><th>내용 · 조치</th><th>최초 / 최근 관측</th><th>알림</th><th></th></tr></thead>
+      <tbody id="firingRows"><tr><td colspan="6" class="empty">조회 전</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section class="panel">
+    <h2>스키마 변경 이력<span class="grow"></span><span class="muted">변경계획과 대조해 계획 외 DDL을 표시합니다</span></h2>
+    <div class="scroll"><table>
+      <thead><tr><th>감지 시각</th><th>DB</th><th>위험도</th><th>변경 내용</th><th>상태</th></tr></thead>
+      <tbody id="schemaRows"><tr><td colspan="5" class="empty">조회 전</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section class="panel">
+    <h2>최근 해소된 경보</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>최고 위험도</th><th>DB</th><th>내용</th><th>기간</th><th>해소 사유</th></tr></thead>
+      <tbody id="recentRows"><tr><td colspan="5" class="empty">조회 전</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section class="panel">
+    <details id="rawPanel">
+      <summary>수집기 원시 알림 <span class="muted">— 쿼리 지연 회귀 등 수집기 자체 감지 (메모리, 재시작 시 초기화)</span></summary>
+      <div class="scroll"><table>
+        <thead><tr><th>알림 ID</th><th>프로파일</th><th>위험도</th><th>유형</th><th>내용</th><th>발생 시각</th></tr></thead>
+        <tbody id="rawRows"><tr><td colspan="6" class="empty">펼치면 조회합니다</td></tr></tbody>
+      </table></div>
+    </details>
   </section>
 </main>
 <script src="/admin/nav.js"></script>
@@ -48,61 +98,104 @@ main{max-width:1600px;margin:auto;padding:20px 26px 60px}
 'use strict';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
 const token=$('#adminToken');
 token.value=localStorage.getItem('sqlonAdminToken')||localStorage.getItem('jasqlAdminToken')||'';
 token.onchange=()=>localStorage.setItem('sqlonAdminToken',token.value);
+function headers(){const h={Accept:'application/json','Content-Type':'application/json'};if(token.value)h['X-Admin-Token']=token.value;return h}
+async function call(method,path,body){const r=await fetch(path,{method,headers:headers(),body:body?JSON.stringify(body):undefined});const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.error||r.statusText);return b}
+function note(text,kind){$('#messages').innerHTML='<div class="message '+(kind||'')+'">'+esc(text)+'</div>';if(kind==='ok')setTimeout(()=>{$('#messages').innerHTML=''},5000)}
+function when(v){if(!v)return '-';const d=new Date(v);return isNaN(d)?esc(v):d.toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}
+function bytes(v){if(v==null)return '-';let n=Math.abs(v),i=0;const u=['B','KiB','MiB','GiB','TiB','PiB'];while(n>=1024&&i<u.length-1){n/=1024;i++}return (v<0?'-':'')+(i?n.toFixed(1):n.toFixed(0))+' '+u[i]}
+function days(d){if(d==null)return '-';if(d<1/24)return Math.max(0,Math.round(d*1440))+'분';if(d<2)return (d*24).toFixed(1)+'시간';return d.toFixed(1)+'일'}
+const SEV={critical:'긴급',warning:'경고',info:'정보',ok:'정상',unknown:'한도 없음',pending:'수집 대기'};
+function sev(s){return '<span class="badge sev-'+esc(s)+'">'+esc(SEV[s]||s)+'</span>'}
+function fit(f){if(!f)return '-';if(!f.valid)return '<span class="muted">'+esc(f.invalid_cause||'계산 불가')+'</span>';return bytes(f.bytes_per_day)+'/일 <span class="muted">R² '+Number(f.r2).toFixed(2)+'</span>'}
+function profLabel(p){return '<b>'+esc(p.name||p.profile_id)+'</b><div class="muted mono">'+esc(p.profile_id)+' · '+esc(p.engine)+' · '+esc(p.environment||'-')+'</div>'}
+let NAMES={};
 
-function headers(){
-  const h={Accept:'application/json'};
-  if(token.value)h['X-Admin-Token']=token.value;
-  return h;
+function renderForecasts(profiles){
+  if(!profiles.length){$('#forecastRows').innerHTML='<tr><td colspan="7" class="empty">접근 가능한 DB 프로파일이 없습니다.</td></tr>';return}
+  $('#forecastRows').innerHTML=profiles.map(p=>{
+    const f=(p.forecasts||[]).find(x=>x.primary)||(p.forecasts||[])[0];
+    const checks='<div class="muted">예방 점검 '+when(p.last_maintenance_at)+' · '+esc(p.maintenance_status||'-')+'</div><div class="muted">스키마 '+when(p.last_schema_at)+' · '+esc(p.schema_status||'-')+'</div>';
+    if(p.consecutive_failures>0&&!f){return '<tr><td>'+profLabel(p)+'</td><td>'+sev(p.status)+'</td><td colspan="4"><span class="badge sev-critical">수집 실패 '+p.consecutive_failures+'회</span> <span class="muted">'+esc(p.last_error||'')+'</span></td><td>'+checks+'</td></tr>'}
+    if(!f){return '<tr><td>'+profLabel(p)+'</td><td>'+sev(p.status)+'</td><td colspan="4" class="muted">아직 용량 스냅숏이 없습니다 — 관측 수집기 첫 주기를 기다리는 중입니다.</td><td>'+checks+'</td></tr>'}
+    let usage;
+    if(f.limit_bytes){const pct=Math.min(100,f.usage_percent||0);usage=bytes(f.used_bytes)+' / '+bytes(f.limit_bytes)+' <b>('+(f.usage_percent||0).toFixed(1)+'%)</b><div class="bar"><i class="'+esc(f.status)+'" style="width:'+pct+'%"></i></div><div class="muted">'+(f.limit_source==='declared'?'선언 한도':'엔진 보고 한도')+' · '+esc(f.asset)+'</div>'}
+    else usage=bytes(f.used_bytes)+'<div class="muted">한도 미선언 — <a href="/admin/db">DB 프로파일</a>에서 "저장공간 한도" 입력</div>';
+    let full='-';
+    if(f.days_to_full!=null){full='<b>'+days(f.days_to_full)+' 후</b><div class="muted">'+when(f.full_at)+' · '+esc(f.basis)+' 추세 기준</div>'}
+    else if(f.limit_bytes){full='<span class="muted">증가 추세 없음</span>'}
+    if(f.note)full+='<div class="muted">'+esc(f.note)+'</div>';
+    return '<tr><td>'+profLabel(p)+(p.consecutive_failures>0?'<div><span class="badge sev-critical">최근 수집 실패 '+p.consecutive_failures+'회</span></div>':'')+'</td><td>'+sev(p.status)+(p.firing?'<div class="muted">경보 '+p.firing+'건</div>':'')+'</td><td>'+usage+'</td><td>'+fit(f.growth_short)+'</td><td>'+fit(f.growth_long)+'</td><td>'+full+'</td><td>'+checks+'</td></tr>';
+  }).join('');
 }
 
-function when(v){
-  if(!v)return '-';
-  const d=new Date(v);
-  return isNaN(d)?esc(v):d.toLocaleString('ko-KR');
+function renderFiring(list){
+  $('#firingCount').textContent=list.length+'건';
+  $('#firingRows').innerHTML=list.length?list.map(a=>{
+    const notified=a.last_notified_at?when(a.last_notified_at)+' <span class="muted">('+a.notify_count+'회)</span>':(a.severity==='info'?'<span class="muted">알림 대상 아님</span>':'<span class="muted">전송 대기</span>');
+    const acked=a.acked_at?'<div class="muted">확인: '+esc(a.acked_by)+' '+when(a.acked_at)+(a.ack_note?' — '+esc(a.ack_note):'')+'</div>':'';
+    return '<tr><td>'+sev(a.severity)+(a.event?'<div class="muted">이벤트</div>':'')+'</td><td class="nowrap">'+esc(NAMES[a.profile_id]||a.profile_id)+'<div class="muted mono">'+esc(a.rule)+'</div></td><td><b>'+esc(a.title)+'</b>'+(a.detail?'<div class="detail">'+esc(a.detail)+'</div>':'')+(a.recommendation?'<div class="rec">조치: '+esc(a.recommendation)+'</div>':'')+acked+'</td><td class="nowrap">'+when(a.first_seen)+'<div class="muted">'+when(a.last_seen)+'</div></td><td class="nowrap">'+notified+'</td><td>'+(a.acked_at?'':'<button class="ack" data-id="'+esc(a.id)+'">확인</button>')+'</td></tr>';
+  }).join(''):'<tr><td colspan="6" class="empty">발생 중인 경보가 없습니다.</td></tr>';
+  document.querySelectorAll('button.ack').forEach(b=>b.onclick=()=>ack(b.dataset.id));
 }
 
-async function get(path){
-  const r=await fetch(path,{headers:headers()});
-  const b=await r.json().catch(()=>({}));
-  if(!r.ok)throw new Error(b.error||r.statusText);
-  return b;
+function renderSchema(list){
+  $('#schemaRows').innerHTML=list.length?list.map(a=>'<tr><td class="nowrap">'+when(a.first_seen)+'</td><td class="nowrap">'+esc(NAMES[a.profile_id]||a.profile_id)+'</td><td>'+sev(a.severity)+'</td><td><b>'+esc(a.title)+'</b><div class="detail mono">'+esc(a.detail||'')+'</div></td><td class="nowrap">'+(a.state==='firing'?'<span class="badge sev-warning">확인 대기</span>':'<span class="badge">'+esc(a.resolve_reason||'종료')+'</span>')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">감지된 스키마 변경이 없습니다. 첫 점검은 기준선을 만들고, 이후 변경부터 표시합니다.</td></tr>';
+}
+
+function renderRecent(list){
+  $('#recentRows').innerHTML=list.length?list.map(a=>'<tr><td>'+sev(a.peak_severity||a.severity)+'</td><td class="nowrap">'+esc(NAMES[a.profile_id]||a.profile_id)+'</td><td>'+esc(a.title)+'</td><td class="nowrap">'+when(a.first_seen)+' → '+when(a.resolved_at)+'</td><td class="muted">'+esc(a.resolve_reason||'')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">최근 해소된 경보가 없습니다.</td></tr>';
+}
+
+function renderDelivery(d){
+  if(!d||!d.configured){$('#delivery').innerHTML='<b>알림 채널 없음</b> — 경보는 이 화면에만 표시됩니다. <span class="mono">SQLON_ALERT_WEBHOOK</span>(Mattermost/Slack incoming webhook)을 설정하세요.';return}
+  let s='알림 채널 <span class="mono">'+esc(d.target)+'</span> · 전달 '+(d.delivered||0)+'건';
+  if(d.last_success_at)s+=' · 마지막 성공 '+when(d.last_success_at);
+  if(d.consecutive_failures>0)s+=' · <b style="color:var(--bad)">연속 실패 '+d.consecutive_failures+'회: '+esc(d.last_error)+'</b> (재시도 '+when(d.next_retry_at)+')';
+  $('#delivery').innerHTML=s;
 }
 
 async function load(){
-  $('#fresh').textContent='알림 조회 중…';
+  $('#fresh').textContent='조회 중…';
   try{
-    const r=await get('/api/db/alerts');
-    const list=r.alerts||[];
-    
-    $('#alertRows').innerHTML=list.length?list.map(a=>{
-      const badgeCls=esc(a.severity);
-      return '<tr>' +
-        '<td class="mono"><b>'+esc(a.id)+'</b></td>' +
-        '<td class="mono">'+esc(a.profile_id)+'</td>' +
-        '<td><span class="badge '+badgeCls+'">'+badgeCls.toUpperCase()+'</span></td>' +
-        '<td><span class="badge">'+esc(a.metric_name)+'</span></td>' +
-        '<td style="white-space:normal; max-width:600px; word-break:break-all;">'+esc(a.message)+'</td>' +
-        '<td>'+when(a.timestamp)+'</td>' +
-        '</tr>';
-    }).join(''):'<tr><td colspan="6" class="empty">🎉 감지된 활성 경고나 지표 회귀 현상이 없습니다. 시스템이 안정적입니다.</td></tr>';
-    
+    const b=await call('GET','/api/early-warning');
+    if(b.status==='disabled'){$('#headline').textContent=b.headline;$('#headline').className='headline warning';return}
+    NAMES={};(b.profiles||[]).forEach(p=>NAMES[p.profile_id]=p.name||p.profile_id);
+    const s=b.summary||{};
+    $('#kCritical').textContent=s.critical??0;$('#kWarning').textContent=s.warning??0;$('#kInfo').textContent=s.info??0;
+    $('#kProfiles').textContent=s.profiles??0;$('#kNoLimit').textContent=s.without_limit??0;$('#kDown').textContent=s.observation_failed??0;
+    $('#kCycle').textContent=b.last_cycle_at?'마지막 평가 '+when(b.last_cycle_at):'평가 전';
+    $('#headline').textContent=b.headline;$('#headline').className='headline '+(s.critical?'critical':s.warning?'warning':'');
+    renderForecasts(b.profiles||[]);renderFiring(b.firing||[]);renderSchema(b.schema_events||[]);renderRecent(b.recent||[]);renderDelivery(b.delivery);
     $('#fresh').textContent='최신 조회 '+new Date().toLocaleTimeString('ko-KR');
-    $('#messages').innerHTML='';
-  }catch(e){
-    $('#messages').innerHTML='<div class="message error">알림 조회 실패: '+esc(e.message)+'</div>';
-    $('#fresh').textContent='조회 실패';
-  }
+  }catch(e){note('예방 경보 조회 실패: '+e.message,'error');$('#fresh').textContent='조회 실패'}
+}
+
+async function ack(id){
+  const memo=prompt('확인 메모 (선택) — 확인하면 해소되거나 더 심각해질 때까지 지속 알림을 보내지 않습니다. 스키마 변경 같은 이벤트는 종료됩니다.','');
+  if(memo===null)return;
+  try{await call('POST','/api/early-warning/alerts/'+encodeURIComponent(id)+'/ack',{note:memo});note('확인 처리했습니다.','ok');load()}catch(e){note('확인 실패: '+e.message,'error')}
+}
+
+async function loadRaw(){
+  try{const r=await call('GET','/api/db/alerts');const list=r.alerts||[];
+    $('#rawRows').innerHTML=list.length?list.map(a=>'<tr><td class="mono">'+esc(a.id)+'</td><td class="mono">'+esc(a.profile_id)+'</td><td>'+sev(a.severity)+'</td><td><span class="badge">'+esc(a.metric_name)+'</span></td><td class="detail">'+esc(a.message)+'</td><td class="nowrap">'+when(a.timestamp)+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">수집기 원시 알림이 없습니다.</td></tr>';
+  }catch(e){$('#rawRows').innerHTML='<tr><td colspan="6" class="empty">조회 실패: '+esc(e.message)+'</td></tr>'}
 }
 
 $('#refresh').onclick=load;
-JASQL.mount({page:'alerts',onReady:async()=>{
-  await load();
-  // Poll alerts every 15 seconds
-  setInterval(load, 15000);
-}});
+$('#rawPanel').addEventListener('toggle',()=>{if($('#rawPanel').open)loadRaw()});
+$('#evaluate').onclick=async()=>{
+  const btn=$('#evaluate');btn.disabled=true;btn.textContent='평가 중…';
+  try{const r=await call('POST','/api/early-warning/evaluate');const rep=r.report||{};
+    note('평가 완료: 수집 '+r.collected+'개'+(r.collection_failed?' (실패 '+r.collection_failed+')':'')+' · 발생 중 경보 '+rep.firing+'건 · 이번에 보낸 알림 '+rep.notifications+'건'+(rep.delivery_error?' · 전달 실패: '+rep.delivery_error:''),rep.delivery_error?'error':'ok');load()}
+  catch(e){note('평가 실패: '+e.message,'error')}finally{btn.disabled=false;btn.textContent='지금 평가'}
+};
+$('#testNotify').onclick=async()=>{
+  try{const r=await call('POST','/api/early-warning/test-notification');note('테스트 메시지를 보냈습니다 → '+r.target,'ok')}catch(e){note('알림 테스트 실패: '+e.message,'error')}
+};
+JASQL.mount({page:'alerts',onReady:async()=>{await load();setInterval(load,30000)}});
 </script>
 </body></html>

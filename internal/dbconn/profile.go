@@ -53,6 +53,10 @@ type Profile struct {
 	// (user/role/database/settings/session management) on this profile via a
 	// separate write-capable pool. Nil/disabled → DBA tools refuse the profile.
 	DBA *DBAConfig `json:"dba,omitempty"`
+	// Capacity declares the storage envelope early-warning forecasts
+	// against (see CapacityConfig). Nil → growth is tracked but no
+	// days-until-full projection is possible for engines without a limit.
+	Capacity *CapacityConfig `json:"capacity,omitempty"`
 }
 
 type OracleConfig struct {
@@ -291,6 +295,9 @@ func (p *Profile) Validate() error {
 			return errors.New("oracle license_policy.source must be operator_declared")
 		}
 	}
+	if err := p.Capacity.validate(); err != nil {
+		return err
+	}
 	if p.Driver != "" && !strings.EqualFold(p.Driver, d.DriverName()) {
 		return fmt.Errorf("driver %q does not match type %s (expected %s or empty)", p.Driver, d.Name(), d.DriverName())
 	}
@@ -523,6 +530,12 @@ func (p Profile) Masked() map[string]any {
 	if p.Oracle != nil {
 		m["oracle"] = p.Oracle
 		m["license_policy"] = p.LicensePolicy
+	}
+	if p.Capacity != nil {
+		m["capacity"] = p.Capacity
+	}
+	if len(p.ConfigBaseline) > 0 {
+		m["config_baseline"] = p.ConfigBaseline
 	}
 	if p.DBA != nil {
 		// expose DBA config for the console, but never the raw secret

@@ -29,6 +29,18 @@ type SQLStat struct {
 	Rows        float64 `json:"rows,omitempty"`
 }
 
+// Capacity scopes with a fixed meaning across engines. Engines may report
+// other scopes (table, tablespace); these are the ones early-warning treats
+// as parts of the storage volume.
+const (
+	ScopeStorage  = "storage"   // the whole footprint on the data volume
+	FootprintName = "footprint" // name of the ScopeStorage row
+	ScopeCluster  = "cluster"   // every database in the instance
+	ScopeWAL      = "wal"       // write-ahead log directory
+	ScopeTemp     = "temp"      // temporary files of spilling queries
+	ScopeLog      = "log"       // server log directory
+)
+
 type Capacity struct {
 	Scope          string  `json:"scope"`
 	Name           string  `json:"name"`

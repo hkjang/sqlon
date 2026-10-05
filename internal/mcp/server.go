@@ -24,6 +24,7 @@ import (
 	"sqlon/internal/change"
 	"sqlon/internal/collector"
 	"sqlon/internal/dbconn"
+	"sqlon/internal/earlywarning"
 	"sqlon/internal/engine/adapters"
 	"sqlon/internal/fleet"
 	"sqlon/internal/meta"
@@ -53,6 +54,7 @@ type Options struct {
 	OpenMetadataToken string
 
 	AlertWebhookURL string
+	EarlyWarning    EarlyWarningOptions
 }
 
 type Server struct {
@@ -62,8 +64,9 @@ type Server struct {
 	Collector     *collector.Service
 	Observability *observability.Service
 	Changes       *change.Service
-	Meta          *meta.Service // nil = standalone mode (auth disabled)
-	OIDC          *OIDCProvider // nil = SSO disabled
+	EarlyWarning  *earlywarning.Engine // nil = disabled
+	Meta          *meta.Service        // nil = standalone mode (auth disabled)
+	OIDC          *OIDCProvider        // nil = SSO disabled
 	mu            sync.Mutex
 	dataMu        sync.Mutex        // serializes dataset mutations + catalog reloads
 	settingsMu    sync.RWMutex      // guards Options.AdminToken/AllowedOrigins/OIDC live updates
@@ -169,6 +172,10 @@ func NewServer(c *catalog.Catalog, opts Options) *Server {
 		metrics:         newMetricsRegistry(),
 	}
 	s.setCatalog(c)
+	if !opts.EarlyWarning.Disabled {
+		s.EarlyWarning = newEarlyWarning(s, c.DataDir, coll, opts)
+		coll.AlertSink = s.EarlyWarning.Ingest
+	}
 	return s
 }
 
@@ -181,6 +188,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.registerDBAPI(mux)
 	s.registerDBAConsole(mux)
 	s.registerPoolAPI(mux)
+	s.registerEarlyWarningAPI(mux)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -459,6 +467,9 @@ func (s *Server) tools() []map[string]any {
 		}, []string{"sql"})),
 		tool("list_db_profiles", "List the DB DB connection profiles the caller may use (id, name, masked connect target, pool/policy, driver availability). Call this to discover which profile id to pass to run_sql_safely / explain_sql / run_evaluation. In auth mode only profiles you own, were granted, or that are shared are returned; admins see all.", objectSchema(map[string]any{}, nil)),
 		tool("list_database_instances", "권한 범위 안의 SQLON DB 플릿 인벤토리를 반환합니다. 대상 DB에 연결하지 않으며 환경, 업무서비스, 중요도, 엔진, 역할, 담당팀, 위치와 선언된 Capability를 제공합니다.", objectSchema(map[string]any{}, nil)),
+		tool("get_early_warnings", "예방 경보(early warning) 현황: 장애가 나기 전에 잡아야 할 위험을 한 번에 반환합니다. 저장공간 고갈 예측(최근 6시간·7일 회귀 추세, 선언된 볼륨 한도 기준 남은 일수), 디스크를 채우는 원인(복제 슬롯·WAL 아카이브 실패/적체·pg_wal 과다·VACUUM 을 막는 장기 트랜잭션·임시파일), 테이블 급증/급감, 변경계획 없는 스키마 변경, 관측 중단을 발생·격상·해소 상태와 함께 보여줍니다. 저장된 관측 결과만 읽으며 DB에 접속하지 않습니다.", objectSchema(map[string]any{
+			"profile": str("특정 DB 프로파일만 볼 때의 ID (생략하면 접근 가능한 전체)"),
+		}, nil)),
 		tool("get_fleet_health", "모든 사용 가능 DB 프로파일의 연결 상태를 독립적으로 병렬 수집하고 위험도 순으로 반환합니다. 각 결과에는 수집 시각, 구조화된 실패 원인, 근거, 영향 중요도와 기능 지원 상태가 포함됩니다.", objectSchema(map[string]any{}, nil)),
 		tool("list_sessions", "대상 DB의 활성·비활성 세션과 장기 SQL·장기 트랜잭션을 분리해 조회합니다. Oracle 세션 키는 INST_ID:SID:SERIAL#이며 시스템·복제 세션 보호 여부, 근거와 수집 시각을 포함합니다. SQL 본문과 bind 값은 반환하지 않습니다.", objectSchema(map[string]any{
 			"profile": str("조회할 DB 프로파일 ID"),
@@ -1016,6 +1027,7 @@ var internalDBAExecutors = map[string]bool{
 // token gate to every such tool. Calls without a profile are catalog-only.
 var dbProfileTools = map[string]bool{
 	"get_fleet_health":         true,
+	"get_early_warnings":       true,
 	"list_sessions":            true,
 	"get_lock_tree":            true,
 	"get_replication_status":   true,
@@ -1069,7 +1081,7 @@ func (s *Server) authorizeDBProfileTool(ctx context.Context, name string, argume
 	// explicit profile value. The metadata-sync tools address the DB by
 	// `source` and always touch it.
 	probesAll := name == "route_db_profile" ||
-		name == "get_fleet_health" ||
+		name == "get_fleet_health" || name == "get_early_warnings" ||
 		name == "discover_metadata" || name == "run_metadata_sync" || name == "profile_metadata_assets" ||
 		(name == "run_sql_safely" && strings.EqualFold(strings.TrimSpace(a.Profile), "auto"))
 	// Retrieval-only evaluation never opens a DB, even if a client happens to
@@ -1263,6 +1275,14 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return map[string]any{"status": "error", "warnings": []string{err.Error()}, "data": []any{}}, nil
 		}
 		return fleet.New(s.DB).InventoryProfiles(profiles), nil
+	case "get_early_warnings":
+		var a struct {
+			Profile string `json:"profile"`
+		}
+		if err := decodeArgs(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		return s.mcpEarlyWarnings(ctx, a.Profile)
 	case "get_fleet_health":
 		profiles, err := s.usableProfiles(ctx)
 		if err != nil {

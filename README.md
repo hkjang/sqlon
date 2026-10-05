@@ -70,7 +70,7 @@ AI-generated changes were not accepted automatically. The project owner remained
 This combination allowed Codex to accelerate implementation while GPT-5.6 supported architectural reasoning and systematic review, with human judgment controlling the final result.
 
 **📚 상세 문서**: [docs/README.md](docs/README.md) — 아키텍처, MCP 도구
-레퍼런스(104종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
+레퍼런스(105종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
 가이드(18종), REST API, DB 커넥터, 운영/평가/보안/개발자 가이드.
 
 ## Quick Start
@@ -86,6 +86,22 @@ This combination allowed Codex to accelerate implementation while GPT-5.6 suppor
 기본 시작은 기존 `data/metadb`를 완전 백업한 뒤 빠진 파일만
 `data/sqlon`으로 병합합니다. 기존 프로파일·카탈로그·감사 로그를 보존하는 규칙과
 복구 방법은 [마이그레이션 가이드](docs/migration.md)를 참조하세요.
+
+### 예방 경보 — 디스크가 차기 전에 알림
+
+PostgreSQL 볼륨이 가득 차는 장애를 막기 위해, SQLON은 1분마다 수집한 관측 결과로
+저장공간 고갈 시점을 예측하고(최근 6시간·7일 회귀), 디스크를 채우는 원인(실패·적체된
+WAL 아카이브, WAL을 붙잡는 복제 슬롯, 재활용되지 못한 `pg_wal`, VACUUM 을 막는 장기
+트랜잭션, 임시파일), 테이블 급증·급감, 변경계획 없는 스키마 변경, 관측 중단을
+Mattermost·Slack 웹훅과 `/admin/alerts` 로 알립니다. 설정은 세 가지입니다.
+
+```sh
+GRANT pg_monitor TO <모니터링 계정>;                        # WAL·임시파일 크기 측정
+# DB 프로파일 → "저장공간 한도": 데이터 볼륨 크기 (예: 500GiB)
+SQLON_ALERT_WEBHOOK=https://mattermost.example.com/hooks/…   # 알림 채널
+```
+
+상세: [docs/early-warning.md](docs/early-warning.md)
 
 HTTP 모드 기본 진입점:
 
@@ -418,6 +434,7 @@ Invoke-RestMethod `
 - `explain_sql` — 리스크 추정: 정적 분석 + `profile` 지정 시 **실측 EXPLAIN**(postgres `EXPLAIN (FORMAT JSON)`, mysql/mariadb `EXPLAIN FORMAT=JSON`) — full scan/카티션/대량 정렬/고비용 탐지, 개선 제안
 - `list_db_profiles` — 호출자가 사용할 수 있는 DB 연결 프로파일 id와 마스킹된 접속·정책 정보를 반환
 - `list_database_instances` — 대상 DB에 접속하지 않고 권한 범위의 플릿 인벤토리, 환경·업무서비스·중요도·역할·담당팀과 엔진 Capability를 반환
+- `get_early_warnings` — 예방 경보 현황: 저장공간 고갈 예측(6시간·7일 회귀, 선언 한도 대비 남은 일수), 디스크를 채우는 원인(복제 슬롯·WAL 아카이브 실패/적체·pg_wal 과다·VACUUM 차단 트랜잭션·임시파일), 테이블 급증/급감, 변경계획 없는 스키마 변경, 관측 중단을 발생·격상·해소 상태와 함께 반환. 저장된 평가만 읽고 DB에 접속하지 않음. `profile`(선택)
 - `get_fleet_health` — 사용 가능한 DB를 독립적으로 병렬 점검하고 연결·배포판·구성 위험을 수집 시각과 근거 데이터가 포함된 위험도 순으로 반환
 - `list_sessions` — 선택한 DB의 활성·비활성 세션을 조회하고 SQL 실행시간과 트랜잭션 지속시간, 대기 이벤트, 보호 세션을 분리해 근거·수집 시각과 함께 반환. Oracle은 `INST_ID:SID:SERIAL#` 세션 키 사용
 - `get_lock_tree` — 엔진 시스템 뷰의 blocker→blocked 관계를 정규화해 루트 블로커, 영향받는 세션 수, 잠금 유형과 대기시간을 반환하며 어떠한 세션 변경도 수행하지 않음
@@ -525,6 +542,7 @@ HTTP 모드로 기동하면 브라우저 기반 관리 화면과 Swagger 문서�
 | `/admin` | **데이터셋 관리 콘솔** — 18개 데이터셋의 용도·스키마·상태 확인, 내용 편집·적용(백업+검증+핫스왑), 제거, 백업/복원, 카탈로그 리로드. 단계별 사용 가이드가 화면에 내장 |
 | `/admin/editor` | **테이블 편집기** — 데이터셋을 표(그리드)로 렌더링해 JSON 없이 편집: 셀 클릭 인라인 수정(타입 자동 보존), 행 추가/복제/삭제, **컬럼 추가/이름변경/삭제**, 검색·페이지네이션. 저장 시 동일한 백업·검증·핫스왑·롤백 적용 |
 | `/admin/db` | **DB 연결 관리·쿼리 실행** — postgres/mysql/mariadb 프로파일 추가/수정/삭제/접속 테스트, Read-Only 쿼리 콘솔(검증→미리보기→실행→취소), 실행 이력·메트릭 ([docs/db-connector.md](docs/db-connector.md)) |
+| `/admin/alerts` | **예방 경보** — 저장공간 예측(사용·한도·증가율·가득 차는 시점), 발생 중 경보와 확인(ack), 스키마 변경 이력, 해소 이력, 알림 채널 상태, 지금 평가·알림 테스트 ([docs/early-warning.md](docs/early-warning.md)) |
 | `/admin/dba` | **DBA 코파일럿** — 읽기 전용 DBA 진단 대시보드: 헬스 점검, 인덱스 어드바이저(CREATE INDEX 후보), 워크로드 리포트, SQL 안티패턴 린트, SQL 자연어 설명을 탭 UI로 제공(자동 실행·변경 없음, 권고용) |
 | `/admin/dba-console` | **DBA 관리 콘솔** (`dba`/`admin` 역할 전용) — 권한 있는 쓰기 세션으로 사용자·역할, 데이터베이스, 권한(GRANT/REVOKE), 서버 설정, 세션(취소/종료), 유지보수(VACUUM/ANALYZE/REINDEX), 임의 권한 SQL을 탭 UI로 관리. 프로파일의 `dba` 자격증명 필요, 모든 변경 감사 로그 기록 |
 | `/auth/login` · `/admin/users` · `/admin/keys` | **인증·사용자·MCP 키** (메타 DB 활성 시) — 로컬/Keycloak SSO 로그인, 사용자·역할 관리(admin), MCP 키 발급·회전·폐기, 프로파일별 권한(grant). 상세: [docs/auth.md](docs/auth.md) |

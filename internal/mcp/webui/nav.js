@@ -28,7 +28,7 @@
       { key: 'compliance', href: '/admin/compliance', icon: '📋', label: '컴플라이언스', show: 'always' },
       { key: 'maintenance', href: '/admin/maintenance', icon: '🛡️', label: '예방 점검', show: 'always' },
       { key: 'dba',      href: '/admin/dba',     icon: '🩺', label: '인시던트 · 진단', show: 'always' },
-      { key: 'alerts',   href: '/admin/alerts',  icon: '🚨', label: '장애 · 경고 알림', show: 'always' },
+      { key: 'alerts',   href: '/admin/alerts',  icon: '🚨', label: '예방 경보', show: 'always' },
       { key: 'changes',  href: '/admin/changes', icon: '📋', label: '변경 관리', show: 'dba' },
       { key: 'dba-console', href: '/admin/dba-console', icon: '🛢', label: 'DBA 콘솔', show: 'dba' },
       { key: 'db',       href: '/admin/db',      icon: '🔌', label: 'DB 플릿 설정', show: 'always' },

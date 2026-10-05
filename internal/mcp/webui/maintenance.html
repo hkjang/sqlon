@@ -19,7 +19,7 @@ td.wrap{white-space:normal;max-width:520px}
 .muted{color:var(--sub);font-size:12px}.empty{padding:32px;text-align:center;color:var(--sub)}
 .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:700;background:#eef2f7;color:#475569}
 .sev-critical{background:#fee2e2;color:#991b1b}.sev-warning{background:#fef3c7;color:#854d0e}.sev-info{background:#e0f2fe;color:#075985}
-.cat-wraparound{background:#fde8e8;color:#9b1c1c}.cat-bloat{background:#fdf0d5;color:#8a5a00}.cat-replication_slot{background:#e6e9f7;color:#3730a3}
+.cat-wraparound{background:#fde8e8;color:#9b1c1c}.cat-bloat{background:#fdf0d5;color:#8a5a00}.cat-replication_slot{background:#e6e9f7;color:#3730a3}.cat-wal_archive{background:#fde8e8;color:#9b1c1c}.cat-wal_retention{background:#fdf0d5;color:#8a5a00}.cat-vacuum_blocker{background:#f3e8ff;color:#6b21a8}.cat-config_risk{background:#e0f2fe;color:#075985}
 .mono{font-family:var(--mono);font-size:12.5px}
 .message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}
 .filterbtn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 11px;font-size:12.5px;cursor:pointer}.filterbtn.active{background:#17243b;color:#fff;border-color:#17243b}
@@ -30,7 +30,7 @@ td.wrap{white-space:normal;max-width:520px}
 <header><h1>예방 점검</h1><select id="profile" aria-label="DB 프로파일"></select><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><button class="primary" id="refresh">새로고침</button><span class="grow"></span><span class="muted" id="fresh">수집 전</span></header>
 <main>
   <div class="context" id="context"><span>환경 -</span><span>업무서비스 -</span><span>엔진 -</span><span>인스턴스 -</span><span>역할 -</span><span>수집 시각 -</span></div>
-  <div class="notice">오류 없이 잠복하다 장애를 유발하는 위험(트랜잭션 ID <b>wraparound</b>, 테이블 <b>블로트</b>, WAL을 붙잡는 <b>비활성 복제 슬롯</b>)을 조기에 진단합니다. 읽기 전용이며, <b>조치는 반드시 변경 관리의 승인 흐름</b>으로 수행하세요. PostgreSQL(wraparound·블로트·슬롯), MySQL/MariaDB(InnoDB 퍼지 적체·PK 없는 테이블), Oracle(테이블스페이스 포화·만료 계정)을 지원합니다.</div>
+  <div class="notice">오류 없이 잠복하다 장애를 유발하는 위험(트랜잭션 ID <b>wraparound</b>, 테이블 <b>블로트</b>, WAL을 붙잡는 <b>복제 슬롯</b>, 실패·적체된 <b>WAL 아카이브</b>, 재활용되지 못한 <b>pg_wal</b>, VACUUM 을 막는 <b>장기 트랜잭션</b>)을 조기에 진단합니다. 이 점검은 <a href="/admin/alerts">예방 경보</a>가 주기적으로 실행해 위험이 생기면 알림을 보냅니다. 읽기 전용이며, <b>조치는 반드시 변경 관리의 승인 흐름</b>으로 수행하세요. PostgreSQL(wraparound·블로트·슬롯), MySQL/MariaDB(InnoDB 퍼지 적체·PK 없는 테이블), Oracle(테이블스페이스 포화·만료 계정)을 지원합니다.</div>
   <div id="messages"></div>
   <section class="cards">
     <div class="card"><small>수행한 점검</small><b id="kChecks">-</b></div>
@@ -54,7 +54,7 @@ const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>"']
 const token=$('#adminToken');token.value=localStorage.getItem('sqlonAdminToken')||localStorage.getItem('jasqlAdminToken')||'';token.onchange=()=>localStorage.setItem('sqlonAdminToken',token.value);
 function headers(){const h={Accept:'application/json'};if(token.value)h['X-Admin-Token']=token.value;return h}
 function when(v){if(!v)return '-';const d=new Date(v);return isNaN(d)?esc(v):d.toLocaleString('ko-KR')}
-const CAT_KO={wraparound:'트랜잭션 wraparound',bloat:'테이블 블로트',replication_slot:'비활성 복제 슬롯',undo_purge_lag:'InnoDB 퍼지 적체',no_primary_key:'PK 없는 테이블',tablespace_saturation:'테이블스페이스 포화',expired_account:'만료 미잠금 계정'};
+const CAT_KO={wraparound:'트랜잭션 wraparound',bloat:'테이블 블로트',replication_slot:'복제 슬롯 WAL 보존',wal_archive:'WAL 아카이브 실패·적체',wal_retention:'pg_wal 과다',vacuum_blocker:'VACUUM 차단 트랜잭션',config_risk:'디스크 보호 설정',undo_purge_lag:'InnoDB 퍼지 적체',no_primary_key:'PK 없는 테이블',tablespace_saturation:'테이블스페이스 포화',expired_account:'만료 미잠금 계정'};
 const SEV_KO={critical:'치명적',warning:'경고',info:'정보'};
 function fmtVal(f){if(!f.metric)return '-';let v=f.value;if(f.metric==='retained_bytes')return esc(bytes(v));if(f.metric==='dead_ratio_pct')return esc(v)+'%';return esc(Math.round(v).toLocaleString())}
 function bytes(n){n=Number(n)||0;const u=['B','KB','MB','GB','TB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++}return (i?n.toFixed(1):n)+' '+u[i]}
