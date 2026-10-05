@@ -39,6 +39,13 @@ type Service struct {
 	// of AlertWebhookURL, so they share the early-warning lifecycle and
 	// delivery. Called from collection workers concurrently.
 	AlertSink func(profileID string, alerts []Alert)
+
+	// latest holds the encoded newest persisted snapshot per profile so the
+	// "latest snapshot" lookup (every collection cycle, fleet health, the
+	// operations pages) does not scan the whole store. Encoded bytes rather
+	// than a Snapshot: callers append to the slices they get back.
+	latestMu sync.Mutex
+	latest   map[string][]byte
 }
 
 // New builds the collection service. providers is the engine-name→provider
@@ -135,6 +142,7 @@ func (s *Service) CollectProfile(ctx context.Context, raw dbconn.Profile, persis
 			result.Snapshot.Warnings = append(result.Snapshot.Warnings, "수집에는 성공했지만 운영 저장소 기록에 실패했습니다.")
 			return result
 		}
+		s.rememberLatest(p.ID, result.Snapshot.CollectedAt, payload)
 		result.Persisted = true
 	}
 	return result
@@ -192,7 +200,56 @@ func (s *Service) CollectAll(ctx context.Context, profiles []dbconn.Profile, per
 	return batch
 }
 
+// latestLookback bounds the cold-start search for a profile's newest
+// snapshot before falling back to the whole store.
+const latestLookback = 48 * time.Hour
+
+func (s *Service) rememberLatest(profileID string, at time.Time, payload []byte) {
+	s.latestMu.Lock()
+	defer s.latestMu.Unlock()
+	if s.latest == nil {
+		s.latest = map[string][]byte{}
+	}
+	if prev, ok := s.latest[profileID]; ok {
+		var head struct {
+			CollectedAt time.Time `json:"collected_at"`
+		}
+		if json.Unmarshal(prev, &head) == nil && head.CollectedAt.After(at) {
+			return
+		}
+	}
+	s.latest[profileID] = payload
+}
+
+// History returns stored snapshots, newest first. The common "latest one"
+// request (limit 1, no lower bound) is answered from memory, or on a cold
+// start from the last two days of the store before scanning all of it.
 func (s *Service) History(ctx context.Context, profileID string, since time.Time, limit int) ([]Snapshot, []string, error) {
+	if limit != 1 || !since.IsZero() || profileID == "" {
+		return s.history(ctx, profileID, since, limit)
+	}
+	s.latestMu.Lock()
+	cached, ok := s.latest[profileID]
+	s.latestMu.Unlock()
+	if ok {
+		var snapshot Snapshot
+		if json.Unmarshal(cached, &snapshot) == nil {
+			return []Snapshot{snapshot}, nil, nil
+		}
+	}
+	out, warnings, err := s.history(ctx, profileID, s.now().Add(-latestLookback), 1)
+	if err == nil && len(out) == 0 {
+		out, warnings, err = s.history(ctx, profileID, time.Time{}, 1)
+	}
+	if err == nil && len(out) == 1 {
+		if payload, encErr := json.Marshal(out[0]); encErr == nil {
+			s.rememberLatest(profileID, out[0].CollectedAt, payload)
+		}
+	}
+	return out, warnings, err
+}
+
+func (s *Service) history(ctx context.Context, profileID string, since time.Time, limit int) ([]Snapshot, []string, error) {
 	result, err := s.Store.Query(ctx, storage.Query{Kind: SnapshotKind, ProfileID: profileID, Since: since, Limit: limit})
 	if err != nil {
 		return nil, nil, err

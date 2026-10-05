@@ -98,3 +98,55 @@ func TestApplyDeclaredLimitTargetsTheFootprint(t *testing.T) {
 		t.Fatalf("an engine-reported limit must never be overridden")
 	}
 }
+
+type countingStore struct {
+	storage.OperationalStore
+	queries int
+}
+
+func (c *countingStore) Query(ctx context.Context, q storage.Query) (storage.QueryResult, error) {
+	c.queries++
+	return c.OperationalStore.Query(ctx, q)
+}
+
+func TestLatestSnapshotIsServedFromMemory(t *testing.T) {
+	store := &countingStore{OperationalStore: storage.NewFileStore(t.TempDir())}
+	svc := New(nil, store, map[string]Provider{"postgres": &sequenceProvider{}})
+	clock := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	svc.Now = func() time.Time { return clock }
+	profile := dbconn.Profile{ID: "p", Type: "postgres"}
+	svc.CollectProfile(context.Background(), profile, true)
+	clock = clock.Add(time.Minute)
+	svc.CollectProfile(context.Background(), profile, true)
+
+	before := store.queries
+	got, _, err := svc.History(context.Background(), "p", time.Time{}, 1)
+	if err != nil || len(got) != 1 || !got[0].CollectedAt.Equal(clock) {
+		t.Fatalf("latest: %+v %v", got, err)
+	}
+	if store.queries != before {
+		t.Fatalf("the latest snapshot must come from memory, store queried %d times", store.queries-before)
+	}
+	got[0].Warnings = append(got[0].Warnings, "caller-owned")
+	again, _, _ := svc.History(context.Background(), "p", time.Time{}, 1)
+	for _, w := range again[0].Warnings {
+		if w == "caller-owned" {
+			t.Fatalf("a caller's append leaked into the cache")
+		}
+	}
+}
+
+func TestLatestSnapshotColdStartFindsOldRecords(t *testing.T) {
+	dir := t.TempDir()
+	old := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	writer := New(nil, storage.NewFileStore(dir), map[string]Provider{"postgres": &sequenceProvider{}})
+	writer.Now = func() time.Time { return old }
+	writer.CollectProfile(context.Background(), dbconn.Profile{ID: "p", Type: "postgres"}, true)
+
+	reader := New(nil, storage.NewFileStore(dir), nil) // fresh process, empty cache
+	reader.Now = func() time.Time { return old.Add(30 * 24 * time.Hour) }
+	got, _, err := reader.History(context.Background(), "p", time.Time{}, 1)
+	if err != nil || len(got) != 1 || !got[0].CollectedAt.Equal(old) {
+		t.Fatalf("a snapshot older than the 48h lookback must still be found: %+v %v", got, err)
+	}
+}
