@@ -26,7 +26,7 @@ done
 echo "built binaries in $D"
 
 for arch in amd64 arm64; do
-  tar -czf "$P/sqlon-$V-linux-$arch.tar.gz" -C "$D" "sqlon-linux-$arch" -C "$ROOT" data docs README.md
+  tar -czf "$P/sqlon-$V-linux-$arch.tar.gz" -C "$D" "sqlon-linux-$arch" -C "$ROOT" data docs README.md scripts/sqlon-disk-report.sh
 done
 
 python3 - "$D" "$V" <<'PY'
@@ -40,6 +40,7 @@ with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
             for f in files:
                 p = os.path.join(root, f); z.write(p, p)
     z.write("README.md", "README.md")
+    z.write("scripts/sqlon-disk-report.sh", "scripts/sqlon-disk-report.sh")
 print("wrote", out)
 PY
 
@@ -51,4 +52,7 @@ docker build -q -f Dockerfile.oracle --build-arg VERSION="$VER" -t "sqlon/sqlon-
 docker save "sqlon/sqlon-oracle:$V" | gzip > "$P/sqlon-oracle-$V-docker.tar.gz"
 echo "saved oracle docker image"
 
-( cd "$P" && sha256sum ./*.tar.gz ./*.zip > SHA256SUMS.txt && cat SHA256SUMS.txt )
+# the disk-report agent ships on its own too, for DB hosts that only need it
+cp scripts/sqlon-disk-report.sh "$P/sqlon-disk-report.sh"
+
+( cd "$P" && sha256sum ./*.tar.gz ./*.zip ./sqlon-disk-report.sh > SHA256SUMS.txt && cat SHA256SUMS.txt )
