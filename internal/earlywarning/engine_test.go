@@ -26,7 +26,23 @@ func (s staticProfiles) Profiles(context.Context) ([]dbconn.Profile, error) { re
 type captureNotifier struct {
 	mu    sync.Mutex
 	calls [][]Notification
+	texts []string
 	fail  error
+	id    string
+}
+
+func (c *captureNotifier) NotifyText(_ context.Context, kind, text string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.texts = append(c.texts, kind+":"+text)
+	return c.fail
+}
+
+func (c *captureNotifier) ID() string {
+	if c.id == "" {
+		return "capture"
+	}
+	return c.id
 }
 
 func (c *captureNotifier) Notify(_ context.Context, notes []Notification, _ map[string]string) error {

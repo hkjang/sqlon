@@ -61,6 +61,12 @@ type Config struct {
 	HistoryRetention time.Duration
 	MaxHistory       int
 	Concurrency      int
+	// HostDiskStaleAfter turns a host disk report this old into a
+	// "reporting stopped" warning.
+	HostDiskStaleAfter time.Duration
+	// DigestAt is the local "HH:MM" of the daily capacity report to the
+	// default channel ("" = off).
+	DigestAt string
 }
 
 func (c Config) withDefaults() Config {
@@ -91,6 +97,9 @@ func (c Config) withDefaults() Config {
 	if c.Concurrency <= 0 {
 		c.Concurrency = 4
 	}
+	if c.HostDiskStaleAfter <= 0 {
+		c.HostDiskStaleAfter = 15 * time.Minute
+	}
 	return c
 }
 
@@ -106,6 +115,9 @@ type DeliveryStatus struct {
 	NextRetryAt         *time.Time `json:"next_retry_at,omitempty"`
 	Delivered           int64      `json:"delivered"`
 	Failed              int64      `json:"failed"`
+	// Profiles routed to this channel in its latest delivery (per-DB
+	// channels only).
+	Profiles []string `json:"profiles,omitempty"`
 }
 
 type profileMeta struct {
@@ -128,6 +140,12 @@ type persisted struct {
 	Delivery    DeliveryStatus          `json:"delivery"`
 	LastCycleAt time.Time               `json:"last_cycle_at,omitempty"`
 	Cycles      int64                   `json:"cycles"`
+	// Channels are per-database destinations keyed by notifier ID.
+	Channels       map[string]*DeliveryStatus `json:"channels,omitempty"`
+	HostDisk       map[string]*HostDiskReport `json:"host_disk,omitempty"`
+	Silences       []Silence                  `json:"silences,omitempty"`
+	LastDigestDate string                     `json:"last_digest_date,omitempty"`
+	LastDigestErr  string                     `json:"last_digest_error,omitempty"`
 }
 
 // Engine evaluates collection cycles into alerts. All exported methods are
@@ -140,14 +158,17 @@ type Engine struct {
 	Plans       PlanLister
 	History     HistoryScanner
 	Notifier    Notifier
-	Now         func() time.Time
-	Logf        func(string, ...any)
+	// Route returns a database's own channel (nil = the default Notifier).
+	Route func(dbconn.Profile) (Notifier, error)
+	Now   func() time.Time
+	Logf  func(string, ...any)
 
 	evalMu    sync.Mutex
 	mu        sync.Mutex
 	st        *persisted
 	series    map[string]*profileSeries
 	forecasts map[string][]Forecast
+	volumes   map[string][]Forecast // from host disk reports
 	bridged   map[string][]collector.Alert
 	baseMu    sync.Mutex
 	baselines map[string]*metasync.RawSnapshot
@@ -157,7 +178,7 @@ type Engine struct {
 // aside rather than blocking startup.
 func New(cfg Config) *Engine {
 	e := &Engine{cfg: cfg.withDefaults(), Now: time.Now, Logf: log.Printf,
-		series: map[string]*profileSeries{}, forecasts: map[string][]Forecast{}, bridged: map[string][]collector.Alert{}, baselines: map[string]*metasync.RawSnapshot{}}
+		series: map[string]*profileSeries{}, forecasts: map[string][]Forecast{}, volumes: map[string][]Forecast{}, bridged: map[string][]collector.Alert{}, baselines: map[string]*metasync.RawSnapshot{}}
 	e.st = &persisted{Version: 1, Profiles: map[string]*profileMeta{}}
 	if e.cfg.Dir != "" {
 		path := filepath.Join(e.cfg.Dir, "state.json")
@@ -307,6 +328,35 @@ func (e *Engine) Evaluate(ctx context.Context, batch collector.BatchResult, opts
 				}
 			}
 		}
+		if report := e.st.HostDisk[pid]; report != nil {
+			// Independent of the DB connection: a database that stopped
+			// because its volume filled is exactly when this matters.
+			dbBytes := 0.0
+			for _, f := range e.forecasts[pid] {
+				if f.Primary {
+					dbBytes = f.UsedBytes
+				}
+			}
+			conds, fcs := hostDiskConditions(w.p, report, e.series[pid], now, e.cfg.HostDiskStaleAfter, dbBytes)
+			if fcs != nil {
+				// the volume gives a real limit: "no limit declared" is no longer true
+				kept := w.conds[:0]
+				for _, c := range w.conds {
+					if c.Rule != RuleLimitUndeclared {
+						kept = append(kept, c)
+					}
+				}
+				w.conds = kept
+			}
+			w.conds = append(w.conds, conds...)
+			w.ran[CheckHostDiskAgent] = true
+			if fcs != nil {
+				// fresh: the volumes were re-examined. Stale: they were not,
+				// and their alerts must stay as they were.
+				e.volumes[pid] = fcs
+				w.ran[CheckHostDisk] = true
+			}
+		}
 		if bridged := e.bridged[pid]; len(bridged) > 0 {
 			w.conds = append(w.conds, bridgedConditions(bridged)...)
 			delete(e.bridged, pid)
@@ -366,16 +416,23 @@ func (e *Engine) Evaluate(ctx context.Context, batch collector.BatchResult, opts
 		if _, ok := byID[pid]; !ok {
 			e.st.resolveProfile(pid, now)
 			delete(e.st.Profiles, pid)
+			delete(e.st.HostDisk, pid)
 			delete(e.series, pid)
 			delete(e.forecasts, pid)
+			delete(e.volumes, pid)
 			e.removeProfileFiles(pid)
 		}
 	}
 	e.st.expire(now, e.cfg.EventTTL, e.cfg.HistoryRetention, e.cfg.MaxHistory)
-	var notes []Notification
-	if e.Notifier != nil && (e.st.Delivery.NextRetryAt == nil || !now.Before(*e.st.Delivery.NextRetryAt)) {
-		notes = e.st.pending(now, e.cfg.MinNotifySeverity, e.cfg.RenotifyInterval)
+	silences := e.activeSilencesLocked(now)
+	policy := func(a *Alert) (string, bool) {
+		floor := e.cfg.MinNotifySeverity
+		if p, ok := byID[a.ProfileID]; ok && p.Alerting != nil && Rank(p.Alerting.MinSeverity) > 0 {
+			floor = p.Alerting.MinSeverity
+		}
+		return floor, silencedUntil(silences, a, now) != nil
 	}
+	routes := e.routeLocked(e.st.pending(now, policy, e.cfg.RenotifyInterval), byID, now)
 	names := map[string]string{}
 	for _, p := range byID {
 		names[p.ID] = p.Name
@@ -385,34 +442,9 @@ func (e *Engine) Evaluate(ctx context.Context, batch collector.BatchResult, opts
 	report.Profiles = len(works)
 	e.mu.Unlock()
 
-	// Phase D — deliver.
-	if len(notes) > 0 {
-		report.Notifications = len(notes)
-		dctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		err := e.Notifier.Notify(dctx, notes, names)
-		cancel()
-		e.mu.Lock()
-		at := e.now()
-		d := &e.st.Delivery
-		d.LastAttemptAt = &at
-		if err != nil {
-			d.Failed++
-			d.ConsecutiveFailures++
-			d.LastError = err.Error()
-			backoff := time.Duration(1<<min(d.ConsecutiveFailures-1, 5)) * time.Minute // 1,2,4…32 min
-			next := at.Add(backoff)
-			d.NextRetryAt = &next
-			report.DeliveryError = err.Error()
-			e.logf("early-warning: notification delivery failed (%d pending, retry after %s): %v", len(notes), backoff, err)
-		} else {
-			d.Delivered += int64(len(notes))
-			d.ConsecutiveFailures, d.LastError, d.NextRetryAt = 0, "", nil
-			d.LastSuccessAt = &at
-			e.st.markDelivered(notes, at)
-			report.Delivered = true
-		}
-		e.mu.Unlock()
-	}
+	// Phase D — deliver, then the daily report.
+	e.deliver(ctx, routes, names, &report)
+	e.sendDigest(ctx, profiles, now)
 
 	// Phase E — persist. Baselines are written after the state that records
 	// the change, so a crash in between re-detects rather than loses it.
@@ -426,6 +458,7 @@ func (e *Engine) Evaluate(ctx context.Context, batch collector.BatchResult, opts
 	if e.Notifier != nil {
 		e.st.Delivery.Target = e.Notifier.Target()
 	}
+	e.st.Silences = e.activeSilencesLocked(now)
 	saveErr := e.saveStateLocked()
 	e.saveSeriesLocked(now, false)
 	e.mu.Unlock()
@@ -714,6 +747,11 @@ type ProfileBoard struct {
 	SchemaStatus        string     `json:"schema_status,omitempty"`
 	SchemaBaselineAt    *time.Time `json:"schema_baseline_at,omitempty"`
 	SchemaTables        int        `json:"schema_tables,omitempty"`
+	// Host disk reporting (sqlon-disk-report.sh): volumes are also in
+	// Forecasts (scope "volume").
+	DiskHost       string     `json:"disk_host,omitempty"`
+	DiskReportedAt *time.Time `json:"disk_reported_at,omitempty"`
+	AlertChannel   string     `json:"alert_channel,omitempty"` // "default" or a masked per-DB webhook
 }
 
 type Board struct {
@@ -727,6 +765,16 @@ type Board struct {
 	Firing       []Alert        `json:"firing"`
 	Recent       []Alert        `json:"recent"`
 	SchemaEvents []Alert        `json:"schema_events"`
+	// Channels are per-database alert destinations; Silences are active.
+	Channels []DeliveryStatus `json:"channels"`
+	Silences []Silence        `json:"silences"`
+	Digest   DigestStatus     `json:"digest"`
+}
+
+type DigestStatus struct {
+	At        string `json:"at,omitempty"` // local HH:MM, empty = off
+	LastSent  string `json:"last_sent,omitempty"`
+	LastError string `json:"last_error,omitempty"`
 }
 
 func timePtr(t time.Time) *time.Time {
@@ -741,9 +789,15 @@ func timePtr(t time.Time) *time.Time {
 func (e *Engine) Board(profiles []dbconn.Profile) Board {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return e.boardLocked(profiles)
+}
+
+func (e *Engine) boardLocked(profiles []dbconn.Profile) Board {
+	now := e.now()
 	board := Board{GeneratedAt: e.now(), LastCycleAt: timePtr(e.st.LastCycleAt), Delivery: e.st.Delivery,
 		Settings: BoardSettings{MinNotifySeverity: e.cfg.MinNotifySeverity, RenotifyHours: e.cfg.RenotifyInterval.Hours(), MaintenanceMinutes: e.cfg.MaintenanceEvery.Minutes(), SchemaMinutes: e.cfg.SchemaEvery.Minutes(), CollectionDownAfter: e.cfg.CollectionDownAfter},
-		Profiles: []ProfileBoard{}, Firing: []Alert{}, Recent: []Alert{}, SchemaEvents: []Alert{}}
+		Profiles: []ProfileBoard{}, Firing: []Alert{}, Recent: []Alert{}, SchemaEvents: []Alert{}, Channels: []DeliveryStatus{}, Silences: []Silence{},
+		Digest: DigestStatus{At: e.cfg.DigestAt, LastSent: e.st.LastDigestDate, LastError: e.st.LastDigestErr}}
 	board.Delivery.Configured = e.Notifier != nil
 	if e.Notifier != nil {
 		board.Delivery.Target = e.Notifier.Target()
@@ -763,19 +817,27 @@ func (e *Engine) Board(profiles []dbconn.Profile) Board {
 		if p.Capacity != nil {
 			pb.StorageLimit = p.Capacity.StorageLimit
 		}
-		if pb.Forecasts == nil {
-			pb.Forecasts = []Forecast{}
+		pb.Forecasts = append(append([]Forecast{}, e.volumes[p.ID]...), pb.Forecasts...)
+		if len(pb.Forecasts) > 8 {
+			pb.Forecasts = pb.Forecasts[:8]
 		}
-		if len(pb.Forecasts) > 6 {
-			pb.Forecasts = pb.Forecasts[:6]
+		if r := e.st.HostDisk[p.ID]; r != nil {
+			pb.DiskHost, pb.DiskReportedAt = r.Host, timePtr(r.ReportedAt)
+		}
+		pb.AlertChannel = defaultDestination
+		if p.Alerting != nil && p.Alerting.WebhookRef != "" {
+			pb.AlertChannel = dbconn.MaskedRef(p.Alerting.WebhookRef)
 		}
 		if !m.LastCollectedAt.IsZero() || m.Failures > 0 {
 			pb.Status = "ok"
 		}
+		limited, primaryUnlimited := false, false
 		for _, f := range pb.Forecasts {
-			if f.Primary && f.LimitBytes == 0 {
-				board.Summary.WithoutLimit++
-			}
+			limited = limited || f.LimitBytes > 0
+			primaryUnlimited = primaryUnlimited || f.Primary && f.LimitBytes == 0
+		}
+		if primaryUnlimited && !limited {
+			board.Summary.WithoutLimit++
 		}
 		if m.Failures > 0 {
 			board.Summary.ObservationFailed++
@@ -786,6 +848,21 @@ func (e *Engine) Board(profiles []dbconn.Profile) Board {
 	for i, pb := range board.Profiles {
 		index[pb.ProfileID] = i
 	}
+	silences := e.activeSilencesLocked(now)
+	for _, s := range silences {
+		if s.ProfileID == "" || allowed[s.ProfileID] {
+			board.Silences = append(board.Silences, s)
+		}
+	}
+	for _, id := range sortedChannelIDs(e.st.Channels) {
+		c := *e.st.Channels[id]
+		for _, pid := range c.Profiles {
+			if allowed[pid] {
+				board.Channels = append(board.Channels, c)
+				break
+			}
+		}
+	}
 	for _, a := range e.st.Alerts {
 		if !allowed[a.ProfileID] {
 			continue
@@ -794,7 +871,9 @@ func (e *Engine) Board(profiles []dbconn.Profile) Board {
 			board.SchemaEvents = append(board.SchemaEvents, *a)
 		}
 		if a.State == StateFiring {
-			board.Firing = append(board.Firing, *a)
+			view := *a
+			view.SilencedUntil = silencedUntil(silences, a, now)
+			board.Firing = append(board.Firing, view)
 			switch a.Severity {
 			case SevCritical:
 				board.Summary.Critical++
@@ -887,4 +966,46 @@ func (e *Engine) Metrics() (forecasts []ForecastMetric, firing map[string]int, d
 		}
 	}
 	return forecasts, firing, e.st.Delivery
+}
+
+func sortedChannelIDs(m map[string]*DeliveryStatus) []string {
+	out := make([]string, 0, len(m))
+	for id := range m {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// sendDigest posts the daily report to the default channel once a day.
+func (e *Engine) sendDigest(ctx context.Context, profiles []dbconn.Profile, now time.Time) {
+	if e.Notifier == nil || e.cfg.DigestAt == "" {
+		return
+	}
+	e.mu.Lock()
+	today, due := digestDue(e.cfg.DigestAt, e.st.LastDigestDate, now)
+	var text string
+	if due {
+		board := e.boardLocked(profiles)
+		if board.Summary.Profiles == 0 || board.LastCycleAt == nil {
+			due = false // nothing to report yet; try again later in the window
+		} else {
+			text = FormatDigest(board, now)
+		}
+	}
+	e.mu.Unlock()
+	if !due {
+		return
+	}
+	dctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	err := e.Notifier.NotifyText(dctx, "digest", text)
+	cancel()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err != nil {
+		e.st.LastDigestErr = err.Error()
+		e.logf("early-warning: daily report delivery failed: %v", err)
+		return
+	}
+	e.st.LastDigestDate, e.st.LastDigestErr = today, ""
 }

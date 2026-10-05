@@ -325,3 +325,16 @@ func TestTableShrinkWithinTheFirstHour(t *testing.T) {
 		t.Fatalf("a 1.2GiB table truncated minutes after loading must be reported")
 	}
 }
+
+func TestPrivilegeHintsAreMergedIntoOneCondition(t *testing.T) {
+	p := pgProfile("")
+	snap := footprintSnapshot(p, t0, gib, 0, nil)
+	snap.Evidence = append(snap.Evidence,
+		collector.Evidence{Code: "STORAGE_FOOTPRINT_PARTIAL", Summary: "GRANT PROCESS"},
+		collector.Evidence{Code: "STORAGE_FOOTPRINT_PARTIAL", Summary: "GRANT REPLICATION CLIENT"})
+	conds := capacityConditions(p, snap, buildForecasts(p, snap, newProfileSeries(), t0))
+	c := conditionByRule(conds, RuleMonitorPrivilege)
+	if c == nil || !strings.Contains(c.Detail, "GRANT PROCESS") || !strings.Contains(c.Detail, "GRANT REPLICATION CLIENT") {
+		t.Fatalf("every missing grant must be listed: %+v", c)
+	}
+}

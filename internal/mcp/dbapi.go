@@ -1014,6 +1014,12 @@ func (s *Server) upsertProfileMeta(w http.ResponseWriter, r *http.Request, pathI
 		writeAPIError(w, http.StatusBadRequest, errEmpty("visibility must be private or shared"))
 		return
 	}
+	if create {
+		if err := dbconn.PreserveMaskedSecrets(&p, nil); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+	}
 	if err := p.Validate(); err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
@@ -1043,6 +1049,16 @@ func (s *Server) upsertProfileMeta(w http.ResponseWriter, r *http.Request, pathI
 		// visibility 변경은 소유자/admin만
 		if req.Visibility != "" && req.Visibility != rec.Visibility && !actor.IsAdmin() && rec.OwnerID != actor.ID {
 			writeAPIError(w, http.StatusForbidden, errEmpty("only the owner or an admin can change visibility"))
+			return
+		}
+		var stored dbconn.Profile
+		_ = json.Unmarshal(rec.Definition, &stored)
+		if err := dbconn.PreserveMaskedSecrets(&p, &stored); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		if definition, err = json.Marshal(p); err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err)
 			return
 		}
 		rec.Definition = definition

@@ -39,6 +39,7 @@ const (
 	ScopeWAL      = "wal"       // write-ahead log directory
 	ScopeTemp     = "temp"      // temporary files of spilling queries
 	ScopeLog      = "log"       // server log directory
+	ScopeVolume   = "volume"    // a filesystem reported by the DB host (df)
 )
 
 type Capacity struct {

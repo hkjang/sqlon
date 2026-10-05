@@ -114,12 +114,25 @@ func (b *book) expire(now time.Time, ttl, retention time.Duration, maxHistory in
 	b.Alerts = append(kept, resolved...)
 }
 
+// notifyPolicy says, per alert, the lowest severity worth sending and
+// whether a silence currently holds its notifications back.
+type notifyPolicy func(a *Alert) (minSeverity string, silenced bool)
+
+func fixedPolicy(minSeverity string) notifyPolicy {
+	return func(*Alert) (string, bool) { return minSeverity, false }
+}
+
 // pending derives what still has to be said. Deriving it from delivery
 // bookkeeping (rather than queuing messages) means a failed webhook call is
-// simply retried on the next cycle.
-func (b *book) pending(now time.Time, minSeverity string, renotify time.Duration) []Notification {
+// simply retried on the next cycle, and an alert held back by a silence is
+// sent — as new, escalated, or resolved — once the silence ends.
+func (b *book) pending(now time.Time, policy notifyPolicy, renotify time.Duration) []Notification {
 	var out []Notification
 	for _, a := range b.Alerts {
+		minSeverity, silenced := policy(a)
+		if silenced {
+			continue
+		}
 		if a.State == StateResolved {
 			if a.LastNotifiedAt != nil && !a.ResolveNotified && !a.QuietResolve && !a.Event {
 				out = append(out, Notification{Kind: KindResolved, Alert: *a})

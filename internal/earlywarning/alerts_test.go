@@ -22,7 +22,7 @@ func TestLifecycleFireRemindEscalateResolve(t *testing.T) {
 	ran := map[string]bool{CheckCapacity: true}
 	now := t0
 	b.reconcile("p", ran, []Condition{cond("disk", CheckCapacity, SevWarning)}, now)
-	notes := b.pending(now, SevWarning, 6*time.Hour)
+	notes := b.pending(now, fixedPolicy(SevWarning), 6*time.Hour)
 	if got := kinds(notes); len(got) != 1 || got[0] != "firing:disk" {
 		t.Fatalf("first sighting must fire once: %v", got)
 	}
@@ -30,13 +30,13 @@ func TestLifecycleFireRemindEscalateResolve(t *testing.T) {
 
 	now = now.Add(time.Hour)
 	b.reconcile("p", ran, []Condition{cond("disk", CheckCapacity, SevWarning)}, now)
-	if got := b.pending(now, SevWarning, 6*time.Hour); len(got) != 0 {
+	if got := b.pending(now, fixedPolicy(SevWarning), 6*time.Hour); len(got) != 0 {
 		t.Fatalf("a standing alert must not repeat inside the renotify interval: %v", kinds(got))
 	}
 
 	now = now.Add(6 * time.Hour)
 	b.reconcile("p", ran, []Condition{cond("disk", CheckCapacity, SevWarning)}, now)
-	notes = b.pending(now, SevWarning, 6*time.Hour)
+	notes = b.pending(now, fixedPolicy(SevWarning), 6*time.Hour)
 	if got := kinds(notes); len(got) != 1 || got[0] != "reminder:disk" {
 		t.Fatalf("after the interval a reminder is due: %v", got)
 	}
@@ -48,12 +48,12 @@ func TestLifecycleFireRemindEscalateResolve(t *testing.T) {
 	}
 	now = now.Add(7 * time.Hour)
 	b.reconcile("p", ran, []Condition{cond("disk", CheckCapacity, SevWarning)}, now)
-	if got := b.pending(now, SevWarning, 6*time.Hour); len(got) != 0 {
+	if got := b.pending(now, fixedPolicy(SevWarning), 6*time.Hour); len(got) != 0 {
 		t.Fatalf("an acknowledged alert sends no reminders: %v", kinds(got))
 	}
 
 	b.reconcile("p", ran, []Condition{cond("disk", CheckCapacity, SevCritical)}, now)
-	notes = b.pending(now, SevWarning, 6*time.Hour)
+	notes = b.pending(now, fixedPolicy(SevWarning), 6*time.Hour)
 	if got := kinds(notes); len(got) != 1 || got[0] != "escalated:disk" {
 		t.Fatalf("escalation must notify even after an ack: %v", got)
 	}
@@ -67,12 +67,12 @@ func TestLifecycleFireRemindEscalateResolve(t *testing.T) {
 	if a.State != StateResolved || a.PeakSeverity != SevCritical {
 		t.Fatalf("absent from a check that ran → resolved, keeping the peak: %+v", a)
 	}
-	notes = b.pending(now, SevWarning, 6*time.Hour)
+	notes = b.pending(now, fixedPolicy(SevWarning), 6*time.Hour)
 	if got := kinds(notes); len(got) != 1 || got[0] != "resolved:disk" {
 		t.Fatalf("a notified alert announces its resolution: %v", got)
 	}
 	b.markDelivered(notes, now)
-	if got := b.pending(now, SevWarning, 6*time.Hour); len(got) != 0 {
+	if got := b.pending(now, fixedPolicy(SevWarning), 6*time.Hour); len(got) != 0 {
 		t.Fatalf("resolution is announced once: %v", kinds(got))
 	}
 }
@@ -100,11 +100,11 @@ func TestAlertsAreScopedToTheirProfile(t *testing.T) {
 func TestBelowMinimumSeverityIsNeverSent(t *testing.T) {
 	var b book
 	b.reconcile("p", map[string]bool{CheckCapacity: true}, []Condition{cond("hint", CheckCapacity, SevInfo)}, t0)
-	if got := b.pending(t0, SevWarning, time.Hour); len(got) != 0 {
+	if got := b.pending(t0, fixedPolicy(SevWarning), time.Hour); len(got) != 0 {
 		t.Fatalf("info is shown on the console, not sent: %v", kinds(got))
 	}
 	b.reconcile("p", map[string]bool{CheckCapacity: true}, nil, t0.Add(time.Minute))
-	if got := b.pending(t0, SevWarning, time.Hour); len(got) != 0 {
+	if got := b.pending(t0, fixedPolicy(SevWarning), time.Hour); len(got) != 0 {
 		t.Fatalf("an alert never sent must not announce its resolution: %v", kinds(got))
 	}
 }
@@ -114,20 +114,20 @@ func TestEventsNotifyOnceAndCloseOnAckOrTTL(t *testing.T) {
 	ev := cond("schema_change:h2", CheckSchema, SevCritical)
 	ev.Event = true
 	b.reconcile("p", map[string]bool{CheckSchema: true}, []Condition{ev}, t0)
-	notes := b.pending(t0, SevWarning, time.Hour)
+	notes := b.pending(t0, fixedPolicy(SevWarning), time.Hour)
 	b.markDelivered(notes, t0)
 	b.reconcile("p", map[string]bool{CheckSchema: true}, nil, t0.Add(15*time.Minute))
 	if b.firing("p|schema_change:h2") == nil {
 		t.Fatalf("an event stays firing until acknowledged, its absence resolves nothing")
 	}
-	if got := b.pending(t0.Add(10*time.Hour), SevWarning, time.Hour); len(got) != 0 {
+	if got := b.pending(t0.Add(10*time.Hour), fixedPolicy(SevWarning), time.Hour); len(got) != 0 {
 		t.Fatalf("events are not re-sent: %v", kinds(got))
 	}
 	b.expire(t0.Add(25*time.Hour), 24*time.Hour, 30*24*time.Hour, 100)
 	if b.firing("p|schema_change:h2") != nil {
 		t.Fatalf("an event closes after its TTL")
 	}
-	if got := b.pending(t0.Add(25*time.Hour), SevWarning, time.Hour); len(got) != 0 {
+	if got := b.pending(t0.Add(25*time.Hour), fixedPolicy(SevWarning), time.Hour); len(got) != 0 {
 		t.Fatalf("an event's expiry is silent: %v", kinds(got))
 	}
 

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"sqlon/internal/collector"
@@ -29,6 +30,8 @@ type EarlyWarningOptions struct {
 	// SchemaEvery spaces out schema-change detection; negative disables it.
 	SchemaEvery time.Duration
 	TimeZone    string
+	// DigestAt is the local HH:MM of the daily capacity report ("" = off).
+	DigestAt string
 }
 
 // schemaSource adapts the lazily built metasync service.
@@ -51,6 +54,7 @@ func newEarlyWarning(s *Server, dataDir string, coll *collector.Service, opts Op
 		RenotifyInterval:  ew.Renotify,
 		MaintenanceEvery:  ew.MaintenanceEvery,
 		SchemaEvery:       ew.SchemaEvery,
+		DigestAt:          ew.DigestAt,
 	})
 	eng.Profiles = s.DB
 	eng.Maintenance = s.Observability
@@ -69,6 +73,22 @@ func newEarlyWarning(s *Server, dataDir string, coll *collector.Service, opts Op
 	}
 	if webhook != "" {
 		eng.Notifier = &earlywarning.WebhookNotifier{URL: webhook, ConsoleURL: ew.ConsoleURL}
+	}
+	channels := map[string]earlywarning.Notifier{}
+	var channelsMu sync.Mutex
+	eng.Route = func(p dbconn.Profile) (earlywarning.Notifier, error) {
+		url, err := p.Alerting.ResolveWebhook()
+		if err != nil || url == "" || url == webhook {
+			return nil, err
+		}
+		channelsMu.Lock()
+		defer channelsMu.Unlock()
+		n := channels[url]
+		if n == nil {
+			n = &earlywarning.WebhookNotifier{URL: url, ConsoleURL: ew.ConsoleURL}
+			channels[url] = n
+		}
+		return n, nil
 	}
 	return eng
 }
@@ -179,24 +199,176 @@ func (s *Server) registerEarlyWarningAPI(mux *http.ServeMux) {
 		if !s.requireAdmin(w, r) {
 			return
 		}
-		if s.EarlyWarning == nil || s.EarlyWarning.Notifier == nil {
-			writeAPIError(w, http.StatusConflict, errEmpty("no notification webhook configured (SQLON_ALERT_WEBHOOK)"))
+		if s.EarlyWarning == nil {
+			writeAPIError(w, http.StatusConflict, errEmpty("early warning is disabled"))
 			return
 		}
-		now := time.Now().UTC()
-		note := earlywarning.Notification{Kind: earlywarning.KindFiring, Alert: earlywarning.Alert{
-			ID: "ew-test", ProfileID: "sqlon", Severity: earlywarning.SevInfo, Rule: "test", State: earlywarning.StateFiring,
-			Title: "알림 경로 테스트 — 이 메시지가 보이면 예방 경보가 이 채널로 전달됩니다", FirstSeen: now, LastSeen: now,
-		}}
+		notifier := s.EarlyWarning.Notifier
+		scope := "기본 채널"
+		if id := r.URL.Query().Get("profile"); id != "" {
+			profiles, _, ok := s.fleetProfilesForRequest(w, r)
+			if !ok {
+				return
+			}
+			p, found := allowedProfile(profiles, id)
+			if !found {
+				writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted"))
+				return
+			}
+			custom, err := s.EarlyWarning.Route(p)
+			if err != nil {
+				writeAPIError(w, http.StatusBadRequest, err)
+				return
+			}
+			if custom != nil {
+				notifier, scope = custom, p.ID+" 전용 채널"
+			}
+		}
+		if notifier == nil {
+			writeAPIError(w, http.StatusConflict, errEmpty("no notification webhook configured (SQLON_ALERT_WEBHOOK or profile alerting.webhook_ref)"))
+			return
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 		defer cancel()
-		err := s.EarlyWarning.Notifier.Notify(ctx, []earlywarning.Notification{note}, map[string]string{"sqlon": "SQLON"})
-		s.earlyWarningAudit(r, "early_warning_test_notification", "", map[string]any{"delivered": err == nil})
+		err := notifier.NotifyText(ctx, "test", "#### 🛡️ SQLON 예방 경보 — 알림 경로 테스트\n이 메시지가 보이면 "+scope+"의 예방 경보가 이 채널로 전달됩니다.")
+		s.earlyWarningAudit(r, "early_warning_test_notification", r.URL.Query().Get("profile"), map[string]any{"delivered": err == nil, "target": notifier.Target()})
 		if err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]any{"delivered": false, "target": s.EarlyWarning.Notifier.Target(), "error": err.Error()})
+			writeJSON(w, http.StatusBadGateway, map[string]any{"delivered": false, "target": notifier.Target(), "error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"delivered": true, "target": s.EarlyWarning.Notifier.Target()})
+		writeJSON(w, http.StatusOK, map[string]any{"delivered": true, "target": notifier.Target()})
+	})
+	mux.HandleFunc("POST /api/early-warning/disk", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		if s.EarlyWarning == nil {
+			writeAPIError(w, http.StatusConflict, errEmpty("early warning is disabled"))
+			return
+		}
+		var req struct {
+			Profile  string                    `json:"profile"`
+			Profiles []string                  `json:"profiles"`
+			Host     string                    `json:"host"`
+			Volumes  []earlywarning.DiskVolume `json:"volumes"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		ids := append([]string{}, req.Profiles...)
+		if req.Profile != "" {
+			ids = append(ids, req.Profile)
+		}
+		if len(ids) == 0 {
+			writeAPIError(w, http.StatusBadRequest, errEmpty("profile is required"))
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		for _, id := range ids {
+			if _, found := allowedProfile(profiles, id); !found {
+				writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted: "+id))
+				return
+			}
+		}
+		report := earlywarning.HostDiskReport{Host: strings.TrimSpace(req.Host), Volumes: req.Volumes}
+		for _, id := range ids {
+			if err := s.EarlyWarning.ReportDisk(ctx, id, report); err != nil {
+				writeAPIError(w, http.StatusBadRequest, err)
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"accepted": true, "profiles": ids, "volumes": len(req.Volumes)})
+	})
+	mux.HandleFunc("POST /api/early-warning/silences", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := s.requireQueryActor(w, r)
+		if !ok {
+			return
+		}
+		if s.EarlyWarning == nil {
+			writeAPIError(w, http.StatusConflict, errEmpty("early warning is disabled"))
+			return
+		}
+		var req struct {
+			Profile  string `json:"profile"`
+			Rule     string `json:"rule"`
+			Duration string `json:"duration"`
+			Reason   string `json:"reason"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		d, err := time.ParseDuration(strings.TrimSpace(req.Duration))
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, errEmpty("duration must be like 30m, 2h, 24h"))
+			return
+		}
+		if strings.TrimSpace(req.Profile) == "" {
+			// silencing every database is an admin decision
+			if !s.requireAdmin(w, r) {
+				return
+			}
+		} else {
+			profiles, _, ok := s.fleetProfilesForRequest(w, r)
+			if !ok {
+				return
+			}
+			if _, found := allowedProfile(profiles, req.Profile); !found {
+				writeAPIError(w, http.StatusNotFound, errEmpty("db profile not found or not permitted"))
+				return
+			}
+		}
+		name := "admin-token"
+		if actor != nil {
+			name = actor.Username
+		}
+		silence, err := s.EarlyWarning.AddSilence(earlywarning.Silence{ProfileID: req.Profile, Rule: req.Rule, Reason: req.Reason, CreatedBy: name}, d)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		s.earlyWarningAudit(r, "early_warning_silence", req.Profile, map[string]any{"silence": silence.ID, "rule": req.Rule, "until": silence.EndsAt, "reason": req.Reason, "actor": name})
+		writeJSON(w, http.StatusOK, map[string]any{"silence": silence})
+	})
+	mux.HandleFunc("DELETE /api/early-warning/silences/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		if s.EarlyWarning == nil {
+			writeAPIError(w, http.StatusConflict, errEmpty("early warning is disabled"))
+			return
+		}
+		id := r.PathValue("id")
+		current, found := s.EarlyWarning.Silence(id)
+		if !found {
+			writeAPIError(w, http.StatusNotFound, errEmpty("silence not found or already ended"))
+			return
+		}
+		if current.ProfileID == "" {
+			if !s.requireAdmin(w, r) {
+				return
+			}
+		} else {
+			profiles, _, ok := s.fleetProfilesForRequest(w, r)
+			if !ok {
+				return
+			}
+			if _, allowed := allowedProfile(profiles, current.ProfileID); !allowed {
+				writeAPIError(w, http.StatusNotFound, errEmpty("silence not found or already ended"))
+				return
+			}
+		}
+		ended, err := s.EarlyWarning.EndSilence(id)
+		if err != nil {
+			writeAPIError(w, http.StatusNotFound, err)
+			return
+		}
+		s.earlyWarningAudit(r, "early_warning_silence_end", ended.ProfileID, map[string]any{"silence": id})
+		writeJSON(w, http.StatusOK, map[string]any{"ended": true, "silence": ended})
 	})
 }
 

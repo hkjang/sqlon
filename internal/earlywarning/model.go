@@ -42,6 +42,10 @@ const (
 	CheckMaintenance = "maintenance"
 	CheckSchema      = "schema"
 	CheckWorkload    = "workload"
+	CheckHostDisk    = "host_disk"
+	// CheckHostDiskAgent owns only the "reports stopped" warning, so a dead
+	// agent never counts as a re-examination of the volume alerts.
+	CheckHostDiskAgent = "host_disk_agent"
 )
 
 // Rules — the stable machine names of what an alert is about.
@@ -57,6 +61,7 @@ const (
 	RuleTableShrink      = "table_shrink"
 	RuleSchemaChange     = "schema_change"
 	RuleSchemaBaseline   = "schema_baseline"
+	RuleHostDiskStale    = "host_disk_stale"
 	RuleMaintenance      = "maint_" // + finding category
 )
 
@@ -115,6 +120,8 @@ type Alert struct {
 	AckedBy          string     `json:"acked_by,omitempty"`
 	AckedAt          *time.Time `json:"acked_at,omitempty"`
 	AckNote          string     `json:"ack_note,omitempty"`
+	// SilencedUntil is filled in read models only (Board).
+	SilencedUntil *time.Time `json:"silenced_until,omitempty"`
 }
 
 const (

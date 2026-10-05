@@ -44,7 +44,7 @@ func assetKey(scope, name string) string { return scope + ":" + name }
 // volume (as opposed to a single table).
 func volumeScope(scope string) bool {
 	switch scope {
-	case collector.ScopeStorage, collector.ScopeCluster, collector.ScopeWAL, collector.ScopeTemp, collector.ScopeLog, "database", "tablespace":
+	case collector.ScopeStorage, collector.ScopeCluster, collector.ScopeWAL, collector.ScopeTemp, collector.ScopeLog, collector.ScopeVolume, "database", "tablespace":
 		return true
 	}
 	return false
@@ -112,7 +112,10 @@ func buildForecasts(p dbconn.Profile, snap collector.Snapshot, ps *profileSeries
 			f.LimitBytes = c.MaxBytes
 			f.UsagePercent = round1(c.UsedBytes / c.MaxBytes * 100)
 			f.LimitSource = "engine"
-			if isPrimary && declared > 0 && float64(declared) == c.MaxBytes {
+			switch {
+			case c.Scope == collector.ScopeVolume:
+				f.LimitSource = "host"
+			case isPrimary && declared > 0 && float64(declared) == c.MaxBytes:
 				f.LimitSource = "declared"
 			}
 			remaining := c.MaxBytes - c.UsedBytes
@@ -170,6 +173,8 @@ func assetLabel(scope, name string) string {
 		return "데이터베이스 " + name
 	case "tablespace":
 		return "테이블스페이스 " + name
+	case collector.ScopeVolume:
+		return "디스크 " + name
 	}
 	return scope + " " + name
 }
@@ -182,14 +187,18 @@ func footprintBreakdown(snap collector.Snapshot) string {
 	for _, l := range labels {
 		for _, c := range snap.Capacity {
 			if c.Scope == l.scope {
-				parts = append(parts, l.label+" "+humanBytes(c.UsedBytes))
+				label := l.label
+				if c.Name == "binlog" {
+					label = "binlog"
+				}
+				parts = append(parts, label+" "+humanBytes(c.UsedBytes))
 			}
 		}
 	}
 	return strings.Join(parts, " · ")
 }
 
-const capacityAdvice = "WAL 비중이 크면 예방 점검의 복제 슬롯·WAL 아카이브 항목을 먼저 확인하세요. 데이터가 원인이면 급증한 테이블을 정리(보관 정책·파티션 분리)하고, 추세가 정상이라면 고갈 예상일 전에 볼륨을 증설하세요."
+const capacityAdvice = "WAL(MySQL은 binlog) 비중이 크면 예방 점검의 복제 슬롯·WAL 아카이브 항목이나 binlog 보존 기간(binlog_expire_logs_seconds)을 먼저 확인하세요. 데이터가 원인이면 급증한 테이블을 정리(보관 정책·파티션 분리)하고, 추세가 정상이라면 고갈 예상일 전에 볼륨을 증설하세요."
 
 func capacityConditions(p dbconn.Profile, snap collector.Snapshot, forecasts []Forecast) []Condition {
 	warnPct, critPct, warnDays, critDays := p.Capacity.Thresholds()
@@ -207,13 +216,20 @@ func capacityConditions(p dbconn.Profile, snap collector.Snapshot, forecasts []F
 			detailTail = " · 구성: " + breakdown
 		}
 		source := "엔진 보고 한도"
-		if f.LimitSource == "declared" {
+		switch f.LimitSource {
+		case "declared":
 			source = "선언 한도"
+		case "host":
+			source = "디스크 실측(df) 한도"
+		}
+		check := CheckCapacity
+		if f.Scope == collector.ScopeVolume {
+			check = CheckHostDisk
 		}
 		if f.LimitBytes > 0 {
 			if sev := thresholdSeverity(f.UsagePercent, warnPct, critPct); sev != "" {
 				out = append(out, Condition{
-					Key: RuleCapacityUsage + ":" + f.Asset, Check: CheckCapacity, Rule: RuleCapacityUsage, Severity: sev, Object: f.Asset,
+					Key: RuleCapacityUsage + ":" + f.Asset, Check: check, Rule: RuleCapacityUsage, Severity: sev, Object: f.Asset,
 					Title:          fmt.Sprintf("%s 사용률 %.1f%%", label, f.UsagePercent),
 					Detail:         fmt.Sprintf("사용 %s / %s %s%s", humanBytes(f.UsedBytes), source, humanBytes(f.LimitBytes), detailTail),
 					Recommendation: capacityAdvice, Value: f.UsagePercent, Threshold: warnPct,
@@ -247,7 +263,7 @@ func capacityConditions(p dbconn.Profile, snap collector.Snapshot, forecasts []F
 						}
 					}
 					out = append(out, Condition{
-						Key: RuleCapacityForecast + ":" + f.Asset, Check: CheckCapacity, Rule: RuleCapacityForecast, Severity: sev, Object: f.Asset,
+						Key: RuleCapacityForecast + ":" + f.Asset, Check: check, Rule: RuleCapacityForecast, Severity: sev, Object: f.Asset,
 						Title: title, Detail: detail + detailTail,
 						Recommendation: capacityAdvice, Value: days, Threshold: warnDays,
 						Attributes: map[string]any{"days_to_full": days, "basis": f.Basis},
@@ -298,14 +314,18 @@ func capacityConditions(p dbconn.Profile, snap collector.Snapshot, forecasts []F
 			})
 		}
 	}
+	var gaps []string
 	for _, e := range snap.Evidence {
 		if e.Code == "STORAGE_FOOTPRINT_PARTIAL" {
-			out = append(out, Condition{
-				Key: RuleMonitorPrivilege, Check: CheckCapacity, Rule: RuleMonitorPrivilege, Severity: SevInfo, Object: "pg_monitor",
-				Title: "모니터링 권한 부족 — WAL·임시파일 크기 미측정", Detail: e.Summary,
-				Recommendation: "GRANT pg_monitor TO <모니터링 계정>; — 읽기 전용 모니터링 역할입니다.",
-			})
+			gaps = append(gaps, e.Summary)
 		}
+	}
+	if len(gaps) > 0 {
+		out = append(out, Condition{
+			Key: RuleMonitorPrivilege, Check: CheckCapacity, Rule: RuleMonitorPrivilege, Severity: SevInfo, Object: "privilege",
+			Title: fmt.Sprintf("모니터링 권한 부족 — 저장공간 일부 미측정 (%d건)", len(gaps)), Detail: strings.Join(gaps, "\n"),
+			Recommendation: "위 GRANT 를 모니터링 계정에 적용하세요 — 읽기 전용 모니터링 권한입니다.",
+		})
 	}
 	return out
 }

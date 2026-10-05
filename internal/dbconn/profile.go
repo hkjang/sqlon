@@ -57,6 +57,9 @@ type Profile struct {
 	// against (see CapacityConfig). Nil → growth is tracked but no
 	// days-until-full projection is possible for engines without a limit.
 	Capacity *CapacityConfig `json:"capacity,omitempty"`
+	// Alerting routes this database's early-warning notifications (team
+	// channel, per-database minimum severity). Nil → server defaults.
+	Alerting *AlertingConfig `json:"alerting,omitempty"`
 }
 
 type OracleConfig struct {
@@ -298,6 +301,9 @@ func (p *Profile) Validate() error {
 	if err := p.Capacity.validate(); err != nil {
 		return err
 	}
+	if err := p.Alerting.validate(); err != nil {
+		return err
+	}
 	if p.Driver != "" && !strings.EqualFold(p.Driver, d.DriverName()) {
 		return fmt.Errorf("driver %q does not match type %s (expected %s or empty)", p.Driver, d.Name(), d.DriverName())
 	}
@@ -456,9 +462,6 @@ func SaveProfiles(dataDir string, profiles []Profile) error {
 // UpsertProfile validates and inserts/replaces a profile, returning the new
 // full list. create=true fails on duplicate id; create=false requires it.
 func UpsertProfile(dataDir string, p Profile, create bool) ([]Profile, error) {
-	if err := p.Validate(); err != nil {
-		return nil, err
-	}
 	profiles, err := LoadProfiles(dataDir)
 	if err != nil {
 		return nil, err
@@ -469,6 +472,16 @@ func UpsertProfile(dataDir string, p Profile, create bool) ([]Profile, error) {
 			idx = i
 			break
 		}
+	}
+	var existing *Profile
+	if idx >= 0 && !create {
+		existing = &profiles[idx]
+	}
+	if err := PreserveMaskedSecrets(&p, existing); err != nil {
+		return nil, err
+	}
+	if err := p.Validate(); err != nil {
+		return nil, err
 	}
 	if create && idx >= 0 {
 		return nil, fmt.Errorf("db profile already exists: %s", p.ID)
@@ -533,6 +546,9 @@ func (p Profile) Masked() map[string]any {
 	}
 	if p.Capacity != nil {
 		m["capacity"] = p.Capacity
+	}
+	if p.Alerting != nil {
+		m["alerting"] = p.Alerting.masked()
 	}
 	if len(p.ConfigBaseline) > 0 {
 		m["config_baseline"] = p.ConfigBaseline

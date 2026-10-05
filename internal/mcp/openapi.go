@@ -235,6 +235,32 @@ var openAPISpec = `{
         "responses": { "200": {"description":"{acknowledged,alert}"}, "404": {"description":"없거나 권한 없음"}, "409": {"description":"이미 해소됨"} }
       }
     },
+    "/api/early-warning/disk": {
+      "post": {
+        "tags": ["early-warning"], "summary": "DB 서버 디스크(df) 보고",
+        "description": "DB 서버의 에이전트(scripts/sqlon-disk-report.sh)가 볼륨 사용량을 보고합니다. SQL로는 볼 수 없는 DB 밖 파일과 볼륨의 실제 크기로 고갈을 예측하며, DB에 접속할 수 없어도 평가합니다. profile 또는 profiles 중 하나가 필요합니다.",
+        "requestBody": {"content":{"application/json":{"schema":{"type":"object","properties":{"profile":{"type":"string"},"profiles":{"type":"array","items":{"type":"string"}},"host":{"type":"string"},"volumes":{"type":"array","items":{"type":"object","properties":{"mount":{"type":"string"},"filesystem":{"type":"string"},"total_bytes":{"type":"number"},"used_bytes":{"type":"number"},"avail_bytes":{"type":"number"}}}}}}}}},
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{accepted,profiles,volumes}"}, "400": {"description":"잘못된 보고"}, "404": {"description":"없거나 권한 없는 프로파일"} }
+      }
+    },
+    "/api/early-warning/silences": {
+      "post": {
+        "tags": ["early-warning"], "summary": "무음(silence) 추가",
+        "description": "계획 작업 동안 DB·규칙 단위로 알림을 멈춥니다(최대 168h, 사유 필수). 경보는 계속 표시되고 무음이 끝날 때 여전히 유효한 것을 보냅니다. profile 이 비면 모든 DB 대상이며 관리자만 가능합니다. rule 은 capacity_* 처럼 접두어도 됩니다.",
+        "requestBody": {"content":{"application/json":{"schema":{"type":"object","required":["duration","reason"],"properties":{"profile":{"type":"string"},"rule":{"type":"string"},"duration":{"type":"string","example":"2h"},"reason":{"type":"string"}}}}}},
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{silence}"}, "400": {"description":"잘못된 요청"} }
+      }
+    },
+    "/api/early-warning/silences/{id}": {
+      "delete": {
+        "tags": ["early-warning"], "summary": "무음 해제",
+        "parameters": [{"name":"id","in":"path","required":true,"schema":{"type":"string"}}],
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{ended,silence}"}, "404": {"description":"없거나 이미 끝남"} }
+      }
+    },
     "/api/early-warning/evaluate": {
       "post": {
         "tags": ["early-warning"], "summary": "지금 평가 (admin)",

@@ -86,6 +86,7 @@ func CollectWorkload(ctx context.Context, q collector.SystemQueryer, p dbconn.Pr
 		}
 	}
 	collector.CollectCapacity(ctx, q, p.ID, capacitySQL, &s)
+	collectStorageFootprint(ctx, q, p, &s, engine)
 	return s, nil
 }
 

@@ -25,6 +25,9 @@ td.nowrap{white-space:nowrap}.detail{white-space:pre-wrap;max-width:560px;font-s
 .delivery{padding:10px 15px;font-size:13px;border-bottom:1px solid var(--line);background:#fbfcfe}
 details{padding:0}details summary{cursor:pointer;padding:13px 15px;font-weight:700;font-size:15px}
 .ack{font-size:12px;padding:4px 9px}
+.silence-form{display:flex;gap:8px;flex-wrap:wrap;padding:12px 15px;border-bottom:1px solid var(--line)}.silence-form input{flex:1;min-width:180px}
+.asset{margin-bottom:7px}.asset:last-child{margin-bottom:0}
+.badge.silenced{background:#ede9fe;color:#5b21b6}
 @media(max-width:1100px){.cards{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:700px){.cards{grid-template-columns:repeat(2,1fr)}main{padding:14px}header{padding:12px 14px}}
 </style>
@@ -64,6 +67,21 @@ details{padding:0}details summary{cursor:pointer;padding:13px 15px;font-weight:7
     <div class="scroll"><table>
       <thead><tr><th>위험도</th><th>DB</th><th>내용 · 조치</th><th>최초 / 최근 관측</th><th>알림</th><th></th></tr></thead>
       <tbody id="firingRows"><tr><td colspan="6" class="empty">조회 전</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section class="panel">
+    <h2>무음(silence)<span class="grow"></span><span class="muted">계획 작업 동안 알림만 멈춥니다 — 경보는 계속 표시되고, 끝날 때 여전히 유효한 것은 그때 보냅니다</span></h2>
+    <form id="silenceForm" class="silence-form">
+      <select id="sProfile" aria-label="DB"><option value="">모든 DB (관리자)</option></select>
+      <input id="sRule" placeholder="규칙 (비우면 전체, 예: capacity_* · maint_wal_archive)">
+      <select id="sDuration" aria-label="기간"><option value="30m">30분</option><option value="1h">1시간</option><option value="2h" selected>2시간</option><option value="6h">6시간</option><option value="24h">24시간</option></select>
+      <input id="sReason" placeholder="사유 (필수, 예: 볼륨 증설 작업)" required>
+      <button class="primary" type="submit">무음 추가</button>
+    </form>
+    <div class="scroll"><table>
+      <thead><tr><th>대상</th><th>규칙</th><th>사유</th><th>종료</th><th></th></tr></thead>
+      <tbody id="silenceRows"><tr><td colspan="5" class="empty">조회 전</td></tr></tbody>
     </table></div>
   </section>
 
@@ -113,30 +131,34 @@ function fit(f){if(!f)return '-';if(!f.valid)return '<span class="muted">'+esc(f
 function profLabel(p){return '<b>'+esc(p.name||p.profile_id)+'</b><div class="muted mono">'+esc(p.profile_id)+' · '+esc(p.engine)+' · '+esc(p.environment||'-')+'</div>'}
 let NAMES={};
 
+function assetName(f){if(f.scope==='volume')return '디스크 '+f.name;if(f.scope==='storage')return 'DB 점유량';if(f.scope==='tablespace')return '테이블스페이스 '+f.name;return f.asset}
+function assetCell(f){
+  if(f.limit_bytes){const pct=Math.min(100,f.usage_percent||0);return '<div class="asset"><b>'+esc(assetName(f))+'</b> '+bytes(f.used_bytes)+' / '+bytes(f.limit_bytes)+' <b>('+(f.usage_percent||0).toFixed(1)+'%)</b><div class="bar"><i class="'+esc(f.status)+'" style="width:'+pct+'%"></i></div><div class="muted">'+({declared:'선언 한도',host:'df 실측',engine:'엔진 보고 한도'}[f.limit_source]||'')+'</div></div>'}
+  return '<div class="asset"><b>'+esc(assetName(f))+'</b> '+bytes(f.used_bytes)+'<div class="muted">한도 미선언 — <a href="/admin/db">DB 프로파일</a>에 "저장공간 한도" 입력 또는 디스크 보고 에이전트 설치</div></div>';
+}
+function worst(fs){return fs.slice().sort((a,b)=>{const r={critical:3,warning:2,info:1,ok:0,unknown:0};if((r[b.status]||0)!==(r[a.status]||0))return (r[b.status]||0)-(r[a.status]||0);const da=a.days_to_full??Infinity,db=b.days_to_full??Infinity;if(da!==db)return da-db;return (b.usage_percent||0)-(a.usage_percent||0)})[0]}
 function renderForecasts(profiles){
   if(!profiles.length){$('#forecastRows').innerHTML='<tr><td colspan="7" class="empty">접근 가능한 DB 프로파일이 없습니다.</td></tr>';return}
   $('#forecastRows').innerHTML=profiles.map(p=>{
-    const f=(p.forecasts||[]).find(x=>x.primary)||(p.forecasts||[])[0];
-    const checks='<div class="muted">예방 점검 '+when(p.last_maintenance_at)+' · '+esc(p.maintenance_status||'-')+'</div><div class="muted">스키마 '+when(p.last_schema_at)+' · '+esc(p.schema_status||'-')+'</div>';
-    if(p.consecutive_failures>0&&!f){return '<tr><td>'+profLabel(p)+'</td><td>'+sev(p.status)+'</td><td colspan="4"><span class="badge sev-critical">수집 실패 '+p.consecutive_failures+'회</span> <span class="muted">'+esc(p.last_error||'')+'</span></td><td>'+checks+'</td></tr>'}
-    if(!f){return '<tr><td>'+profLabel(p)+'</td><td>'+sev(p.status)+'</td><td colspan="4" class="muted">아직 용량 스냅숏이 없습니다 — 관측 수집기 첫 주기를 기다리는 중입니다.</td><td>'+checks+'</td></tr>'}
-    let usage;
-    if(f.limit_bytes){const pct=Math.min(100,f.usage_percent||0);usage=bytes(f.used_bytes)+' / '+bytes(f.limit_bytes)+' <b>('+(f.usage_percent||0).toFixed(1)+'%)</b><div class="bar"><i class="'+esc(f.status)+'" style="width:'+pct+'%"></i></div><div class="muted">'+(f.limit_source==='declared'?'선언 한도':'엔진 보고 한도')+' · '+esc(f.asset)+'</div>'}
-    else usage=bytes(f.used_bytes)+'<div class="muted">한도 미선언 — <a href="/admin/db">DB 프로파일</a>에서 "저장공간 한도" 입력</div>';
+    const fs=(p.forecasts||[]).filter(f=>f.primary||f.scope==='volume'||f.limit_bytes);
+    const disk=p.disk_reported_at?'<div class="muted">디스크 보고 '+esc(p.disk_host||'')+' · '+when(p.disk_reported_at)+'</div>':'<div class="muted">디스크 보고 없음</div>';
+    const checks='<div class="muted">예방 점검 '+when(p.last_maintenance_at)+' · '+esc(p.maintenance_status||'-')+'</div><div class="muted">스키마 '+when(p.last_schema_at)+' · '+esc(p.schema_status||'-')+'</div>'+disk+(p.alert_channel&&p.alert_channel!=='default'?'<div class="muted">알림 → '+esc(p.alert_channel)+'</div>':'');
+    if(!fs.length){const msg=p.consecutive_failures>0?'<span class="badge sev-critical">수집 실패 '+p.consecutive_failures+'회</span> <span class="muted">'+esc(p.last_error||'')+'</span>':'<span class="muted">아직 용량 스냅숏이 없습니다 — 관측 수집기 첫 주기를 기다리는 중입니다.</span>';return '<tr><td>'+profLabel(p)+'</td><td>'+sev(p.status)+'</td><td colspan="4">'+msg+'</td><td>'+checks+'</td></tr>'}
+    const f=worst(fs);
     let full='-';
-    if(f.days_to_full!=null){full='<b>'+days(f.days_to_full)+' 후</b><div class="muted">'+when(f.full_at)+' · '+esc(f.basis)+' 추세 기준</div>'}
+    if(f.days_to_full!=null){full='<b>'+days(f.days_to_full)+' 후</b><div class="muted">'+when(f.full_at)+' · '+esc(f.basis)+' 추세 · '+esc(assetName(f))+'</div>'}
     else if(f.limit_bytes){full='<span class="muted">증가 추세 없음</span>'}
     if(f.note)full+='<div class="muted">'+esc(f.note)+'</div>';
-    return '<tr><td>'+profLabel(p)+(p.consecutive_failures>0?'<div><span class="badge sev-critical">최근 수집 실패 '+p.consecutive_failures+'회</span></div>':'')+'</td><td>'+sev(p.status)+(p.firing?'<div class="muted">경보 '+p.firing+'건</div>':'')+'</td><td>'+usage+'</td><td>'+fit(f.growth_short)+'</td><td>'+fit(f.growth_long)+'</td><td>'+full+'</td><td>'+checks+'</td></tr>';
+    return '<tr><td>'+profLabel(p)+(p.consecutive_failures>0?'<div><span class="badge sev-critical">최근 수집 실패 '+p.consecutive_failures+'회</span></div>':'')+'</td><td>'+sev(p.status)+(p.firing?'<div class="muted">경보 '+p.firing+'건</div>':'')+'</td><td>'+fs.slice(0,4).map(assetCell).join('')+'</td><td>'+fit(f.growth_short)+'</td><td>'+fit(f.growth_long)+'</td><td>'+full+'</td><td>'+checks+'</td></tr>';
   }).join('');
 }
 
 function renderFiring(list){
   $('#firingCount').textContent=list.length+'건';
   $('#firingRows').innerHTML=list.length?list.map(a=>{
-    const notified=a.last_notified_at?when(a.last_notified_at)+' <span class="muted">('+a.notify_count+'회)</span>':(a.severity==='info'?'<span class="muted">알림 대상 아님</span>':'<span class="muted">전송 대기</span>');
+    const notified=a.last_notified_at?when(a.last_notified_at)+' <span class="muted">('+a.notify_count+'회)</span>':(a.silenced_until?'<span class="muted">무음으로 보류</span>':a.severity==='info'?'<span class="muted">알림 대상 아님</span>':'<span class="muted">전송 대기</span>');
     const acked=a.acked_at?'<div class="muted">확인: '+esc(a.acked_by)+' '+when(a.acked_at)+(a.ack_note?' — '+esc(a.ack_note):'')+'</div>':'';
-    return '<tr><td>'+sev(a.severity)+(a.event?'<div class="muted">이벤트</div>':'')+'</td><td class="nowrap">'+esc(NAMES[a.profile_id]||a.profile_id)+'<div class="muted mono">'+esc(a.rule)+'</div></td><td><b>'+esc(a.title)+'</b>'+(a.detail?'<div class="detail">'+esc(a.detail)+'</div>':'')+(a.recommendation?'<div class="rec">조치: '+esc(a.recommendation)+'</div>':'')+acked+'</td><td class="nowrap">'+when(a.first_seen)+'<div class="muted">'+when(a.last_seen)+'</div></td><td class="nowrap">'+notified+'</td><td>'+(a.acked_at?'':'<button class="ack" data-id="'+esc(a.id)+'">확인</button>')+'</td></tr>';
+    return '<tr><td>'+sev(a.severity)+(a.event?'<div class="muted">이벤트</div>':'')+(a.silenced_until?'<div><span class="badge silenced">무음 ~'+when(a.silenced_until)+'</span></div>':'')+'</td><td class="nowrap">'+esc(NAMES[a.profile_id]||a.profile_id)+'<div class="muted mono">'+esc(a.rule)+'</div></td><td><b>'+esc(a.title)+'</b>'+(a.detail?'<div class="detail">'+esc(a.detail)+'</div>':'')+(a.recommendation?'<div class="rec">조치: '+esc(a.recommendation)+'</div>':'')+acked+'</td><td class="nowrap">'+when(a.first_seen)+'<div class="muted">'+when(a.last_seen)+'</div></td><td class="nowrap">'+notified+'</td><td>'+(a.acked_at?'':'<button class="ack" data-id="'+esc(a.id)+'">확인</button>')+'</td></tr>';
   }).join(''):'<tr><td colspan="6" class="empty">발생 중인 경보가 없습니다.</td></tr>';
   document.querySelectorAll('button.ack').forEach(b=>b.onclick=()=>ack(b.dataset.id));
 }
@@ -149,12 +171,26 @@ function renderRecent(list){
   $('#recentRows').innerHTML=list.length?list.map(a=>'<tr><td>'+sev(a.peak_severity||a.severity)+'</td><td class="nowrap">'+esc(NAMES[a.profile_id]||a.profile_id)+'</td><td>'+esc(a.title)+'</td><td class="nowrap">'+when(a.first_seen)+' → '+when(a.resolved_at)+'</td><td class="muted">'+esc(a.resolve_reason||'')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">최근 해소된 경보가 없습니다.</td></tr>';
 }
 
-function renderDelivery(d){
-  if(!d||!d.configured){$('#delivery').innerHTML='<b>알림 채널 없음</b> — 경보는 이 화면에만 표시됩니다. <span class="mono">SQLON_ALERT_WEBHOOK</span>(Mattermost/Slack incoming webhook)을 설정하세요.';return}
-  let s='알림 채널 <span class="mono">'+esc(d.target)+'</span> · 전달 '+(d.delivered||0)+'건';
+function channelLine(label,d){
+  let s=label+' <span class="mono">'+esc(d.target)+'</span> · 전달 '+(d.delivered||0)+'건';
+  if(d.profiles&&d.profiles.length)s+=' · DB '+esc(d.profiles.join(', '));
   if(d.last_success_at)s+=' · 마지막 성공 '+when(d.last_success_at);
-  if(d.consecutive_failures>0)s+=' · <b style="color:var(--bad)">연속 실패 '+d.consecutive_failures+'회: '+esc(d.last_error)+'</b> (재시도 '+when(d.next_retry_at)+')';
-  $('#delivery').innerHTML=s;
+  if(d.consecutive_failures>0||d.last_error)s+=' · <b style="color:var(--bad)">'+(d.consecutive_failures?'연속 실패 '+d.consecutive_failures+'회: ':'')+esc(d.last_error)+'</b>'+(d.next_retry_at?' (재시도 '+when(d.next_retry_at)+')':'');
+  return '<div>'+s+'</div>';
+}
+function renderDelivery(d,channels,digest){
+  let html='';
+  if(!d||!d.configured)html+='<div><b>기본 알림 채널 없음</b> — 경보는 이 화면(과 DB별 채널)에만 표시됩니다. <span class="mono">SQLON_ALERT_WEBHOOK</span>(Mattermost/Slack incoming webhook)을 설정하세요.</div>';
+  else html+=channelLine('기본 채널',d);
+  (channels||[]).forEach(c=>{html+=channelLine('DB별 채널',c)});
+  if(digest){html+='<div class="muted">일일 용량 리포트: '+(digest.at?esc(digest.at)+' (기본 채널)':'꺼짐')+(digest.last_sent?' · 마지막 발송 '+esc(digest.last_sent):'')+(digest.last_error?' · <b style="color:var(--bad)">실패: '+esc(digest.last_error)+'</b>':'')+'</div>'}
+  $('#delivery').innerHTML=html;
+}
+function renderSilences(list,profiles){
+  const sel=$('#sProfile');const keep=sel.value;
+  sel.innerHTML='<option value="">모든 DB (관리자)</option>'+profiles.map(p=>'<option value="'+esc(p.profile_id)+'">'+esc(p.name||p.profile_id)+'</option>').join('');sel.value=keep;
+  $('#silenceRows').innerHTML=list.length?list.map(x=>'<tr><td>'+esc(x.profile_id?(NAMES[x.profile_id]||x.profile_id):'모든 DB')+'</td><td class="mono">'+esc(x.rule||'전체')+'</td><td>'+esc(x.reason)+'<div class="muted">'+esc(x.created_by||'')+' · '+when(x.created_at)+'</div></td><td class="nowrap">'+when(x.ends_at)+'</td><td><button class="ack" data-silence="'+esc(x.id)+'">해제</button></td></tr>').join(''):'<tr><td colspan="5" class="empty">활성 무음이 없습니다.</td></tr>';
+  document.querySelectorAll('button[data-silence]').forEach(b=>b.onclick=async()=>{try{await call('DELETE','/api/early-warning/silences/'+encodeURIComponent(b.dataset.silence));note('무음을 해제했습니다. 보류된 알림은 다음 평가 주기에 전송됩니다.','ok');load()}catch(e){note('무음 해제 실패: '+e.message,'error')}});
 }
 
 async function load(){
@@ -168,7 +204,7 @@ async function load(){
     $('#kProfiles').textContent=s.profiles??0;$('#kNoLimit').textContent=s.without_limit??0;$('#kDown').textContent=s.observation_failed??0;
     $('#kCycle').textContent=b.last_cycle_at?'마지막 평가 '+when(b.last_cycle_at):'평가 전';
     $('#headline').textContent=b.headline;$('#headline').className='headline '+(s.critical?'critical':s.warning?'warning':'');
-    renderForecasts(b.profiles||[]);renderFiring(b.firing||[]);renderSchema(b.schema_events||[]);renderRecent(b.recent||[]);renderDelivery(b.delivery);
+    renderForecasts(b.profiles||[]);renderFiring(b.firing||[]);renderSchema(b.schema_events||[]);renderRecent(b.recent||[]);renderDelivery(b.delivery,b.channels,b.digest);renderSilences(b.silences||[],b.profiles||[]);
     $('#fresh').textContent='최신 조회 '+new Date().toLocaleTimeString('ko-KR');
   }catch(e){note('예방 경보 조회 실패: '+e.message,'error');$('#fresh').textContent='조회 실패'}
 }
@@ -186,6 +222,11 @@ async function loadRaw(){
 }
 
 $('#refresh').onclick=load;
+$('#silenceForm').onsubmit=async ev=>{
+  ev.preventDefault();
+  try{await call('POST','/api/early-warning/silences',{profile:$('#sProfile').value,rule:$('#sRule').value.trim(),duration:$('#sDuration').value,reason:$('#sReason').value.trim()});$('#sReason').value='';note('무음을 추가했습니다.','ok');load()}
+  catch(e){note('무음 추가 실패: '+e.message,'error')}
+};
 $('#rawPanel').addEventListener('toggle',()=>{if($('#rawPanel').open)loadRaw()});
 $('#evaluate').onclick=async()=>{
   const btn=$('#evaluate');btn.disabled=true;btn.textContent='평가 중…';

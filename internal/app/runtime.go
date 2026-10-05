@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"sqlon/internal/catalog"
+	"sqlon/internal/earlywarning"
 	"sqlon/internal/mcp"
 	"sqlon/internal/meta"
 	"sqlon/internal/migration"
@@ -50,7 +51,7 @@ type config struct {
 	autoMigrate                                        bool
 	earlyWarning                                       bool
 	alertWebhook, alertConsoleURL, alertMinSeverity    string
-	alertTZ                                            string
+	alertTZ, alertDigestAt                             string
 	alertRenotify, schemaWatch, maintenanceEvery       time.Duration
 }
 
@@ -128,13 +129,17 @@ func (rt Runtime) Run(ctx context.Context, args []string) error {
 		schemaEvery = -1 // 0 on the command line means "off"
 	}
 	srv := mcp.NewServer(cat, mcp.Options{Endpoint: cfg.endpoint, AllowedOrigins: splitCSV(cfg.allowOrigins), Stateful: !cfg.stateless, SSEPost: cfg.ssePost, AdminToken: cfg.adminToken, FeedbackTenantID: cfg.feedbackTenant, OpenMetadataURL: cfg.omURL, OpenMetadataToken: cfg.omToken, AlertWebhookURL: cfg.digestWebhook,
-		EarlyWarning: mcp.EarlyWarningOptions{Disabled: !cfg.earlyWarning, WebhookURL: cfg.alertWebhook, ConsoleURL: cfg.alertConsoleURL, MinSeverity: cfg.alertMinSeverity, Renotify: cfg.alertRenotify, MaintenanceEvery: cfg.maintenanceEvery, SchemaEvery: schemaEvery, TimeZone: cfg.alertTZ}})
+		EarlyWarning: mcp.EarlyWarningOptions{Disabled: !cfg.earlyWarning, WebhookURL: cfg.alertWebhook, ConsoleURL: cfg.alertConsoleURL, MinSeverity: cfg.alertMinSeverity, Renotify: cfg.alertRenotify, MaintenanceEvery: cfg.maintenanceEvery, SchemaEvery: schemaEvery, TimeZone: cfg.alertTZ, DigestAt: cfg.alertDigestAt}})
 	if srv.EarlyWarning != nil {
 		target := "none (console only; set SQLON_ALERT_WEBHOOK)"
 		if srv.EarlyWarning.Notifier != nil {
 			target = srv.EarlyWarning.Notifier.Target()
 		}
-		logger.Printf("SQLON early warning: on (notify=%s, min=%s, maintenance every %s, schema watch %s)", target, srv.EarlyWarning.Config().MinNotifySeverity, srv.EarlyWarning.Config().MaintenanceEvery, describeSchemaWatch(schemaEvery))
+		digest := cfg.alertDigestAt
+		if digest == "" {
+			digest = "off"
+		}
+		logger.Printf("SQLON early warning: on (notify=%s, min=%s, maintenance every %s, schema watch %s, daily report %s)", target, srv.EarlyWarning.Config().MinNotifySeverity, srv.EarlyWarning.Config().MaintenanceEvery, describeSchemaWatch(schemaEvery), digest)
 		if cfg.observeInterval <= 0 {
 			logger.Printf("WARNING: early warning needs the observation collector; -observe-interval is 0 so no cycle will run")
 		}
@@ -244,6 +249,7 @@ func (rt Runtime) parse(args []string) (config, error) {
 	fs.StringVar(&c.alertConsoleURL, "alert-console-url", rt.Getenv("SQLON_ALERT_CONSOLE_URL"), "Console URL linked from notifications, e.g. https://sqlon.example/admin/alerts")
 	fs.StringVar(&c.alertMinSeverity, "alert-min-severity", envOr(rt.Getenv("SQLON_ALERT_MIN_SEVERITY"), "warning"), "Lowest severity sent to the webhook: info, warning, critical")
 	fs.StringVar(&c.alertTZ, "alert-timezone", envOr(rt.Getenv("SQLON_ALERT_TZ"), "Asia/Seoul"), "Time zone for times in notifications")
+	fs.StringVar(&c.alertDigestAt, "alert-digest-at", envOr(rt.Getenv("SQLON_ALERT_DIGEST_AT"), "09:00"), "Local HH:MM of the daily capacity report to the alert webhook (off disables)")
 	fs.DurationVar(&c.alertRenotify, "alert-renotify", *durations["SQLON_ALERT_RENOTIFY"], "Re-send a still-firing, unacknowledged alert after this long (0 = never)")
 	fs.DurationVar(&c.schemaWatch, "schema-watch-interval", *durations["SQLON_SCHEMA_WATCH_INTERVAL"], "Schema-change detection interval (0 disables)")
 	fs.DurationVar(&c.maintenanceEvery, "maintenance-interval", *durations["SQLON_MAINTENANCE_INTERVAL"], "Interval of the periodic maintenance-risk check (WAL, slots, archiver, bloat, wraparound)")
@@ -259,6 +265,11 @@ func (rt Runtime) parse(args []string) (config, error) {
 	if c.alertRenotify < 0 || c.maintenanceEvery < 0 || c.schemaWatch < 0 {
 		return c, fmt.Errorf("early-warning intervals must not be negative")
 	}
+	digestAt, err := earlywarning.ParseDigestTime(c.alertDigestAt)
+	if err != nil {
+		return c, err
+	}
+	c.alertDigestAt = digestAt
 	if c.alertRenotify == 0 {
 		c.alertRenotify = -1 // engine: negative = never re-send
 	}

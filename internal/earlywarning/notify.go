@@ -17,8 +17,12 @@ import (
 // Notifier delivers one cycle's notifications in a single call.
 type Notifier interface {
 	Notify(ctx context.Context, notes []Notification, profileNames map[string]string) error
+	// NotifyText posts a prepared message (the daily report, a test).
+	NotifyText(ctx context.Context, kind, text string) error
 	// Target describes the destination without secrets, for status pages.
 	Target() string
+	// ID identifies the destination (stable, secret-free).
+	ID() string
 }
 
 // WebhookNotifier POSTs JSON whose "text" field is Markdown, so the same URL
@@ -33,13 +37,27 @@ type WebhookNotifier struct {
 
 func (w *WebhookNotifier) Target() string { return MaskURL(w.URL) }
 
+func (w *WebhookNotifier) ID() string { return "webhook:" + shortHash(w.URL) }
+
 func (w *WebhookNotifier) Notify(ctx context.Context, notes []Notification, names map[string]string) error {
-	body, err := json.Marshal(map[string]any{
+	return w.post(ctx, map[string]any{
 		"source":        "sqlon_early_warning",
+		"kind":          "alerts",
 		"ts":            time.Now().UTC().Format(time.RFC3339),
 		"text":          FormatText(notes, names, w.ConsoleURL),
 		"notifications": notes,
 	})
+}
+
+func (w *WebhookNotifier) NotifyText(ctx context.Context, kind, text string) error {
+	if w.ConsoleURL != "" {
+		text += fmt.Sprintf("\n\n[예방 경보 콘솔 열기](%s)", w.ConsoleURL)
+	}
+	return w.post(ctx, map[string]any{"source": "sqlon_early_warning", "kind": kind, "ts": time.Now().UTC().Format(time.RFC3339), "text": text})
+}
+
+func (w *WebhookNotifier) post(ctx context.Context, payload map[string]any) error {
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
