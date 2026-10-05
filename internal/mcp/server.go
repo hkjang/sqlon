@@ -886,6 +886,7 @@ func (s *Server) tools() []map[string]any {
 		}, []string{"name"})),
 		tool("reload_catalog", "Recompile the catalog from the files on disk and hot-swap it. Use after editing dataset files directly (e.g. via a mounted volume).", objectSchema(map[string]any{}, nil)),
 	}
+	list = append(list, earlyWarningToolDefs()...)
 	return annotateTools(publicTools(list))
 }
 
@@ -936,6 +937,14 @@ func annotateTools(list []map[string]any) []map[string]any {
 		"execute_approved_change":        {destructive: true, idempotent: false},
 		"rollback_change":                {destructive: true, idempotent: false},
 		"cancel_change":                  {destructive: false, idempotent: true},
+		"acknowledge_early_warning":      {destructive: false, idempotent: true},
+		"manage_early_warning_silences":  {destructive: false, idempotent: false},
+		"report_host_disk":               {destructive: false, idempotent: true},
+		"configure_early_warning":        {destructive: false, idempotent: true},
+		"configure_profile_alerting":     {destructive: false, idempotent: true},
+		"run_early_warning_check":        {destructive: false, idempotent: false},
+		"test_alert_channel":             {destructive: false, idempotent: false},
+		"propose_early_warning_fix":      {destructive: false, idempotent: false}, // creates a draft plan only
 	}
 	for _, t := range list {
 		name, _ := t["name"].(string)
@@ -977,6 +986,10 @@ var adminOnlyTools = map[string]bool{
 	"set_active_catalog":             true,
 	"build_all_profile_catalogs":     true,
 	"import_openmetadata_to_profile": true,
+	"configure_early_warning":        true,
+	"configure_profile_alerting":     true,
+	"run_early_warning_check":        true,
+	"test_alert_channel":             true,
 }
 
 // dbaTools are privileged DBA operations. They require the dba/admin capability
@@ -1065,7 +1078,7 @@ var dbProfileTools = map[string]bool{
 // the token, while stdio and standalone HTTP with no configured token remain
 // locally trusted. Meta mode proceeds to its existing per-profile ACL checks.
 func (s *Server) authorizeDBProfileTool(ctx context.Context, name string, arguments json.RawMessage) (map[string]any, error) {
-	if !dbProfileTools[name] {
+	if !dbProfileTools[name] && !earlyWarningToolNames[name] {
 		return nil, nil
 	}
 	var a struct {
@@ -1081,7 +1094,7 @@ func (s *Server) authorizeDBProfileTool(ctx context.Context, name string, argume
 	// explicit profile value. The metadata-sync tools address the DB by
 	// `source` and always touch it.
 	probesAll := name == "route_db_profile" ||
-		name == "get_fleet_health" || name == "get_early_warnings" ||
+		name == "get_fleet_health" || earlyWarningToolNames[name] ||
 		name == "discover_metadata" || name == "run_metadata_sync" || name == "profile_metadata_assets" ||
 		(name == "run_sql_safely" && strings.EqualFold(strings.TrimSpace(a.Profile), "auto"))
 	// Retrieval-only evaluation never opens a DB, even if a client happens to
@@ -1283,6 +1296,9 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 			return nil, err
 		}
 		return s.mcpEarlyWarnings(ctx, a.Profile)
+	case "explain_early_warning", "plan_capacity", "acknowledge_early_warning", "manage_early_warning_silences", "report_host_disk",
+		"configure_early_warning", "configure_profile_alerting", "run_early_warning_check", "test_alert_channel", "propose_early_warning_fix":
+		return s.earlyWarningTool(ctx, req.Name, req.Arguments)
 	case "get_fleet_health":
 		profiles, err := s.usableProfiles(ctx)
 		if err != nil {
@@ -2835,6 +2851,11 @@ func (s *Server) prompts() []map[string]any {
 			},
 		},
 		{
+			"name":        "early_warning_triage",
+			"description": "예방 경보 트리아지 워크플로: 우선순위 확인 → 원인 사슬 분석 → 승인 게이트 수정안·용량 계획 → 무음/확인 → 재평가로 효과 확인.",
+			"arguments":   []map[string]any{},
+		},
+		{
 			"name":        "db_sql_generation",
 			"description": "DB SQL generation prompt with optional schema context, join context, and few-shot examples.",
 			"arguments": []map[string]any{
@@ -2870,6 +2891,8 @@ func (s *Server) getPrompt(params json.RawMessage) (map[string]any, error) {
 	case "text2sql_workflow":
 		q := req.Arguments["question"]
 		return promptResult("Metadata-compiled NL2SQL workflow", "Use this workflow for question: "+q+"\n\n1. Call prepare_sql_context(question) — it runs analyze → search → metric definitions → schema context → join paths → SQL skeleton in one call and returns a single bundle. (Fall back to the individual tools — analyze_question, search_schema, search_examples, find_filter_columns, resolve_time, get_metric_definition, get_schema_context, get_join_paths, build_sql_skeleton — only to refine one part.)\n1b. If the response has status=needs_clarification, DO NOT generate SQL. Relay each clarifications[].question to the user verbatim; when options exist, present them and mark the recommended one. Then re-call prepare_sql_context(question, clarifications={id: answer-or-option-key}). Items under advisory carry safe defaults — proceed, but list them as assumptions in the final answer. If a metric's source=inferred, confirm the formula with the user.\n2. Fill only the skeleton's /* SLOT */ comments to complete one DB SELECT, using solely the bundle's tables, columns, dictionary metric expressions, and join conditions. Never expose pii columns. Always bound rows.\n3. Call validate_sql with metrics=metric_names and expected_outputs=expected_output_columns from the bundle; apply fix_hints and retry at most twice. Never execute invalid SQL. For hard questions, generate 2-3 candidates and pick rank_candidates best_sql.\n4. Call explain_sql; if risk is high, regenerate with period/limit constraints instead of executing.\n5. To execute, call run_sql_safely(sql, profile) — read-only; discover profile ids with list_db_profiles. It refuses with status=clarification_required while blocking clarifications remain unanswered in this session.\n6. Return the final answer as JSON: {sql, used_tables, used_columns, applied_metrics, applied_join_paths, applied_filters, assumptions, cautions, validation_result, executable}.\n7. Call record_feedback with the outcome."), nil
+	case "early_warning_triage":
+		return promptResult("SQLON 예방 경보 트리아지", earlyWarningTriagePrompt), nil
 	case "db_sql_generation":
 		text := "Generate one DB SQL SELECT for the user question.\n\nQuestion:\n" + req.Arguments["question"] + "\n\nSchema context:\n" + req.Arguments["schema_context"] + "\n\nJoin context:\n" + req.Arguments["join_context"] + "\n\nFew-shot examples:\n" + req.Arguments["examples"] + "\n\nRules:\n- Use schema-qualified table names.\n- Do not invent columns.\n- Apply each table's operator-configured policy filters (see policy_hints) only when the corresponding columns exist.\n- Return SQL plus a brief Korean explanation."
 		return promptResult("DB SQL generation", text), nil

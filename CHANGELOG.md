@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## v0.4.0 — 2026-10-06
+
+### MCP 로 예방 경보 전체 운영
+
+- 예방 경보의 모든 기능을 MCP 도구 11종으로 쓸 수 있습니다: 조회(`get_early_warnings`,
+  `explain_early_warning`, `plan_capacity`), 조치(`acknowledge_early_warning`,
+  `manage_early_warning_silences`, `report_host_disk`), 관리자(`configure_early_warning`,
+  `configure_profile_alerting`, `run_early_warning_check`, `test_alert_channel`), DBA
+  (`propose_early_warning_fix`). 단독 모드는 관리 토큰, 로그인 모드는 사용자 권한 범위로 동작하며
+  모든 변경은 감사 로그에 남습니다.
+- **전략적 사용**: `get_early_warnings` 가 원인 경보 → 긴급 → 경고 순으로 정렬된 `next_actions`
+  (그대로 호출할 도구와 인자)를 돌려주고, MCP 프롬프트 `early_warning_triage` 가 확인 → 원인 분석 →
+  승인 게이트 수정 → 재평가 순서를 안내합니다.
+- **경보 → 수정 변경계획**: 버려진 복제 슬롯 제거, VACUUM 차단 세션 종료·prepared 롤백, 블로트
+  VACUUM, `max_slot_wal_keep_size` 상한, `autovacuum` 켜기, `pg_monitor` 부여를 승인 대기 초안으로
+  만듭니다. 검증 단계는 조치가 적용되지 않으면 실패합니다.
+- **원인 추정**: 함께 발생한 경보를 원인→결과로 묶어(예: 복제 슬롯 → pg_wal 과다 → 고갈 예측 →
+  사용률 초과) 헤드라인·콘솔·알림(`🔗 원인 추정`)에 표시합니다.
+- **흔들림 억제**: 1시간에 3번 이상 발생·해소를 반복하는 경보는 안정될 때까지 알림을 보류합니다.
+- **용량 계획**: N일을 버티기 위한 볼륨 크기·부족분·시점과 추세 1·2·3배 시나리오.
+- **런타임 설정**: 기본 알림 채널·최소 위험도·재알림·일일 리포트·점검 주기를 재시작 없이 바꾸고
+  (`PUT /api/early-warning/settings`, 콘솔 설정 패널, MCP), 재시작 후에도 유지합니다.
+- 콘솔: 원인 추정 패널, 경보 상세(수정안 만들기), 용량 계획, 설정 패널, 흔들림 표시.
+
 ## v0.3.0 — 2026-10-06
 
 ### 예방 경보 강화

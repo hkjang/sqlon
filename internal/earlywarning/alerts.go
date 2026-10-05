@@ -114,6 +114,26 @@ func (b *book) expire(now time.Time, ttl, retention time.Duration, maxHistory in
 	b.Alerts = append(kept, resolved...)
 }
 
+// An alert that keeps firing and resolving (usage hovering at a threshold)
+// trains people to ignore the channel. Once a key has fired flapThreshold
+// times within flapWindow it is "flapping": new/reminder/resolved
+// notifications for it are held until it settles; escalations still go out.
+const (
+	flapWindow    = time.Hour
+	flapThreshold = 3
+)
+
+// flapCounts counts occurrences per key that began within the window.
+func (b *book) flapCounts(now time.Time) map[string]int {
+	counts := map[string]int{}
+	for _, a := range b.Alerts {
+		if !a.Event && now.Sub(a.FirstSeen) < flapWindow {
+			counts[a.Key]++
+		}
+	}
+	return counts
+}
+
 // notifyPolicy says, per alert, the lowest severity worth sending and
 // whether a silence currently holds its notifications back.
 type notifyPolicy func(a *Alert) (minSeverity string, silenced bool)
@@ -128,13 +148,15 @@ func fixedPolicy(minSeverity string) notifyPolicy {
 // sent — as new, escalated, or resolved — once the silence ends.
 func (b *book) pending(now time.Time, policy notifyPolicy, renotify time.Duration) []Notification {
 	var out []Notification
+	flaps := b.flapCounts(now)
 	for _, a := range b.Alerts {
 		minSeverity, silenced := policy(a)
 		if silenced {
 			continue
 		}
+		flapping := flaps[a.Key] >= flapThreshold
 		if a.State == StateResolved {
-			if a.LastNotifiedAt != nil && !a.ResolveNotified && !a.QuietResolve && !a.Event {
+			if a.LastNotifiedAt != nil && !a.ResolveNotified && !a.QuietResolve && !a.Event && !flapping {
 				out = append(out, Notification{Kind: KindResolved, Alert: *a})
 			}
 			continue
@@ -143,11 +165,11 @@ func (b *book) pending(now time.Time, policy notifyPolicy, renotify time.Duratio
 			continue
 		}
 		switch {
-		case a.LastNotifiedAt == nil:
+		case a.LastNotifiedAt == nil && !flapping:
 			out = append(out, Notification{Kind: KindFiring, Alert: *a})
-		case Rank(a.Severity) > Rank(a.NotifiedSeverity):
+		case a.LastNotifiedAt != nil && Rank(a.Severity) > Rank(a.NotifiedSeverity):
 			out = append(out, Notification{Kind: KindEscalated, Alert: *a})
-		case renotify > 0 && !a.Event && a.AckedAt == nil && now.Sub(*a.LastNotifiedAt) >= renotify:
+		case renotify > 0 && !flapping && a.LastNotifiedAt != nil && !a.Event && a.AckedAt == nil && now.Sub(*a.LastNotifiedAt) >= renotify:
 			out = append(out, Notification{Kind: KindReminder, Alert: *a})
 		}
 	}

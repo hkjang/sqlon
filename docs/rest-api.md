@@ -36,6 +36,10 @@ REST와 MCP 도구(`put_dataset` 등)는 **동일한 서버 코드**를 호출�
 | `POST /api/early-warning/silences` · `DELETE /api/early-warning/silences/{id}` | 무음 추가·해제 |
 | `POST /api/early-warning/disk` | DB 서버 디스크(df) 보고 — `scripts/sqlon-disk-report.sh` |
 | `POST /api/early-warning/evaluate` | 지금 평가 (admin) |
+| `GET /api/early-warning/alerts/{id}` | 경보 상세(원인 사슬·이력·예측·다음 도구) |
+| `POST /api/early-warning/alerts/{id}/fix` | 승인 대기 수정 변경계획 초안 (DBA) |
+| `GET /api/early-warning/capacity-plan?profile=&days=` | 용량 계획 |
+| `GET·PUT /api/early-warning/settings` | 런타임 설정 조회·변경·초기화 (admin) |
 | `POST /api/early-warning/test-notification` | 알림 경로 테스트 (admin, `?profile=` 로 DB별 채널) |
 
 상세: [early-warning.md](early-warning.md)

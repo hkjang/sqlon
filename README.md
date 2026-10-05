@@ -70,7 +70,7 @@ AI-generated changes were not accepted automatically. The project owner remained
 This combination allowed Codex to accelerate implementation while GPT-5.6 supported architectural reasoning and systematic review, with human judgment controlling the final result.
 
 **📚 상세 문서**: [docs/README.md](docs/README.md) — 아키텍처, MCP 도구
-레퍼런스(105종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
+레퍼런스(115종), SQL 생성 워크플로, 검증 룰 카탈로그(33종), 데이터셋
 가이드(18종), REST API, DB 커넥터, 운영/평가/보안/개발자 가이드.
 
 ## Quick Start
@@ -103,6 +103,10 @@ SQLON_ALERT_WEBHOOK=https://mattermost.example.com/hooks/…   # 알림 채널
 # 권장: DB 서버 cron 에서 디스크 실측 보고 — DB 밖 파일(덤프 백업 등)까지 감시
 * * * * * SQLON_URL=… SQLON_TOKEN=… SQLON_PROFILE=orders-prod sqlon-disk-report.sh /var/lib/postgresql
 ```
+
+MCP 클라이언트(에이전트)에서는 프롬프트 `early_warning_triage` 와 `get_early_warnings` 의
+`next_actions` 를 따라 원인 경보 → 승인 게이트 수정안(`propose_early_warning_fix`) → 재평가
+(`run_early_warning_check`) 순으로 운영할 수 있고, 관리자는 알림 채널·임계값까지 MCP로 관리합니다.
 
 상세: [docs/early-warning.md](docs/early-warning.md)
 
@@ -438,6 +442,16 @@ Invoke-RestMethod `
 - `list_db_profiles` — 호출자가 사용할 수 있는 DB 연결 프로파일 id와 마스킹된 접속·정책 정보를 반환
 - `list_database_instances` — 대상 DB에 접속하지 않고 권한 범위의 플릿 인벤토리, 환경·업무서비스·중요도·역할·담당팀과 엔진 Capability를 반환
 - `get_early_warnings` — 예방 경보 현황: 저장공간 고갈 예측(6시간·7일 회귀, 선언 한도 대비 남은 일수), 디스크를 채우는 원인(복제 슬롯·WAL 아카이브 실패/적체·pg_wal 과다·VACUUM 차단 트랜잭션·임시파일), 테이블 급증/급감, 변경계획 없는 스키마 변경, 관측 중단을 발생·격상·해소 상태와 함께 반환. 저장된 평가만 읽고 DB에 접속하지 않음. `profile`(선택)
+- `explain_early_warning` — 경보 하나의 원인 사슬(예: WAL 아카이브 실패 → pg_wal 과다 → 고갈 예측), 함께 발생 중인 경보, 과거 발생 이력, 저장공간 예측·최근 시계열, 무음·흔들림 여부와 다음 도구(next_actions). `alert_id`
+- `plan_capacity` — 용량 계획(what-if): 현재 추세로 `target_days`(기본 90)일을 버티려면 필요한 볼륨 크기·부족분·경고 임계 도달일·가득 차는 날짜와 추세 1·2·3배 시나리오. `profile`
+- `acknowledge_early_warning` — 경보 확인(ack): 지속 경보는 재알림 중지, 이벤트는 종료. 감사 로그 기록. `alert_id`·`note`
+- `manage_early_warning_silences` — 무음 관리(list·create·end): 계획 작업 동안 DB·규칙(접두어 가능) 단위로 알림만 멈춤. 전체 DB 무음은 관리자만
+- `report_host_disk` — DB 서버 디스크(df) 보고: DB 밖 파일·볼륨 실제 크기로 고갈 예측. 보통은 `sqlon-disk-report.sh` 가 사용
+- `configure_early_warning` — **관리자**: 기본 알림 채널·콘솔 링크·최소 위험도·재알림·일일 리포트·점검 주기를 재시작 없이 조회·변경·초기화(get·set·reset)
+- `configure_profile_alerting` — **관리자**: DB 하나의 용량 한도·임계값(capacity)과 전용 채널·최소 위험도(alerting)만 변경·초기화
+- `run_early_warning_check` — **관리자**: 지금 수집·평가하고 새로 생긴/해소된 경보와 다음 행동 반환 — 조치 효과 확인용
+- `test_alert_channel` — **관리자**: 기본 또는 DB별 채널로 테스트 메시지 전송
+- `propose_early_warning_fix` — **DBA**: 경보를 고치는 승인 대기 변경계획 초안 생성(버려진 슬롯 제거·장기 트랜잭션 종료·VACUUM·max_slot_wal_keep_size·autovacuum·pg_monitor 부여). 검증 단계는 조치가 적용되지 않으면 실패. 자동 수정이 없는 경보는 할 일을 안내
 - `get_fleet_health` — 사용 가능한 DB를 독립적으로 병렬 점검하고 연결·배포판·구성 위험을 수집 시각과 근거 데이터가 포함된 위험도 순으로 반환
 - `list_sessions` — 선택한 DB의 활성·비활성 세션을 조회하고 SQL 실행시간과 트랜잭션 지속시간, 대기 이벤트, 보호 세션을 분리해 근거·수집 시각과 함께 반환. Oracle은 `INST_ID:SID:SERIAL#` 세션 키 사용
 - `get_lock_tree` — 엔진 시스템 뷰의 blocker→blocked 관계를 정규화해 루트 블로커, 영향받는 세션 수, 잠금 유형과 대기시간을 반환하며 어떠한 세션 변경도 수행하지 않음

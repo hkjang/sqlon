@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -74,6 +75,13 @@ func newEarlyWarning(s *Server, dataDir string, coll *collector.Service, opts Op
 	if webhook != "" {
 		eng.Notifier = &earlywarning.WebhookNotifier{URL: webhook, ConsoleURL: ew.ConsoleURL}
 	}
+	eng.ConsoleURL = ew.ConsoleURL
+	eng.Factory = func(url, console string) earlywarning.Notifier {
+		return &earlywarning.WebhookNotifier{URL: url, ConsoleURL: console}
+	}
+	eng.Resolve = func(ref string) (string, error) {
+		return (&dbconn.AlertingConfig{WebhookRef: ref}).ResolveWebhook()
+	}
 	channels := map[string]earlywarning.Notifier{}
 	var channelsMu sync.Mutex
 	eng.Route = func(p dbconn.Profile) (earlywarning.Notifier, error) {
@@ -89,6 +97,9 @@ func newEarlyWarning(s *Server, dataDir string, coll *collector.Service, opts Op
 			channels[url] = n
 		}
 		return n, nil
+	}
+	if err := eng.LoadSettings(); err != nil {
+		log.Printf("sqlon: early-warning runtime settings not applied: %v", err)
 	}
 	return eng
 }
@@ -203,7 +214,7 @@ func (s *Server) registerEarlyWarningAPI(mux *http.ServeMux) {
 			writeAPIError(w, http.StatusConflict, errEmpty("early warning is disabled"))
 			return
 		}
-		notifier := s.EarlyWarning.Notifier
+		notifier := s.EarlyWarning.DefaultNotifier()
 		scope := "기본 채널"
 		if id := r.URL.Query().Get("profile"); id != "" {
 			profiles, _, ok := s.fleetProfilesForRequest(w, r)
@@ -237,6 +248,92 @@ func (s *Server) registerEarlyWarningAPI(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"delivered": true, "target": notifier.Target()})
+	})
+	mux.HandleFunc("GET /api/early-warning/settings", func(w http.ResponseWriter, r *http.Request) {
+		if !s.requireAdmin(w, r) {
+			return
+		}
+		if s.EarlyWarning == nil {
+			writeAPIError(w, http.StatusConflict, errEmpty("early warning is disabled"))
+			return
+		}
+		writeJSON(w, http.StatusOK, s.EarlyWarning.Settings())
+	})
+	mux.HandleFunc("PUT /api/early-warning/settings", func(w http.ResponseWriter, r *http.Request) {
+		if !s.requireAdmin(w, r) {
+			return
+		}
+		if s.EarlyWarning == nil {
+			writeAPIError(w, http.StatusConflict, errEmpty("early warning is disabled"))
+			return
+		}
+		var req struct {
+			Settings earlywarning.Settings `json:"settings"`
+			Reset    []string              `json:"reset"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		actor := "admin-token"
+		if u, err := s.authenticate(r); err == nil && u != nil {
+			actor = u.Username
+		}
+		view, err := s.EarlyWarning.UpdateSettings(req.Settings, req.Reset, actor)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		s.earlyWarningAudit(r, "early_warning_settings", "", map[string]any{"changed": settingsChanged(req.Settings), "reset": req.Reset, "actor": actor})
+		writeJSON(w, http.StatusOK, view)
+	})
+	mux.HandleFunc("GET /api/early-warning/alerts/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		raw, _ := json.Marshal(map[string]string{"alert_id": r.PathValue("id")})
+		out, err := s.earlyWarningToolScoped(ctx, profiles, "explain_early_warning", raw)
+		writeToolResult(w, out, err)
+	})
+	mux.HandleFunc("GET /api/early-warning/capacity-plan", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		days := 90.0
+		if v := r.URL.Query().Get("days"); v != "" {
+			fmt.Sscanf(v, "%g", &days)
+		}
+		raw, _ := json.Marshal(map[string]any{"profile": r.URL.Query().Get("profile"), "target_days": days})
+		out, err := s.earlyWarningToolScoped(ctx, profiles, "plan_capacity", raw)
+		writeToolResult(w, out, err)
+	})
+	mux.HandleFunc("POST /api/early-warning/alerts/{id}/fix", func(w http.ResponseWriter, r *http.Request) {
+		if !s.requireDBA(w, r) {
+			return
+		}
+		profiles, ctx, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		var body map[string]any
+		if r.ContentLength != 0 {
+			_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&body)
+		}
+		if body == nil {
+			body = map[string]any{}
+		}
+		body["alert_id"] = r.PathValue("id")
+		raw, _ := json.Marshal(body)
+		out, err := s.earlyWarningToolScoped(ctx, profiles, "propose_early_warning_fix", raw)
+		writeToolResult(w, out, err)
 	})
 	mux.HandleFunc("POST /api/early-warning/disk", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := s.requireQueryActor(w, r); !ok {
@@ -401,8 +498,36 @@ func (s *Server) mcpEarlyWarnings(ctx context.Context, profileID string) (any, e
 		"firing":        board.Firing,
 		"profiles":      board.Profiles,
 		"schema_events": board.SchemaEvents,
+		"incidents":     board.Incidents,
+		"silences":      board.Silences,
+		"next_actions":  nextActions(board),
 		"delivery":      board.Delivery,
+		"channels":      board.Channels,
 		"last_cycle_at": board.LastCycleAt,
-		"note":          "읽기 전용 예방 경보 현황입니다. 조치는 변경계획으로, 경보 확인(ack)은 /admin/alerts 또는 POST /api/early-warning/alerts/{id}/ack 로 합니다.",
+		"note":          "읽기 전용 예방 경보 현황입니다. next_actions 를 위에서부터 따르세요(원인 경보 우선). 워크플로: MCP 프롬프트 early_warning_triage.",
 	}, nil
+}
+
+// writeToolResult maps a tool's status onto an HTTP code for REST callers.
+func writeToolResult(w http.ResponseWriter, out any, err error) {
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	code := http.StatusOK
+	if m, ok := out.(map[string]any); ok {
+		switch m["status"] {
+		case "not_found":
+			code = http.StatusNotFound
+		case "forbidden":
+			code = http.StatusForbidden
+		case "invalid":
+			code = http.StatusBadRequest
+		case "conflict", "disabled", "not_configured":
+			code = http.StatusConflict
+		case "error":
+			code = http.StatusBadGateway
+		}
+	}
+	writeJSON(w, code, out)
 }

@@ -151,7 +151,79 @@ SQL로는 볼륨의 **다른 파일**(덤프 백업·외부 로그·코어 파�
 조치"라면 리포트는 60일 뒤 고갈 같은 느린 추세를 놓치지 않게 합니다. 그 시각부터 2시간 안에만
 보내므로, 서버가 그 시간에 꺼져 있었으면 그날은 건너뜁니다. `off` 로 끕니다.
 
+## 원인 추정과 흔들림 억제
+
+함께 발생한 경보는 알려진 원인→결과 관계로 묶어 **사건(incident)** 으로 보여줍니다. 예를 들어
+"WAL 아카이브 실패 → pg_wal 과다 → 고갈 예측 → 사용률 임계 초과" 는 하나의 사건이고, 고칠 것은
+맨 앞의 원인 하나입니다. 증상 경보의 알림에는 `🔗 원인 추정: …` 줄이 붙고, 콘솔 맨 위와 헤드라인에
+사건이 표시됩니다. 설정 위험은 그 설정이 실제로 만드는 결과로만 연결합니다(`autovacuum=off` →
+블로트, 무제한 `max_slot_wal_keep_size` 는 원인이 아니라 잠재 위험). 디스크가 실제로 가득 찬
+경우(사용률 ≥ 98% 또는 남은 일수 0)만 "DB 정지(관측 중단)" 의 원인으로 봅니다.
+
+사용률이 임계값 근처에서 오르내리면 같은 경보가 발생·해소를 반복합니다. 1시간 안에 3번 이상
+발생한 경보는 **흔들림(flapping)** 으로 보고 발생·해소·지속 알림을 보류합니다(격상은 보냄). 안정되면
+여전히 유효한 경보를 그때 보냅니다. 콘솔에는 "흔들림 — 알림 보류" 로 표시됩니다.
+
+## 용량 계획
+
+`plan_capacity`(MCP)·`GET /api/early-warning/capacity-plan?profile=&days=`·콘솔의 "용량 계획" 버튼은
+현재 추세로 N일(기본 90)을 버티려면 필요한 볼륨 크기(경고 임계 아래로 유지), 부족분, 경고 임계
+도달일·가득 차는 날짜, 추세 1·2·3배 시나리오를 계산합니다. 이미 경고 임계를 넘은 자산은 추세 이력이
+없어도 증설 필요로 판단합니다.
+
+## 경보에서 수정까지 (승인 게이트)
+
+`propose_early_warning_fix`(DBA)·`POST /api/early-warning/alerts/{id}/fix`·콘솔 "상세 → 수정 변경계획
+초안 만들기" 는 경보를 고치는 **초안(draft) 변경계획** 을 만듭니다. 실행은 기존 변경 관리 흐름
+(submit → approve → execute, 감사 기록, 보상 단계)을 그대로 거칩니다.
+
+| 경보 | 수정안 | 위험도 |
+| --- | --- | --- |
+| 비활성·무효화된 복제 슬롯 | `pg_drop_replication_slot` (보상: 같은 이름·종류로 빈 슬롯 재생성 — WAL은 되돌릴 수 없음) | high |
+| VACUUM 차단 세션 | `pg_terminate_backend(pid, 5000)` (14+), prepared 는 `ROLLBACK PREPARED` | medium / high |
+| 테이블 블로트 | `VACUUM (ANALYZE) 테이블` | low |
+| `max_slot_wal_keep_size=-1` | `ALTER SYSTEM SET max_slot_wal_keep_size` = 볼륨의 20%(또는 `value_mb`) + reload, 보상 RESET | medium |
+| `autovacuum=off` | `ALTER SYSTEM SET autovacuum = on` + reload | medium |
+| 모니터링 권한 부족 | `GRANT pg_monitor TO <모니터링 계정>` (보상 REVOKE) | low |
+
+변경 실행기는 검증 쿼리가 오류 없이 실행되면 통과로 보므로, 이 수정안의 검증은 조치가 적용되지
+않았으면 `verification failed: …` 오류를 냅니다. 연결된 소비자가 뒤처진 슬롯, WAL 아카이브 대상 장애,
+저장공간 경보처럼 SQL 한 줄로 고칠 수 없는 경보는 무엇을 해야 하는지 안내만 합니다.
+
+## MCP 로 운영하기 (에이전트·관리자)
+
+모든 기능을 MCP 도구로 쓸 수 있습니다. 단독 HTTP 모드에서는 모두 관리 토큰이 필요하고, 메타 DB(로그인)
+모드에서는 사용자가 권한을 가진 DB의 경보만 보입니다(다른 DB의 경보 ID는 없는 것처럼 응답).
+
+| 도구 | 권한 | 용도 |
+| --- | --- | --- |
+| `get_early_warnings` | 프로파일 | 현황 + 사건(incidents) + 우선순위별 `next_actions` |
+| `explain_early_warning` | 프로파일 | 원인 사슬·과거 이력·예측·시계열·다음 도구 |
+| `plan_capacity` | 프로파일 | 증설 크기·시점 계산 |
+| `acknowledge_early_warning` | 프로파일 | 확인(ack) |
+| `manage_early_warning_silences` | 프로파일(전체 무음은 관리자) | 무음 list·create·end |
+| `report_host_disk` | 프로파일 | 디스크(df) 보고 |
+| `configure_early_warning` | 관리자 | 서버 설정 get·set·reset (재시작 없이) |
+| `configure_profile_alerting` | 관리자 | DB별 용량 한도·채널·최소 위험도 |
+| `run_early_warning_check` | 관리자 | 즉시 평가, 새로 생긴/해소된 경보 |
+| `test_alert_channel` | 관리자 | 채널 테스트 |
+| `propose_early_warning_fix` | DBA | 승인 대기 수정안 생성 |
+
+**전략적으로 쓰는 법**: MCP 프롬프트 `early_warning_triage` 가 순서를 안내합니다 —
+① `get_early_warnings` 의 `next_actions` 를 위에서부터(원인 경보 우선) ② `explain_early_warning` 으로
+원인 사슬 확인 ③ 고칠 수 있으면 `propose_early_warning_fix` → 사람의 승인(`submit_change` →
+`approve_change` → `execute_approved_change`) ④ 고칠 수 없는 저장공간 문제는 `plan_capacity` ⑤ 계획
+작업은 무음, 확인만 할 것은 ack ⑥ `run_early_warning_check` 의 `resolved_ids` 로 효과 확인 ⑦ 감시 공백
+(`configure_profile_alerting`·`configure_early_warning` 제안)은 관리자에게 보고. `next_actions` 의 모든
+항목은 그대로 호출할 수 있는 도구 이름과 인자입니다.
+
 ## 운영 설정
+
+관리자는 아래 설정을 콘솔 "예방 경보 설정", `PUT /api/early-warning/settings`, MCP
+`configure_early_warning` 으로 **재시작 없이** 바꿀 수 있습니다(런타임 값은 `settings.json` 에 저장되어
+재시작 후에도 유지되고, 초기화하면 아래 기본값으로 돌아갑니다). 기본 채널의 `webhook_ref` 는
+`env:`·`file:`·`plain:` 참조이며 `plain:` 값은 가려서 보여줍니다.
+
 
 | 플래그 | 환경변수 | 기본값 |
 | --- | --- | --- |
@@ -168,8 +240,8 @@ SQL로는 볼륨의 **다른 파일**(덤프 백업·외부 로그·코어 파�
 ## 조회 경로
 
 - 콘솔: `/admin/alerts` — 저장공간 예측 표(DB 점유량과 디스크 볼륨), 발생 중 경보(확인 버튼·무음 표시), 무음 관리, 스키마 변경 이력, 해소 이력, 기본·DB별 채널 상태와 일일 리포트 상태, **지금 평가**·**알림 테스트** 버튼
-- MCP 도구: `get_early_warnings` (`profile` 선택)
-- REST: `GET /api/early-warning`, `POST /api/early-warning/alerts/{id}/ack`, `POST /api/early-warning/silences`, `DELETE /api/early-warning/silences/{id}`, `POST /api/early-warning/disk`, `POST /api/early-warning/evaluate`, `POST /api/early-warning/test-notification`
+- MCP 도구 11종(위 표)과 프롬프트 `early_warning_triage`
+- REST: `GET /api/early-warning`, `GET /api/early-warning/alerts/{id}`, `POST /api/early-warning/alerts/{id}/ack`, `POST /api/early-warning/alerts/{id}/fix`, `GET /api/early-warning/capacity-plan`, `GET·PUT /api/early-warning/settings`, `POST /api/early-warning/silences`, `DELETE /api/early-warning/silences/{id}`, `POST /api/early-warning/disk`, `POST /api/early-warning/evaluate`, `POST /api/early-warning/test-notification`
 - Prometheus (`/metrics`): `sqlon_storage_used_bytes`, `sqlon_storage_limit_bytes`,
   `sqlon_storage_growth_bytes_per_day{window="6h|7d"}`, `sqlon_storage_days_to_full`,
   `sqlon_early_warning_alerts_firing{severity}`, `sqlon_early_warning_notifications_total{outcome}`

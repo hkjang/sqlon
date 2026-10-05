@@ -413,6 +413,19 @@ pending 큐를 조회하고, id와 `decision=approve|reject`를 전달하면 승
 
 상세: [early-warning.md](early-warning.md)
 
+### explain_early_warning · plan_capacity · acknowledge_early_warning · manage_early_warning_silences · report_host_disk
+
+예방 경보 조회·조치 도구(프로파일 권한). explain_early_warning 은 원인 사슬·과거 이력·예측·다음 도구, plan_capacity 는 N일 버티기 위한 볼륨 크기와 시점, manage_early_warning_silences 는 action=list|create|end 로 계획 작업 중 알림을 멈춥니다.
+
+### configure_early_warning · configure_profile_alerting · run_early_warning_check · test_alert_channel (관리자)
+
+서버 알림 설정(채널·임계·주기)을 재시작 없이 get|set|reset, DB별 용량 한도·채널·최소 위험도 변경, 즉시 평가(새로 생긴/해소된 경보), 채널 테스트.
+
+### propose_early_warning_fix (DBA)
+
+경보를 고치는 초안 변경계획(슬롯 제거·세션 종료·VACUUM·max_slot_wal_keep_size·autovacuum·pg_monitor)을 만들며 실행은 승인 게이트를 거칩니다. 워크플로는 MCP 프롬프트 `early_warning_triage`.
+
+
 ### get_catalog_health
 
 컴파일 상태(`ok/degraded/error`), LoadIssue 전체, 논리명/설명 누락 테이블,

@@ -120,8 +120,9 @@ type Alert struct {
 	AckedBy          string     `json:"acked_by,omitempty"`
 	AckedAt          *time.Time `json:"acked_at,omitempty"`
 	AckNote          string     `json:"ack_note,omitempty"`
-	// SilencedUntil is filled in read models only (Board).
+	// SilencedUntil and Flapping are filled in read models only (Board).
 	SilencedUntil *time.Time `json:"silenced_until,omitempty"`
+	Flapping      bool       `json:"flapping,omitempty"`
 }
 
 const (
@@ -140,6 +141,9 @@ const (
 type Notification struct {
 	Kind  string `json:"kind"`
 	Alert Alert  `json:"alert"`
+	// Cause names the probable root cause when this alert is a symptom of
+	// another firing alert (see correlate).
+	Cause string `json:"cause,omitempty"`
 }
 
 // Forecast is the storage outlook of one capacity asset.

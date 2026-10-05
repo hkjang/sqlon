@@ -171,6 +171,9 @@ func FormatText(notes []Notification, names map[string]string, consoleURL string
 				fmt.Fprintf(&b, "\n> %s", line)
 			}
 		}
+		if n.Cause != "" {
+			fmt.Fprintf(&b, "\n> 🔗 %s", n.Cause)
+		}
 		if a.Recommendation != "" && n.Kind != KindReminder {
 			fmt.Fprintf(&b, "\n> 조치: %s", a.Recommendation)
 		}

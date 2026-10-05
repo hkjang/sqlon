@@ -235,6 +235,48 @@ var openAPISpec = `{
         "responses": { "200": {"description":"{acknowledged,alert}"}, "404": {"description":"없거나 권한 없음"}, "409": {"description":"이미 해소됨"} }
       }
     },
+    "/api/early-warning/alerts/{id}": {
+      "get": {
+        "tags": ["early-warning"], "summary": "경보 상세",
+        "description": "원인 사슬(함께 발생 중인 경보 묶음), 과거 발생 이력, 저장공간 예측·최근 시계열, 무음·흔들림 여부, 자동 수정 가능 여부, 다음에 쓸 도구(next_actions).",
+        "parameters": [{"name":"id","in":"path","required":true,"schema":{"type":"string"}}],
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{detail,fix_available,next_actions}"}, "404": {"description":"없거나 권한 없음"} }
+      }
+    },
+    "/api/early-warning/alerts/{id}/fix": {
+      "post": {
+        "tags": ["early-warning"], "summary": "수정 변경계획 초안 (DBA)",
+        "description": "경보를 고치는 승인 대기(draft) 변경계획을 만듭니다(슬롯 제거·세션 종료·VACUUM·max_slot_wal_keep_size·autovacuum·pg_monitor). 실행은 변경 관리 승인 게이트를 거칩니다. 자동 수정이 없으면 안내만 반환합니다.",
+        "parameters": [{"name":"id","in":"path","required":true,"schema":{"type":"string"}}],
+        "requestBody": {"content":{"application/json":{"schema":{"type":"object","properties":{"value_mb":{"type":"integer"}}}}}},
+        "security": [{"SessionCookie":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{alert_id,proposal:{available,kind,plan,guidance,next_tools}}"}, "404": {"description":"없거나 권한 없음"}, "409": {"description":"이미 해소됨"} }
+      }
+    },
+    "/api/early-warning/capacity-plan": {
+      "get": {
+        "tags": ["early-warning"], "summary": "용량 계획",
+        "description": "현재 추세로 days 일(기본 90)을 버티려면 필요한 볼륨 크기·부족분·경고 임계 도달일·가득 차는 날짜와 추세 1·2·3배 시나리오.",
+        "parameters": [{"name":"profile","in":"query","required":true,"schema":{"type":"string"}},{"name":"days","in":"query","required":false,"schema":{"type":"number"}}],
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{plan}"} }
+      }
+    },
+    "/api/early-warning/settings": {
+      "get": {
+        "tags": ["early-warning"], "summary": "런타임 설정 조회 (admin)",
+        "security": [{"SessionCookie":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"유효 값·출처(default|runtime)·마지막 변경자"} }
+      },
+      "put": {
+        "tags": ["early-warning"], "summary": "런타임 설정 변경·초기화 (admin)",
+        "description": "settings 의 지정 항목만 바꾸고 reset 의 항목(all = 전체)을 기본값으로 되돌립니다. 재시작 없이 적용되며 settings.json 에 저장됩니다.",
+        "requestBody": {"content":{"application/json":{"schema":{"type":"object","properties":{"settings":{"type":"object","properties":{"webhook_ref":{"type":"string"},"console_url":{"type":"string"},"min_notify_severity":{"type":"string"},"renotify_interval":{"type":"string"},"digest_at":{"type":"string"},"maintenance_interval":{"type":"string"},"schema_interval":{"type":"string"},"host_disk_stale_after":{"type":"string"}}},"reset":{"type":"array","items":{"type":"string"}}}}}}},
+        "security": [{"SessionCookie":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"변경 후 설정"}, "400": {"description":"잘못된 값"} }
+      }
+    },
     "/api/early-warning/disk": {
       "post": {
         "tags": ["early-warning"], "summary": "DB 서버 디스크(df) 보고",

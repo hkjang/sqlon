@@ -160,8 +160,13 @@ type Engine struct {
 	Notifier    Notifier
 	// Route returns a database's own channel (nil = the default Notifier).
 	Route func(dbconn.Profile) (Notifier, error)
-	Now   func() time.Time
-	Logf  func(string, ...any)
+	// Factory and Resolve let runtime settings rebuild the default channel;
+	// ConsoleURL is linked from messages.
+	Factory    NotifierFactory
+	Resolve    WebhookResolver
+	ConsoleURL string
+	Now        func() time.Time
+	Logf       func(string, ...any)
 
 	evalMu    sync.Mutex
 	mu        sync.Mutex
@@ -172,6 +177,8 @@ type Engine struct {
 	bridged   map[string][]collector.Alert
 	baseMu    sync.Mutex
 	baselines map[string]*metasync.RawSnapshot
+	base      *settingsBase
+	stored    *storedSettings
 }
 
 // New loads persisted state from cfg.Dir. A corrupt state file is moved
@@ -198,7 +205,18 @@ func New(cfg Config) *Engine {
 	return e
 }
 
-func (e *Engine) Config() Config { return e.cfg }
+func (e *Engine) Config() Config {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.cfg
+}
+
+// DefaultNotifier returns the server-wide channel (nil = none).
+func (e *Engine) DefaultNotifier() Notifier {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.Notifier
+}
 
 func (e *Engine) now() time.Time {
 	if e.Now == nil {
@@ -432,7 +450,18 @@ func (e *Engine) Evaluate(ctx context.Context, batch collector.BatchResult, opts
 		}
 		return floor, silencedUntil(silences, a, now) != nil
 	}
-	routes := e.routeLocked(e.st.pending(now, policy, e.cfg.RenotifyInterval), byID, now)
+	notes := e.st.pending(now, policy, e.cfg.RenotifyInterval)
+	var firing []Alert
+	for _, a := range e.st.Alerts {
+		if a.State == StateFiring {
+			firing = append(firing, *a)
+		}
+	}
+	causes := causeOf(correlate(firing))
+	for i := range notes {
+		notes[i].Cause = causes[notes[i].Alert.ID]
+	}
+	routes := e.routeLocked(notes, byID, now)
 	names := map[string]string{}
 	for _, p := range byID {
 		names[p.ID] = p.Name
@@ -769,6 +798,8 @@ type Board struct {
 	Channels []DeliveryStatus `json:"channels"`
 	Silences []Silence        `json:"silences"`
 	Digest   DigestStatus     `json:"digest"`
+	// Incidents group firing alerts linked by cause and effect.
+	Incidents []Incident `json:"incidents"`
 }
 
 type DigestStatus struct {
@@ -849,6 +880,7 @@ func (e *Engine) boardLocked(profiles []dbconn.Profile) Board {
 		index[pb.ProfileID] = i
 	}
 	silences := e.activeSilencesLocked(now)
+	flaps := e.st.flapCounts(now)
 	for _, s := range silences {
 		if s.ProfileID == "" || allowed[s.ProfileID] {
 			board.Silences = append(board.Silences, s)
@@ -873,6 +905,7 @@ func (e *Engine) boardLocked(profiles []dbconn.Profile) Board {
 		if a.State == StateFiring {
 			view := *a
 			view.SilencedUntil = silencedUntil(silences, a, now)
+			view.Flapping = flaps[a.Key] >= flapThreshold
 			board.Firing = append(board.Firing, view)
 			switch a.Severity {
 			case SevCritical:
@@ -914,6 +947,10 @@ func (e *Engine) boardLocked(profiles []dbconn.Profile) Board {
 		}
 		return board.Profiles[i].ProfileID < board.Profiles[j].ProfileID
 	})
+	board.Incidents = correlate(board.Firing)
+	if board.Incidents == nil {
+		board.Incidents = []Incident{}
+	}
 	board.Headline = headline(board)
 	return board
 }
@@ -930,6 +967,9 @@ func headline(b Board) string {
 		return msg
 	}
 	msg := fmt.Sprintf("긴급 %d · 경고 %d건이 발생 중입니다.", b.Summary.Critical, b.Summary.Warning)
+	if len(b.Incidents) > 0 {
+		return msg + " " + b.Incidents[0].ProfileID + " — " + b.Incidents[0].Summary
+	}
 	for _, a := range b.Firing {
 		if a.Rule == RuleCapacityForecast || a.Rule == RuleCapacityUsage {
 			msg += " 가장 급한 저장공간 경보: " + a.ProfileID + " — " + a.Title
