@@ -28,3 +28,6 @@ output/
 
 # 데모 서버를 띄우는 로컬 도우미 (경로가 이 기계에 묶여 있다)
 /scripts/start_demo_servers.sh
+
+# 조기경보 운영 상태(state.json, settings.json, 버튼 서명 키 action.key) — 실행 중 생기는 비밀 포함 데이터
+data/*/operations/

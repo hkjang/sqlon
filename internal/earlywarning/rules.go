@@ -102,6 +102,9 @@ func buildForecasts(p dbconn.Profile, snap collector.Snapshot, ps *profileSeries
 		}
 		key := assetKey(c.Scope, c.Name)
 		f := Forecast{Asset: key, Scope: c.Scope, Name: c.Name, Primary: isPrimary, UsedBytes: c.UsedBytes, Status: "ok"}
+		if isPrimary || c.Scope == collector.ScopeVolume {
+			f.Attribution = attribute(ps, c.Scope, c.Name, now)
+		}
 		var s *Series
 		if ps != nil {
 			s = ps.Assets[key]
@@ -215,6 +218,9 @@ func capacityConditions(p dbconn.Profile, snap collector.Snapshot, forecasts []F
 		if f.Primary && breakdown != "" {
 			detailTail = " · 구성: " + breakdown
 		}
+		if t := f.Attribution.text(); t != "" {
+			detailTail += "\n" + t
+		}
 		source := "엔진 보고 한도"
 		switch f.LimitSource {
 		case "declared":
@@ -289,7 +295,7 @@ func capacityConditions(p dbconn.Profile, snap collector.Snapshot, forecasts []F
 			out = append(out, Condition{
 				Key: RuleGrowthSurge + ":" + f.Asset, Check: CheckCapacity, Rule: RuleGrowthSurge, Severity: SevWarning, Object: f.Asset,
 				Title:          fmt.Sprintf("저장공간 증가 속도 급증: %s/일", humanBytes(short.BytesPerDay)),
-				Detail:         fmt.Sprintf("최근 6시간 증가 속도가 7일 추세(%s/일)의 %.1f배입니다%s", humanBytes(long.BytesPerDay), short.BytesPerDay/math.Max(long.BytesPerDay, 1), prefixed(" · 구성: ", breakdown)),
+				Detail:         fmt.Sprintf("최근 6시간 증가 속도가 7일 추세(%s/일)의 %.1f배입니다%s%s", humanBytes(long.BytesPerDay), short.BytesPerDay/math.Max(long.BytesPerDay, 1), prefixed(" · 구성: ", breakdown), prefixed("\n", f.Attribution.text())),
 				Recommendation: "어떤 구성요소가 늘고 있는지 확인하세요. WAL이면 슬롯·아카이브, 데이터면 급증 테이블 경보를, 임시파일이면 대형 정렬·해시 쿼리를 보세요.",
 				Value:          short.BytesPerDay, Threshold: surgeFactor * math.Max(long.BytesPerDay, 0),
 			})

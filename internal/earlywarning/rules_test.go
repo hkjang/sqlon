@@ -261,7 +261,7 @@ func TestSchemaChangeUnplannedVsPlanned(t *testing.T) {
 	// A plan touched customers, nobody planned the orders change.
 	plans := []change.Plan{{ID: "cp-1", ProfileID: "prod-pg", Target: "public.customers", State: change.Completed, UpdatedAt: t0.Add(5 * time.Minute),
 		Steps: []change.Step{{Command: "ALTER TABLE public.customers ADD COLUMN grade text"}}}}
-	conds := schemaConditions(p, base, cur, plans, map[string]float64{"public.orders": 3 * gib})
+	conds := schemaConditions(p, base, cur, plans, map[string]float64{"public.orders": 3 * gib}, nil)
 	if len(conds) != 1 {
 		t.Fatalf("one event per detected change set, got %+v", conds)
 	}
@@ -284,11 +284,11 @@ func TestSchemaChangeSeverityOutsideProduction(t *testing.T) {
 	p := dbconn.ApplyDefaults(dbconn.Profile{ID: "dev", Type: "postgres", Environment: "development"})
 	base := schemaSnap("a", t0, metasync.TableAsset{Schema: "public", Name: "t", Kind: "table", Columns: []metasync.ColumnAsset{col("id", "int")}})
 	cur := schemaSnap("b", t0.Add(time.Hour))
-	conds := schemaConditions(p, base, cur, nil, nil)
+	conds := schemaConditions(p, base, cur, nil, nil, nil)
 	if len(conds) != 1 || conds[0].Severity != SevWarning {
 		t.Fatalf("a dropped table outside production is capped at warning: %+v", conds)
 	}
-	if got := schemaConditions(p, base, base, nil, nil); len(got) != 0 {
+	if got := schemaConditions(p, base, base, nil, nil, nil); len(got) != 0 {
 		t.Fatalf("an identical schema yields nothing: %+v", got)
 	}
 }

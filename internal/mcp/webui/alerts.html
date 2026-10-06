@@ -125,6 +125,11 @@ details{padding:0}details summary{cursor:pointer;padding:13px 15px;font-weight:7
         <div><label>예방 점검 주기 <span class="src" data-src="maintenance_interval"></span></label><input id="stMaint" placeholder="5m"></div>
         <div><label>스키마 감시 주기 <span class="src" data-src="schema_interval"></span></label><input id="stSchema" placeholder="15m 또는 off"></div>
         <div><label>디스크 보고 중단 판정 <span class="src" data-src="host_disk_stale_after"></span></label><input id="stStale" placeholder="15m"></div>
+        <div><label>당직 호출 채널 (웹훅 참조) <span class="src" data-src="escalation_ref"></span></label><input id="stEscalation" placeholder="env:DBA_ONCALL_WEBHOOK"></div>
+        <div><label>당직 호출까지 (긴급 미확인) <span class="src" data-src="escalate_after"></span></label><input id="stEscAfter" placeholder="30m · 0=즉시 · off"></div>
+        <div><label>SQLON 생존 신호 URL <span class="src" data-src="heartbeat_ref"></span></label><input id="stHeartbeat" placeholder="env:SQLON_HEARTBEAT_URL (healthchecks.io 등)"></div>
+        <div><label>채팅 버튼 <span class="src" data-src="chat_actions"></span></label><select id="stChat"><option value="off">끔</option><option value="mattermost">Mattermost (확인·무음·수정안)</option></select></div>
+        <div style="grid-column:span 2"><label>버튼 콜백 주소 — 채팅 서버가 닿는 SQLON 주소 <span class="src" data-src="action_url"></span></label><input id="stActionURL" placeholder="비우면 콘솔 링크의 origin"></div>
         <div style="grid-column:1/-1;display:flex;gap:8px;align-items:center"><button class="primary" type="submit">저장</button><button type="button" id="stReset">모두 기본값으로</button><span class="muted" id="stMeta"></span></div>
       </form>
     </details>
@@ -180,6 +185,8 @@ function renderForecasts(profiles){
     else if(f.days_to_full!=null){full='<b>'+days(f.days_to_full)+' 후</b><div class="muted">'+when(f.full_at)+' · '+esc(f.basis)+' 추세 · '+esc(assetName(f))+'</div>'}
     else if(f.limit_bytes){full='<span class="muted">증가 추세 없음</span>'}
     if(f.note)full+='<div class="muted">'+esc(f.note)+'</div>';
+    const att=(fs.find(x=>x.attribution&&x.scope===f.scope&&x.name===f.name)||fs.find(x=>x.attribution)||{}).attribution;
+    if(att)full+='<div class="muted">증가 원인('+(att.window_hours>=48?(att.window_hours/24).toFixed(1)+'일':Math.round(att.window_hours)+'시간')+' +'+bytes(att.growth_bytes)+'): '+(att.contributors||[]).slice(0,3).map(c=>esc(c.name)+' '+Math.round(c.share*100)+'%').join(', ')+'</div>';
     return '<tr><td>'+profLabel(p)+(p.consecutive_failures>0?'<div><span class="badge sev-critical">최근 수집 실패 '+p.consecutive_failures+'회</span></div>':'')+'</td><td>'+sev(p.status)+(p.firing?'<div class="muted">경보 '+p.firing+'건</div>':'')+'</td><td>'+fs.slice(0,4).map(assetCell).join('')+'</td><td>'+fit(f.growth_short)+'</td><td>'+fit(f.growth_long)+'</td><td>'+full+'</td><td>'+checks+'</td></tr>';
   }).join('');
 }
@@ -189,7 +196,7 @@ function renderFiring(list){
   $('#firingRows').innerHTML=list.length?list.map(a=>{
     const notified=a.last_notified_at?when(a.last_notified_at)+' <span class="muted">('+a.notify_count+'회)</span>':(a.silenced_until?'<span class="muted">무음으로 보류</span>':a.severity==='info'?'<span class="muted">알림 대상 아님</span>':'<span class="muted">전송 대기</span>');
     const acked=a.acked_at?'<div class="muted">확인: '+esc(a.acked_by)+' '+when(a.acked_at)+(a.ack_note?' — '+esc(a.ack_note):'')+'</div>':'';
-    return '<tr><td>'+sev(a.severity)+(a.event?'<div class="muted">이벤트</div>':'')+(a.silenced_until?'<div><span class="badge silenced">무음 ~'+when(a.silenced_until)+'</span></div>':'')+(a.flapping?'<div><span class="badge flap">흔들림 — 알림 보류</span></div>':'')+'</td><td class="nowrap">'+esc(NAMES[a.profile_id]||a.profile_id)+'<div class="muted mono">'+esc(a.rule)+'</div></td><td><b>'+esc(a.title)+'</b>'+(a.detail?'<div class="detail">'+esc(a.detail)+'</div>':'')+(a.recommendation?'<div class="rec">조치: '+esc(a.recommendation)+'</div>':'')+acked+'</td><td class="nowrap">'+when(a.first_seen)+'<div class="muted">'+when(a.last_seen)+'</div></td><td class="nowrap">'+notified+'</td><td><button class="ack" data-detail="'+esc(a.id)+'">상세</button>'+(a.acked_at?'':' <button class="ack" data-id="'+esc(a.id)+'">확인</button>')+'</td></tr>';
+    return '<tr><td>'+sev(a.severity)+(a.event?'<div class="muted">이벤트</div>':'')+(a.silenced_until?'<div><span class="badge silenced">무음 ~'+when(a.silenced_until)+'</span></div>':'')+(a.flapping?'<div><span class="badge flap">흔들림 — 알림 보류</span></div>':'')+(a.paged_at?'<div><span class="badge sev-critical">📟 당직 호출 '+when(a.paged_at)+'</span></div>':'')+'</td><td class="nowrap">'+esc(NAMES[a.profile_id]||a.profile_id)+'<div class="muted mono">'+esc(a.rule)+'</div></td><td><b>'+esc(a.title)+'</b>'+(a.detail?'<div class="detail">'+esc(a.detail)+'</div>':'')+(a.recommendation?'<div class="rec">조치: '+esc(a.recommendation)+'</div>':'')+acked+'</td><td class="nowrap">'+when(a.first_seen)+'<div class="muted">'+when(a.last_seen)+'</div></td><td class="nowrap">'+notified+'</td><td><button class="ack" data-detail="'+esc(a.id)+'">상세</button>'+(a.acked_at?'':' <button class="ack" data-id="'+esc(a.id)+'">확인</button>')+'</td></tr>';
   }).join(''):'<tr><td colspan="6" class="empty">발생 중인 경보가 없습니다.</td></tr>';
   document.querySelectorAll('button[data-id]').forEach(b=>b.onclick=()=>ack(b.dataset.id));
   document.querySelectorAll('button[data-detail]').forEach(b=>b.onclick=()=>showDetail(b.dataset.detail));
@@ -210,11 +217,15 @@ function channelLine(label,d){
   if(d.consecutive_failures>0||d.last_error)s+=' · <b style="color:var(--bad)">'+(d.consecutive_failures?'연속 실패 '+d.consecutive_failures+'회: ':'')+esc(d.last_error)+'</b>'+(d.next_retry_at?' (재시도 '+when(d.next_retry_at)+')':'');
   return '<div>'+s+'</div>';
 }
-function renderDelivery(d,channels,digest){
+function renderDelivery(d,channels,digest,esc_,hb){
   let html='';
   if(!d||!d.configured)html+='<div><b>기본 알림 채널 없음</b> — 경보는 이 화면(과 DB별 채널)에만 표시됩니다. <span class="mono">SQLON_ALERT_WEBHOOK</span>(Mattermost/Slack incoming webhook)을 설정하세요.</div>';
   else html+=channelLine('기본 채널',d);
   (channels||[]).forEach(c=>{html+=channelLine('DB별 채널',c)});
+  if(esc_&&esc_.configured)html+=channelLine('📟 당직 호출',esc_);
+  else html+='<div class="muted">당직 호출 채널 없음 — 확인되지 않은 긴급 경보가 팀 채널에만 남습니다 (설정 › 당직 호출 채널).</div>';
+  if(hb&&hb.configured){let h='💓 SQLON 생존 신호 <span class="mono">'+esc(hb.target)+'</span> · 핑 '+(hb.pings||0)+'회';if(hb.last_ping_at)h+=' · 마지막 '+when(hb.last_ping_at);if(hb.last_skipped)h+=' · <b style="color:var(--warn)">보류: '+esc(hb.last_skipped)+'</b>';if(hb.last_error)h+=' · <b style="color:var(--bad)">실패: '+esc(hb.last_error)+'</b>';html+='<div>'+h+'</div>'}
+  else html+='<div class="muted">SQLON 생존 신호 없음 — SQLON 자신이 멈추면 아무도 모릅니다 (설정 › 생존 신호 URL).</div>';
   if(digest){html+='<div class="muted">일일 용량 리포트: '+(digest.at?esc(digest.at)+' (기본 채널)':'꺼짐')+(digest.last_sent?' · 마지막 발송 '+esc(digest.last_sent):'')+(digest.last_error?' · <b style="color:var(--bad)">실패: '+esc(digest.last_error)+'</b>':'')+'</div>'}
   $('#delivery').innerHTML=html;
 }
@@ -226,7 +237,7 @@ function renderSilences(list,profiles){
 }
 
 let LOADED={};
-const ST_FIELDS={webhook_ref:'#stWebhook',console_url:'#stConsole',min_notify_severity:'#stMin',renotify_interval:'#stRenotify',digest_at:'#stDigest',maintenance_interval:'#stMaint',schema_interval:'#stSchema',host_disk_stale_after:'#stStale'};
+const ST_FIELDS={webhook_ref:'#stWebhook',console_url:'#stConsole',min_notify_severity:'#stMin',renotify_interval:'#stRenotify',digest_at:'#stDigest',maintenance_interval:'#stMaint',schema_interval:'#stSchema',host_disk_stale_after:'#stStale',escalation_ref:'#stEscalation',escalate_after:'#stEscAfter',heartbeat_ref:'#stHeartbeat',chat_actions:'#stChat',action_url:'#stActionURL'};
 function renderIncidents(list){
   $('#incidentPanel').style.display=list.length?'':'none';
   $('#incidentRows').innerHTML=list.map(i=>'<div class="incident">'+sev(i.severity)+' <b>'+esc(NAMES[i.profile_id]||i.profile_id)+'</b> — '+esc(i.summary)+'<div class="muted">원인 경보: '+esc((i.roots||[]).join(', '))+' · 묶인 경보 '+i.alert_ids.length+'건 '+(i.root_ids||[]).map(id=>'<button class="ack" data-detail="'+esc(id)+'">원인 상세</button>').join(' ')+'</div></div>').join('');
@@ -262,6 +273,8 @@ async function loadSettings(){
   try{const v=await call('GET','/api/early-warning/settings');
     $('#stWebhook').value=v.webhook_ref||'';$('#stWebhook').placeholder=v.webhook?('현재: '+v.webhook+' (기본값)'):'env:SQLON_ALERT_WEBHOOK 또는 plain:https://…';
     $('#stConsole').value=v.console_url||'';$('#stMin').value=v.min_notify_severity;$('#stRenotify').value=v.renotify_interval;$('#stDigest').value=v.digest_at;$('#stMaint').value=v.maintenance_interval;$('#stSchema').value=v.schema_interval;$('#stStale').value=v.host_disk_stale_after;
+    $('#stEscalation').value=v.escalation_ref||'';$('#stEscalation').placeholder=v.escalation?('현재: '+v.escalation+' (기본값)'):'env:DBA_ONCALL_WEBHOOK';$('#stEscAfter').value=v.escalate_after||'';
+    $('#stHeartbeat').value=v.heartbeat_ref||'';$('#stHeartbeat').placeholder=v.heartbeat?('현재: '+v.heartbeat+' (기본값)'):'env:SQLON_HEARTBEAT_URL (healthchecks.io 등)';$('#stChat').value=v.chat_actions||'off';$('#stActionURL').value=v.action_url||'';
     document.querySelectorAll('[data-src]').forEach(e=>{const src=(v.source||{})[e.dataset.src];e.textContent=src==='runtime'?'런타임':'기본';e.className='src '+(src||'')});
     LOADED={};Object.entries(ST_FIELDS).forEach(([k,sel])=>LOADED[k]=$(sel).value);
     $('#stMeta').textContent=v.updated_at?'마지막 변경 '+when(v.updated_at)+' · '+(v.updated_by||''):'';
@@ -289,7 +302,7 @@ async function load(){
     $('#kProfiles').textContent=s.profiles??0;$('#kNoLimit').textContent=s.without_limit??0;$('#kDown').textContent=s.observation_failed??0;
     $('#kCycle').textContent=b.last_cycle_at?'마지막 평가 '+when(b.last_cycle_at):'평가 전';
     $('#headline').textContent=b.headline;$('#headline').className='headline '+(s.critical?'critical':s.warning?'warning':'');
-    renderForecasts(b.profiles||[]);renderFiring(b.firing||[]);renderSchema(b.schema_events||[]);renderRecent(b.recent||[]);renderDelivery(b.delivery,b.channels,b.digest);renderSilences(b.silences||[],b.profiles||[]);renderIncidents(b.incidents||[]);
+    renderForecasts(b.profiles||[]);renderFiring(b.firing||[]);renderSchema(b.schema_events||[]);renderRecent(b.recent||[]);renderDelivery(b.delivery,b.channels,b.digest,b.escalation,b.heartbeat);renderSilences(b.silences||[],b.profiles||[]);renderIncidents(b.incidents||[]);
     document.querySelectorAll('button[data-plan]').forEach(x=>x.onclick=()=>showPlan(x.dataset.plan));
     $('#fresh').textContent='최신 조회 '+new Date().toLocaleTimeString('ko-KR');
   }catch(e){note('예방 경보 조회 실패: '+e.message,'error');$('#fresh').textContent='조회 실패'}

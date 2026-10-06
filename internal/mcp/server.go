@@ -3280,3 +3280,39 @@ func ServeServer(addr string, srv *Server) error {
 	log.Printf("sqlon NL2SQL MCP listening on http://%s%s", addr, srv.Options.Endpoint)
 	return httpServer.ListenAndServe()
 }
+
+// ServeServerContext is ServeServer that stops when ctx ends: in-flight
+// requests get a few seconds, then local state is flushed to disk.
+func ServeServerContext(ctx context.Context, addr string, srv *Server) error {
+	mux := http.NewServeMux()
+	srv.Register(mux)
+	httpServer := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	log.Printf("sqlon NL2SQL MCP listening on http://%s%s", addr, srv.Options.Endpoint)
+	errc := make(chan error, 1)
+	go func() { errc <- httpServer.ListenAndServe() }()
+	select {
+	case err := <-errc:
+		return err
+	case <-ctx.Done():
+	}
+	log.Printf("sqlon: shutting down")
+	sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = httpServer.Shutdown(sctx)
+	srv.Flush()
+	return nil
+}
+
+// Flush writes in-memory operational state (early-warning series and
+// alert bookkeeping) to disk.
+func (s *Server) Flush() {
+	if s.EarlyWarning != nil {
+		if err := s.EarlyWarning.Flush(); err != nil {
+			log.Printf("early-warning: flush on shutdown: %v", err)
+		}
+	}
+}

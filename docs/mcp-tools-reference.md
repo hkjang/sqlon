@@ -419,11 +419,11 @@ pending 큐를 조회하고, id와 `decision=approve|reject`를 전달하면 승
 
 ### configure_early_warning · configure_profile_alerting · run_early_warning_check · test_alert_channel (관리자)
 
-서버 알림 설정(채널·임계·주기)을 재시작 없이 get|set|reset, DB별 용량 한도·채널·최소 위험도 변경, 즉시 평가(새로 생긴/해소된 경보), 채널 테스트.
+서버 알림 설정(채널·임계·주기, 당직 호출 `escalation_ref`·`escalate_after`, 생존 신호 `heartbeat_ref`, Mattermost 버튼 `chat_actions`·`action_url`)을 재시작 없이 get|set|reset, DB별 용량 한도·채널·당직 채널(`alerting.escalation_ref`)·최소 위험도 변경, 즉시 평가(새로 생긴/해소된 경보), 채널 테스트(`channel=escalation` 은 당직 채널).
 
 ### propose_early_warning_fix (DBA)
 
-경보를 고치는 초안 변경계획(슬롯 제거·세션 종료·VACUUM·max_slot_wal_keep_size·autovacuum·pg_monitor)을 만들며 실행은 승인 게이트를 거칩니다. 워크플로는 MCP 프롬프트 `early_warning_triage`.
+경보를 고치는 초안 변경계획(슬롯 제거·세션 종료·VACUUM·max_slot_wal_keep_size·autovacuum·pg_monitor)을 만들며 실행은 승인 게이트를 거칩니다. 같은 경보에 진행 중인 계획이 있으면 새로 만들지 않고 그 계획을 돌려줍니다(`existing: true`). 워크플로는 MCP 프롬프트 `early_warning_triage`.
 
 
 ### get_catalog_health

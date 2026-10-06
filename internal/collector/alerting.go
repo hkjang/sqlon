@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"sync"
 	"time"
@@ -248,6 +250,10 @@ func sendWebhookAlerts(url string, alerts []Alert) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		var ue *neturl.Error
+		if errors.As(err, &ue) {
+			err = ue.Err // the URL path is the webhook's secret
+		}
 		log.Printf("alerting engine: failed to send webhook alert: %v", err)
 		return
 	}

@@ -59,6 +59,13 @@ func (b *book) reconcile(profileID string, ran map[string]bool, conds []Conditio
 		a.Title, a.Detail, a.Recommendation = c.Title, c.Detail, c.Recommendation
 		a.Value, a.Threshold, a.Attributes = c.Value, c.Threshold, c.Attributes
 		a.Event, a.QuietResolve, a.LastSeen = c.Event, c.QuietResolve, now
+		switch {
+		case c.Severity == SevCritical && a.CriticalSince == nil:
+			at := now
+			a.CriticalSince = &at
+		case c.Severity != SevCritical:
+			a.CriticalSince = nil
+		}
 		if Rank(c.Severity) > Rank(a.PeakSeverity) {
 			a.PeakSeverity = c.Severity
 		}

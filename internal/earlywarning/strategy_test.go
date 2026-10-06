@@ -53,7 +53,7 @@ func TestRuntimeSettingsOverrideDefaultsAndPersist(t *testing.T) {
 		t.Fatalf("the engine must run with the new values: %+v", cfg)
 	}
 	// echoing the masked value back keeps the stored webhook
-	if v, err = eng.UpdateSettings(Settings{WebhookRef: "plain:****", RenotifyInterval: "2h"}, nil, "kim"); err != nil || v.Webhook != "https://mm.example/…" || v.RenotifyInterval != "2h0m0s" {
+	if v, err = eng.UpdateSettings(Settings{WebhookRef: "plain:****", RenotifyInterval: "2h"}, nil, "kim"); err != nil || v.Webhook != "https://mm.example/…" || v.RenotifyInterval != "2h" {
 		t.Fatalf("masked echo: %+v %v", v, err)
 	}
 

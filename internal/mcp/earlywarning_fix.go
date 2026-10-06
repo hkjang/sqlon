@@ -31,6 +31,23 @@ type fixProposal struct {
 	NextTools []string     `json:"next_tools,omitempty"`
 }
 
+// saveFixDraft stores a proposed fix as a draft, unless a plan for the same
+// alert is still open — a second click or call returns that one, so
+// approvers never see two competing fixes for one problem.
+func (s *Server) saveFixDraft(alertID string, plan change.Plan) (change.Plan, bool, error) {
+	for _, existing := range s.Changes.List() {
+		switch existing.State {
+		case change.Completed, change.Failed, change.RolledBack, change.Cancelled:
+			continue
+		}
+		if pre, ok := existing.PreState.(map[string]any); ok && pre["alert_id"] == alertID {
+			return existing, true, nil
+		}
+	}
+	created, err := s.Changes.Create(plan, plan.ID)
+	return created, false, err
+}
+
 // assertSQL fails with message unless cond (a boolean SQL expression) holds.
 func assertSQL(cond, message string) string {
 	return "SELECT CAST(CASE WHEN " + cond + " THEN '1' ELSE " + quoteLiteral("verification failed: "+message) + " END AS integer)"

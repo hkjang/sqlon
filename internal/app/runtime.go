@@ -52,6 +52,9 @@ type config struct {
 	earlyWarning                                       bool
 	alertWebhook, alertConsoleURL, alertMinSeverity    string
 	alertTZ, alertDigestAt                             string
+	alertHeartbeat, alertEscalation, alertEscalateRaw  string
+	alertChatActions, alertActionURL                   string
+	alertEscalateAfter                                 time.Duration
 	alertRenotify, schemaWatch, maintenanceEvery       time.Duration
 }
 
@@ -129,7 +132,9 @@ func (rt Runtime) Run(ctx context.Context, args []string) error {
 		schemaEvery = -1 // 0 on the command line means "off"
 	}
 	srv := mcp.NewServer(cat, mcp.Options{Endpoint: cfg.endpoint, AllowedOrigins: splitCSV(cfg.allowOrigins), Stateful: !cfg.stateless, SSEPost: cfg.ssePost, AdminToken: cfg.adminToken, FeedbackTenantID: cfg.feedbackTenant, OpenMetadataURL: cfg.omURL, OpenMetadataToken: cfg.omToken, AlertWebhookURL: cfg.digestWebhook,
-		EarlyWarning: mcp.EarlyWarningOptions{Disabled: !cfg.earlyWarning, WebhookURL: cfg.alertWebhook, ConsoleURL: cfg.alertConsoleURL, MinSeverity: cfg.alertMinSeverity, Renotify: cfg.alertRenotify, MaintenanceEvery: cfg.maintenanceEvery, SchemaEvery: schemaEvery, TimeZone: cfg.alertTZ, DigestAt: cfg.alertDigestAt}})
+		EarlyWarning: mcp.EarlyWarningOptions{Disabled: !cfg.earlyWarning, WebhookURL: cfg.alertWebhook, ConsoleURL: cfg.alertConsoleURL, MinSeverity: cfg.alertMinSeverity, Renotify: cfg.alertRenotify, MaintenanceEvery: cfg.maintenanceEvery, SchemaEvery: schemaEvery, TimeZone: cfg.alertTZ, DigestAt: cfg.alertDigestAt,
+			HeartbeatURL: cfg.alertHeartbeat, EscalationURL: cfg.alertEscalation, EscalateAfter: cfg.alertEscalateAfter,
+			ChatActions: cfg.alertChatActions, ActionURL: cfg.alertActionURL}})
 	if srv.EarlyWarning != nil {
 		target := "none (console only; set SQLON_ALERT_WEBHOOK)"
 		if srv.EarlyWarning.Notifier != nil {
@@ -139,7 +144,8 @@ func (rt Runtime) Run(ctx context.Context, args []string) error {
 		if digest == "" {
 			digest = "off"
 		}
-		logger.Printf("SQLON early warning: on (notify=%s, min=%s, maintenance every %s, schema watch %s, daily report %s)", target, srv.EarlyWarning.Config().MinNotifySeverity, srv.EarlyWarning.Config().MaintenanceEvery, describeSchemaWatch(schemaEvery), digest)
+		view := srv.EarlyWarning.Settings()
+		logger.Printf("SQLON early warning: on (notify=%s, min=%s, maintenance every %s, schema watch %s, daily report %s, escalation=%s after %s, heartbeat=%s, chat actions=%s)", target, srv.EarlyWarning.Config().MinNotifySeverity, srv.EarlyWarning.Config().MaintenanceEvery, describeSchemaWatch(schemaEvery), digest, orNone(view.Escalation), view.EscalateAfter, orNone(view.Heartbeat), view.ChatActions)
 		if cfg.observeInterval <= 0 {
 			logger.Printf("WARNING: early warning needs the observation collector; -observe-interval is 0 so no cycle will run")
 		}
@@ -164,7 +170,7 @@ func (rt Runtime) Run(ctx context.Context, args []string) error {
 	}
 	srv.StartObservationCollector(ctx, cfg.observeInterval, cfg.observeRetentionDays)
 	logger.Printf("SQLON AI Database Operations Platform listening on http://%s", cfg.addr)
-	return mcp.ServeServer(cfg.addr, srv)
+	return mcp.ServeServerContext(ctx, cfg.addr, srv)
 }
 
 func (rt Runtime) parse(args []string) (config, error) {
@@ -249,6 +255,11 @@ func (rt Runtime) parse(args []string) (config, error) {
 	fs.StringVar(&c.alertConsoleURL, "alert-console-url", rt.Getenv("SQLON_ALERT_CONSOLE_URL"), "Console URL linked from notifications, e.g. https://sqlon.example/admin/alerts")
 	fs.StringVar(&c.alertMinSeverity, "alert-min-severity", envOr(rt.Getenv("SQLON_ALERT_MIN_SEVERITY"), "warning"), "Lowest severity sent to the webhook: info, warning, critical")
 	fs.StringVar(&c.alertTZ, "alert-timezone", envOr(rt.Getenv("SQLON_ALERT_TZ"), "Asia/Seoul"), "Time zone for times in notifications")
+	fs.StringVar(&c.alertHeartbeat, "alert-heartbeat-url", rt.Getenv("SQLON_HEARTBEAT_URL"), "Dead man's switch: URL pinged after every healthy evaluation cycle (healthchecks.io, Uptime Kuma push)")
+	fs.StringVar(&c.alertEscalation, "alert-escalation-webhook", rt.Getenv("SQLON_ALERT_ESCALATION_WEBHOOK"), "On-call webhook paged for critical alerts left unacknowledged")
+	fs.StringVar(&c.alertEscalateRaw, "alert-escalate-after", envOr(rt.Getenv("SQLON_ALERT_ESCALATE_AFTER"), "30m"), "Page on-call after a critical alert stays unacknowledged this long (0 = at once, off)")
+	fs.StringVar(&c.alertChatActions, "alert-chat-actions", envOr(rt.Getenv("SQLON_ALERT_CHAT_ACTIONS"), "off"), "Buttons on alert messages: mattermost or off")
+	fs.StringVar(&c.alertActionURL, "alert-action-url", rt.Getenv("SQLON_ALERT_ACTION_URL"), "Base URL the chat server calls back for buttons (default: origin of -alert-console-url)")
 	fs.StringVar(&c.alertDigestAt, "alert-digest-at", envOr(rt.Getenv("SQLON_ALERT_DIGEST_AT"), "09:00"), "Local HH:MM of the daily capacity report to the alert webhook (off disables)")
 	fs.DurationVar(&c.alertRenotify, "alert-renotify", *durations["SQLON_ALERT_RENOTIFY"], "Re-send a still-firing, unacknowledged alert after this long (0 = never)")
 	fs.DurationVar(&c.schemaWatch, "schema-watch-interval", *durations["SQLON_SCHEMA_WATCH_INTERVAL"], "Schema-change detection interval (0 disables)")
@@ -264,6 +275,19 @@ func (rt Runtime) parse(args []string) (config, error) {
 	}
 	if c.alertRenotify < 0 || c.maintenanceEvery < 0 || c.schemaWatch < 0 {
 		return c, fmt.Errorf("early-warning intervals must not be negative")
+	}
+	escalateAfter, err := earlywarning.ParseEscalateAfter(c.alertEscalateRaw)
+	if err != nil {
+		return c, err
+	}
+	c.alertEscalateAfter = escalateAfter
+	switch strings.ToLower(strings.TrimSpace(c.alertChatActions)) {
+	case "off", "":
+		c.alertChatActions = "off"
+	case "mattermost":
+		c.alertChatActions = "mattermost"
+	default:
+		return c, fmt.Errorf("invalid -alert-chat-actions %q: use mattermost or off", c.alertChatActions)
 	}
 	digestAt, err := earlywarning.ParseDigestTime(c.alertDigestAt)
 	if err != nil {
@@ -344,4 +368,11 @@ func describeSchemaWatch(every time.Duration) string {
 		return "off"
 	}
 	return "every " + every.String()
+}
+
+func orNone(v string) string {
+	if v == "" {
+		return "none"
+	}
+	return v
 }

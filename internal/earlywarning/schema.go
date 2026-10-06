@@ -92,6 +92,7 @@ type SchemaChange struct {
 	Before   string  `json:"before,omitempty"`
 	After    string  `json:"after,omitempty"`
 	Planned  bool    `json:"planned"`
+	Deploy   bool    `json:"deploy,omitempty"` // applied with a migration tool
 	Severity string  `json:"severity"`
 	Bytes    float64 `json:"bytes,omitempty"` // current table size when known
 }
@@ -99,7 +100,10 @@ type SchemaChange struct {
 // schemaConditions diffs the baseline against the current physical schema
 // and reports the result as one event: the changes, which of them no
 // executed change plan accounts for, and how severe the worst one is.
-func schemaConditions(p dbconn.Profile, base, cur *metasync.RawSnapshot, plans []change.Plan, tableBytes map[string]float64) []Condition {
+// schemaConditions … changes that coincide with migrations a migration
+// tool recorded in the window (migs) count as a deployment: still listed,
+// but informational, because they were made the way the team ships schema.
+func schemaConditions(p dbconn.Profile, base, cur *metasync.RawSnapshot, plans []change.Plan, tableBytes map[string]float64, migs []metasync.Migration) []Condition {
 	if base == nil || cur == nil || base.SchemaHash == cur.SchemaHash {
 		return nil
 	}
@@ -113,8 +117,14 @@ func schemaConditions(p dbconn.Profile, base, cur *metasync.RawSnapshot, plans [
 			continue
 		}
 		isPlanned := planned(texts, c.Table)
-		sev := schemaChangeSeverity(c, isPlanned, production)
-		if !isPlanned {
+		deploy := !isPlanned && len(migs) > 0
+		sev := schemaChangeSeverity(c, isPlanned || deploy, production)
+		if deploy && (c.Kind == metasync.TableRemoved || c.Kind == metasync.ColumnRemoved) {
+			// a migration tool ran it, but data is gone: a bad migration is
+			// exactly what someone should look at
+			sev = SevWarning
+		}
+		if !isPlanned && !deploy {
 			unplanned++
 		}
 		if Rank(sev) > Rank(worst) {
@@ -124,7 +134,7 @@ func schemaConditions(p dbconn.Profile, base, cur *metasync.RawSnapshot, plans [
 		if kind == "" {
 			kind = string(c.Kind)
 		}
-		changes = append(changes, SchemaChange{Kind: kind, Table: c.Table, Column: c.Column, Before: c.Before, After: c.After, Planned: isPlanned, Severity: sev, Bytes: tableBytes[c.Table]})
+		changes = append(changes, SchemaChange{Kind: kind, Table: c.Table, Column: c.Column, Before: c.Before, After: c.After, Planned: isPlanned, Deploy: deploy, Severity: sev, Bytes: tableBytes[c.Table]})
 	}
 	if len(changes) == 0 {
 		return nil
@@ -145,8 +155,11 @@ func schemaConditions(p dbconn.Profile, base, cur *metasync.RawSnapshot, plans [
 			break
 		}
 		tag := "계획 외"
-		if c.Planned {
+		switch {
+		case c.Planned:
 			tag = "변경계획"
+		case c.Deploy:
+			tag = "배포 마이그레이션"
 		}
 		line := fmt.Sprintf("[%s] %s %s", tag, c.Kind, c.Table)
 		if c.Column != "" {
@@ -163,14 +176,36 @@ func schemaConditions(p dbconn.Profile, base, cur *metasync.RawSnapshot, plans [
 	title := fmt.Sprintf("스키마 변경 감지: %d건", len(changes))
 	if unplanned > 0 {
 		title += fmt.Sprintf(" (변경계획 없는 변경 %d건)", unplanned)
+	} else if len(migs) > 0 {
+		title += fmt.Sprintf(" (배포 마이그레이션 %d건)", len(migs))
+	}
+	if len(migs) > 0 {
+		lines = append(lines, "적용된 마이그레이션:")
+		for i, m := range migs {
+			if i == 5 {
+				lines = append(lines, fmt.Sprintf("  … 외 %d건", len(migs)-i))
+				break
+			}
+			when := ""
+			if !m.AppliedAt.IsZero() {
+				when = " " + m.AppliedAt.In(displayLocation()).Format("01-02 15:04")
+			}
+			lines = append(lines, fmt.Sprintf("  %s %s %s%s%s", m.Tool, m.Version, m.Description, prefixed(" by ", m.AppliedBy), when))
+		}
 	}
 	rec := "변경계획에 없는 DDL은 배포 누락·수동 변경·권한 오남용일 수 있습니다. 변경 주체를 확인하고, 삭제·타입 변경이면 의존 쿼리와 애플리케이션 영향을 점검하세요."
+	if unplanned == 0 && len(migs) > 0 {
+		rec = "마이그레이션 도구가 기록한 배포입니다. 의도한 릴리스인지 확인한 뒤 확인(ack)하세요."
+		if Rank(worst) >= Rank(SevWarning) {
+			rec = "마이그레이션 도구가 기록한 배포지만 테이블·컬럼이 삭제됐습니다. 의도한 삭제인지, 백업·데이터 이관이 끝났는지 확인하세요."
+		}
+	}
 	return []Condition{{
 		Key:   RuleSchemaChange + ":" + cur.SchemaHash,
 		Check: CheckSchema, Rule: RuleSchemaChange, Severity: worst, Object: "schema",
 		Title: title, Detail: strings.Join(lines, "\n"), Recommendation: rec,
 		Value: float64(len(changes)), Event: true,
-		Attributes: map[string]any{"changes": changes, "unplanned": unplanned, "from_hash": base.SchemaHash, "to_hash": cur.SchemaHash, "baseline_at": base.CollectedAt},
+		Attributes: map[string]any{"changes": changes, "unplanned": unplanned, "migrations": migs, "from_hash": base.SchemaHash, "to_hash": cur.SchemaHash, "baseline_at": base.CollectedAt},
 	}}
 }
 

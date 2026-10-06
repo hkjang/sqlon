@@ -117,6 +117,9 @@ func FormatDigest(b Board, now time.Time) string {
 		if f.Scope == "volume" {
 			line += " · 디스크 " + f.Name
 		}
+		if c := f.Attribution.TopGrower(); c != nil && c.Share >= 0.3 {
+			line += fmt.Sprintf(" · 증가 1위 %s +%s(%.0f%%)", c.Name, humanBytes(c.Bytes), c.Share*100)
+		}
 		s.WriteString(line)
 	}
 	if len(noLimit) > 0 {

@@ -94,7 +94,8 @@ PostgreSQL 볼륨이 가득 차는 장애를 막기 위해, SQLON은 1분마다 
 WAL 아카이브, WAL을 붙잡는 복제 슬롯, 재활용되지 못한 `pg_wal`, VACUUM 을 막는 장기
 트랜잭션, 임시파일), 테이블 급증·급감, 변경계획 없는 스키마 변경, 관측 중단을
 Mattermost·Slack 웹훅과 `/admin/alerts` 로 알립니다. 매일 아침 용량 리포트를 보내고,
-DB별 팀 채널·계획 작업 중 무음을 지원합니다. 설정은 세 가지(+권장 하나)입니다.
+DB별 팀 채널·계획 작업 중 무음을 지원합니다. 무엇이 늘고 있는지(테이블·WAL·DB 밖 파일)를 함께
+보여주고, Flyway·Liquibase 등의 배포 마이그레이션은 계획 외 변경과 구분합니다. 설정은 세 가지(+권장 하나)입니다.
 
 ```sh
 GRANT pg_monitor TO <모니터링 계정>;                        # WAL·임시파일 크기 측정 (MySQL: REPLICATION CLIENT)
@@ -102,6 +103,14 @@ GRANT pg_monitor TO <모니터링 계정>;                        # WAL·임시�
 SQLON_ALERT_WEBHOOK=https://mattermost.example.com/hooks/…   # 알림 채널
 # 권장: DB 서버 cron 에서 디스크 실측 보고 — DB 밖 파일(덤프 백업 등)까지 감시
 * * * * * SQLON_URL=… SQLON_TOKEN=… SQLON_PROFILE=orders-prod sqlon-disk-report.sh /var/lib/postgresql
+```
+
+경보가 사람에게 확실히 닿게 하려면(선택):
+
+```sh
+SQLON_ALERT_ESCALATION_WEBHOOK=https://mattermost.example.com/hooks/…  # 긴급 경보가 30분 확인 안 되면 당직 호출
+SQLON_HEARTBEAT_URL=https://hc-ping.com/<uuid>                          # SQLON 자신이 멈추면 외부 감시가 알림
+SQLON_ALERT_CHAT_ACTIONS=mattermost                                     # 알림에 확인·무음·수정안 버튼
 ```
 
 MCP 클라이언트(에이전트)에서는 프롬프트 `early_warning_triage` 와 `get_early_warnings` 의
@@ -447,10 +456,10 @@ Invoke-RestMethod `
 - `acknowledge_early_warning` — 경보 확인(ack): 지속 경보는 재알림 중지, 이벤트는 종료. 감사 로그 기록. `alert_id`·`note`
 - `manage_early_warning_silences` — 무음 관리(list·create·end): 계획 작업 동안 DB·규칙(접두어 가능) 단위로 알림만 멈춤. 전체 DB 무음은 관리자만
 - `report_host_disk` — DB 서버 디스크(df) 보고: DB 밖 파일·볼륨 실제 크기로 고갈 예측. 보통은 `sqlon-disk-report.sh` 가 사용
-- `configure_early_warning` — **관리자**: 기본 알림 채널·콘솔 링크·최소 위험도·재알림·일일 리포트·점검 주기를 재시작 없이 조회·변경·초기화(get·set·reset)
-- `configure_profile_alerting` — **관리자**: DB 하나의 용량 한도·임계값(capacity)과 전용 채널·최소 위험도(alerting)만 변경·초기화
+- `configure_early_warning` — **관리자**: 기본 알림 채널·콘솔 링크·최소 위험도·재알림·일일 리포트·점검 주기·당직 호출(채널·대기 시간)·생존 신호 URL·Mattermost 버튼을 재시작 없이 조회·변경·초기화(get·set·reset)
+- `configure_profile_alerting` — **관리자**: DB 하나의 용량 한도·임계값(capacity)과 전용 채널·당직 채널·최소 위험도(alerting)만 변경·초기화
 - `run_early_warning_check` — **관리자**: 지금 수집·평가하고 새로 생긴/해소된 경보와 다음 행동 반환 — 조치 효과 확인용
-- `test_alert_channel` — **관리자**: 기본 또는 DB별 채널로 테스트 메시지 전송
+- `test_alert_channel` — **관리자**: 기본·DB별 채널 또는 당직 채널(`channel=escalation`)로 테스트 메시지 전송
 - `propose_early_warning_fix` — **DBA**: 경보를 고치는 승인 대기 변경계획 초안 생성(버려진 슬롯 제거·장기 트랜잭션 종료·VACUUM·max_slot_wal_keep_size·autovacuum·pg_monitor 부여). 검증 단계는 조치가 적용되지 않으면 실패. 자동 수정이 없는 경보는 할 일을 안내
 - `get_fleet_health` — 사용 가능한 DB를 독립적으로 병렬 점검하고 연결·배포판·구성 위험을 수집 시각과 근거 데이터가 포함된 위험도 순으로 반환
 - `list_sessions` — 선택한 DB의 활성·비활성 세션을 조회하고 SQL 실행시간과 트랜잭션 지속시간, 대기 이벤트, 보호 세션을 분리해 근거·수집 시각과 함께 반환. Oracle은 `INST_ID:SID:SERIAL#` 세션 키 사용

@@ -126,6 +126,7 @@
           <div class="row" style="margin-top:12px">
             <div><label>이 DB 전용 알림 채널 (웹훅 참조)</label><input id="f_alert_webhook" placeholder="env:TEAM_A_WEBHOOK 또는 plain:https://mattermost.example/hooks/…"></div>
             <div><label>최소 알림 위험도</label><select id="f_alert_min"><option value="">서버 기본값</option><option value="info">정보 이상</option><option value="warning">경고 이상</option><option value="critical">긴급만</option></select></div>
+            <div><label>이 DB 당직 호출 채널 (웹훅 참조)</label><input id="f_alert_escalation" placeholder="비우면 서버 당직 채널 — env:DBA_ONCALL_WEBHOOK"></div>
           </div>
           <div class="field-hint">채널을 지정하면 이 DB의 예방 경보는 그 채널로만 갑니다(팀 채널). 비우면 서버 기본 채널(SQLON_ALERT_WEBHOOK)로 갑니다. 개발 DB는 "긴급만"으로 소음을 줄이세요.</div>
         </div>
@@ -457,6 +458,7 @@ function openForm(id) {
   const alerting = p.alerting || {};
   $('#f_alert_webhook').value = alerting.webhook_ref || '';
   $('#f_alert_min').value = alerting.min_severity || '';
+  $('#f_alert_escalation').value = alerting.escalation_ref || '';
   $('#f_conn').value = p.connect_string || '';
   $('#f_user').value = p.username || '';
   $('#f_pw').value = id ? (p.password_ref.startsWith('plain:') ? '' : p.password_ref) : '';
@@ -533,8 +535,8 @@ async function saveProfile(ev) {
   const capacity = { storage_limit: $('#f_storage_limit').value.trim(), warn_percent: num('#f_cap_warn_pct'), critical_percent: num('#f_cap_crit_pct'),
     warn_days: num('#f_cap_warn_days'), critical_days: num('#f_cap_crit_days') };
   if (Object.values(capacity).some(v => v)) body.capacity = capacity;
-  const alerting = { webhook_ref: $('#f_alert_webhook').value.trim(), min_severity: $('#f_alert_min').value };
-  if (alerting.webhook_ref || alerting.min_severity) body.alerting = alerting; // plain:**** keeps the stored webhook
+  const alerting = { webhook_ref: $('#f_alert_webhook').value.trim(), escalation_ref: $('#f_alert_escalation').value.trim(), min_severity: $('#f_alert_min').value };
+  if (alerting.webhook_ref || alerting.escalation_ref || alerting.min_severity) body.alerting = alerting; // plain:**** keeps the stored webhook
   if (EDIT_ID) {
     // fields this form does not edit must survive a save
     const cur = PROFILES.find(x => x.id === EDIT_ID);

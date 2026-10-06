@@ -126,3 +126,21 @@ func TestRuntimeEarlyWarningSettings(t *testing.T) {
 		t.Fatalf("an unparseable interval must be rejected")
 	}
 }
+
+func TestRuntimeEscalationHeartbeatAndChatFlags(t *testing.T) {
+	rt := Runtime{Stderr: &bytes.Buffer{}, Getenv: func(k string) string {
+		return map[string]string{"SQLON_HEARTBEAT_URL": "https://hc.example/ping/x", "SQLON_ALERT_ESCALATE_AFTER": "0", "SQLON_ALERT_CHAT_ACTIONS": "Mattermost"}[k]
+	}}
+	cfg, err := rt.parse(nil)
+	if err != nil || cfg.alertHeartbeat != "https://hc.example/ping/x" || cfg.alertEscalateAfter != time.Nanosecond || cfg.alertChatActions != "mattermost" {
+		t.Fatalf("env: %+v %v", cfg, err)
+	}
+	if cfg, _ := (Runtime{Stderr: &bytes.Buffer{}, Getenv: func(string) string { return "" }}).parse(nil); cfg.alertEscalateAfter != 30*time.Minute || cfg.alertChatActions != "off" {
+		t.Fatalf("defaults: %+v", cfg)
+	}
+	for _, args := range [][]string{{"-alert-chat-actions", "teams"}, {"-alert-escalate-after", "5s"}} {
+		if _, err := (Runtime{Stderr: &bytes.Buffer{}, Getenv: func(string) string { return "" }}).parse(args); err == nil {
+			t.Fatalf("%v must be rejected", args)
+		}
+	}
+}

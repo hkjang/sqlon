@@ -272,7 +272,7 @@ var openAPISpec = `{
       "put": {
         "tags": ["early-warning"], "summary": "런타임 설정 변경·초기화 (admin)",
         "description": "settings 의 지정 항목만 바꾸고 reset 의 항목(all = 전체)을 기본값으로 되돌립니다. 재시작 없이 적용되며 settings.json 에 저장됩니다.",
-        "requestBody": {"content":{"application/json":{"schema":{"type":"object","properties":{"settings":{"type":"object","properties":{"webhook_ref":{"type":"string"},"console_url":{"type":"string"},"min_notify_severity":{"type":"string"},"renotify_interval":{"type":"string"},"digest_at":{"type":"string"},"maintenance_interval":{"type":"string"},"schema_interval":{"type":"string"},"host_disk_stale_after":{"type":"string"}}},"reset":{"type":"array","items":{"type":"string"}}}}}}},
+        "requestBody": {"content":{"application/json":{"schema":{"type":"object","properties":{"settings":{"type":"object","properties":{"webhook_ref":{"type":"string"},"console_url":{"type":"string"},"min_notify_severity":{"type":"string"},"renotify_interval":{"type":"string"},"digest_at":{"type":"string"},"maintenance_interval":{"type":"string"},"schema_interval":{"type":"string"},"host_disk_stale_after":{"type":"string"},"heartbeat_ref":{"type":"string","description":"외부 감시 서비스 핑 URL 참조 — 평가 주기마다 GET, 기본 채널이 실패 중이면 보류"},"escalation_ref":{"type":"string","description":"당직 호출 웹훅 참조"},"escalate_after":{"type":"string","example":"30m","description":"critical 이 이 시간 동안 ack 되지 않으면 당직 호출 (0=즉시, off=끔)"},"chat_actions":{"type":"string","enum":["off","mattermost"]},"action_url":{"type":"string","description":"채팅 서버가 버튼 콜백을 보낼 SQLON 주소 (비우면 console_url 의 origin)"}}},"reset":{"type":"array","items":{"type":"string"}}}}}}},
         "security": [{"SessionCookie":[]},{"AdminToken":[]}],
         "responses": { "200": {"description":"변경 후 설정"}, "400": {"description":"잘못된 값"} }
       }
@@ -314,9 +314,18 @@ var openAPISpec = `{
     "/api/early-warning/test-notification": {
       "post": {
         "tags": ["early-warning"], "summary": "알림 경로 테스트 (admin)",
-        "description": "설정된 웹훅(SQLON_ALERT_WEBHOOK)으로 테스트 메시지를 보냅니다.",
+        "description": "설정된 웹훅(SQLON_ALERT_WEBHOOK)으로 테스트 메시지를 보냅니다. profile 을 주면 그 DB의 전용 채널을, channel=escalation 이면 당직 호출 채널을 시험합니다.",
+        "parameters": [{"name":"profile","in":"query","schema":{"type":"string"}},{"name":"channel","in":"query","schema":{"type":"string","enum":["team","escalation"]}}],
         "security": [{"SessionCookie":[]},{"AdminToken":[]}],
         "responses": { "200": {"description":"{delivered:true,target}"}, "409": {"description":"웹훅 미설정"}, "502": {"description":"전달 실패 {delivered:false,error}"} }
+      }
+    },
+    "/api/early-warning/chat-action": {
+      "post": {
+        "tags": ["early-warning"], "summary": "채팅 버튼 콜백 (Mattermost)",
+        "description": "Mattermost 메시지 버튼(확인·2시간 무음·수정안 초안)이 호출합니다. SQLON 자격 증명 없이 context.token 의 서명(HMAC-SHA256, 7일 만료)이 경보 하나에 대한 동작 하나만 허용합니다. 수정안은 변경계획 초안만 만들고 실행하지 않습니다. chat_actions=off 로 바꾸면 이미 게시된 버튼도 거부됩니다.",
+        "requestBody": {"content":{"application/json":{"schema":{"type":"object","properties":{"user_id":{"type":"string"},"user_name":{"type":"string"},"context":{"type":"object","properties":{"token":{"type":"string"}}}}}}}},
+        "responses": { "200": {"description":"{ephemeral_text}"}, "403": {"description":"위조·만료·비활성 버튼 {ephemeral_text}"} }
       }
     },
     "/api/observability/sessions": {

@@ -11,11 +11,11 @@ import (
 )
 
 // Runtime settings let an administrator change how early warning notifies
-// (channel, minimum severity, reminder interval, daily report time) and how
-// often the heavier checks run, without a restart — from the console, REST,
-// or MCP. Flags and environment variables stay the defaults; a runtime value
-// overrides its default until it is reset. Overrides persist in
-// <Dir>/settings.json.
+// (channels, minimum severity, reminder and escalation timing, daily report,
+// heartbeat, chat buttons) and how often the heavier checks run, without a
+// restart — from the console, REST, or MCP. Flags and environment variables
+// stay the defaults; a runtime value overrides its default until it is
+// reset. Overrides persist in <Dir>/settings.json.
 
 // Settings is a partial override: empty fields keep the default.
 type Settings struct {
@@ -28,10 +28,58 @@ type Settings struct {
 	MaintenanceEvery   string `json:"maintenance_interval,omitempty"`
 	SchemaEvery        string `json:"schema_interval,omitempty"` // "off" disables schema watch
 	HostDiskStaleAfter string `json:"host_disk_stale_after,omitempty"`
+	// HeartbeatRef is pinged after every healthy cycle (dead man's switch).
+	HeartbeatRef string `json:"heartbeat_ref,omitempty"`
+	// EscalationRef pages an on-call channel for critical alerts left
+	// unacknowledged for EscalateAfter ("30m"; "0m" pages at once; "off").
+	EscalationRef string `json:"escalation_ref,omitempty"`
+	EscalateAfter string `json:"escalate_after,omitempty"`
+	// ChatActions adds buttons to messages ("mattermost" | "off"); ActionURL
+	// is the base URL the chat server calls back (default: console origin).
+	ChatActions string `json:"chat_actions,omitempty"`
+	ActionURL   string `json:"action_url,omitempty"`
 }
 
+var settingNames = []string{"webhook_ref", "console_url", "min_notify_severity", "renotify_interval", "digest_at", "maintenance_interval", "schema_interval", "host_disk_stale_after", "heartbeat_ref", "escalation_ref", "escalate_after", "chat_actions", "action_url"}
+
+func (s *Settings) field(name string) *string {
+	switch name {
+	case "webhook_ref":
+		return &s.WebhookRef
+	case "console_url":
+		return &s.ConsoleURL
+	case "min_notify_severity":
+		return &s.MinNotifySeverity
+	case "renotify_interval":
+		return &s.RenotifyInterval
+	case "digest_at":
+		return &s.DigestAt
+	case "maintenance_interval":
+		return &s.MaintenanceEvery
+	case "schema_interval":
+		return &s.SchemaEvery
+	case "host_disk_stale_after":
+		return &s.HostDiskStaleAfter
+	case "heartbeat_ref":
+		return &s.HeartbeatRef
+	case "escalation_ref":
+		return &s.EscalationRef
+	case "escalate_after":
+		return &s.EscalateAfter
+	case "chat_actions":
+		return &s.ChatActions
+	case "action_url":
+		return &s.ActionURL
+	}
+	return nil
+}
+
+// secretFields hold URLs that carry their secret; echoes of the masked
+// value keep the stored one.
+var secretFields = map[string]bool{"webhook_ref": true, "heartbeat_ref": true, "escalation_ref": true}
+
 // SettingsView is what callers see: every effective value, where it came
-// from, and the channel without its secret.
+// from, and channels without their secrets.
 type SettingsView struct {
 	Webhook            string            `json:"webhook"` // masked target, "" = none
 	WebhookRef         string            `json:"webhook_ref,omitempty"`
@@ -42,6 +90,13 @@ type SettingsView struct {
 	MaintenanceEvery   string            `json:"maintenance_interval"`
 	SchemaEvery        string            `json:"schema_interval"`
 	HostDiskStaleAfter string            `json:"host_disk_stale_after"`
+	Heartbeat          string            `json:"heartbeat"`
+	HeartbeatRef       string            `json:"heartbeat_ref,omitempty"`
+	Escalation         string            `json:"escalation"`
+	EscalationRef      string            `json:"escalation_ref,omitempty"`
+	EscalateAfter      string            `json:"escalate_after"`
+	ChatActions        string            `json:"chat_actions"`
+	ActionURL          string            `json:"action_url,omitempty"`
 	Source             map[string]string `json:"source"` // field → default | runtime
 	UpdatedAt          *time.Time        `json:"updated_at,omitempty"`
 	UpdatedBy          string            `json:"updated_by,omitempty"`
@@ -53,23 +108,43 @@ type storedSettings struct {
 	UpdatedBy string    `json:"updated_by,omitempty"`
 }
 
-// NotifierFactory builds the default channel from a resolved webhook URL.
+// NotifierFactory builds a channel from a resolved webhook URL.
 type NotifierFactory func(webhookURL, consoleURL string) Notifier
 
 // WebhookResolver turns a webhook reference into a URL (env:/file:/plain:).
 type WebhookResolver func(ref string) (string, error)
 
 type settingsBase struct {
-	cfg        Config
-	notifier   Notifier
-	consoleURL string
+	cfg          Config
+	notifier     Notifier
+	consoleURL   string
+	heartbeatURL string
+	escalation   Notifier
+	chatActions  string
+	actionURL    string
+}
+
+func (e *Engine) captureBase() *settingsBase {
+	return &settingsBase{cfg: e.cfg, notifier: e.Notifier, consoleURL: e.ConsoleURL, heartbeatURL: e.HeartbeatURL, escalation: e.Escalation, chatActions: e.ChatActions, actionURL: e.ActionURL}
 }
 
 func fmtDuration(d time.Duration, zero string) string {
 	if d <= 0 {
 		return zero
 	}
-	return d.String()
+	return shortDuration(d)
+}
+
+// shortDuration writes 6h, 2m, 1h30m instead of 6h0m0s.
+func shortDuration(d time.Duration) string {
+	s := d.String()
+	if strings.HasSuffix(s, "m0s") {
+		s = strings.TrimSuffix(s, "0s")
+	}
+	if strings.HasSuffix(s, "h0m") {
+		s = strings.TrimSuffix(s, "0m")
+	}
+	return s
 }
 
 func parseSettingDuration(name, v string, allowOff bool) (time.Duration, error) {
@@ -84,11 +159,31 @@ func parseSettingDuration(name, v string, allowOff bool) (time.Duration, error) 
 	return d, nil
 }
 
+// ParseEscalateAfter accepts a delay ("30m"), "0"/"0m" (page at once), or
+// "off" (never page; returned as -1).
+func ParseEscalateAfter(v string) (time.Duration, error) {
+	v = strings.TrimSpace(strings.ToLower(v))
+	switch v {
+	case "off":
+		return -1, nil
+	case "0", "0m", "0s", "immediate":
+		return time.Nanosecond, nil // 0 in Config means "default"
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d < time.Minute || d > 24*time.Hour {
+		return 0, errors.New("escalate_after must be 0 (at once), a duration between 1m and 24h, or off")
+	}
+	return d, nil
+}
+
 // validate checks every non-empty field.
 func (s Settings) validate(resolve WebhookResolver) error {
-	if s.WebhookRef != "" && strings.TrimSpace(s.WebhookRef) != "plain:****" && resolve != nil {
-		if _, err := resolve(s.WebhookRef); err != nil {
-			return err
+	for name := range secretFields {
+		ref := strings.TrimSpace(*s.field(name))
+		if ref != "" && ref != "plain:****" && resolve != nil {
+			if _, err := resolve(ref); err != nil {
+				return fmt.Errorf("%s: %w", name, err)
+			}
 		}
 	}
 	if s.MinNotifySeverity != "" && Rank(strings.ToLower(s.MinNotifySeverity)) == 0 {
@@ -116,27 +211,39 @@ func (s Settings) validate(resolve WebhookResolver) error {
 			return err
 		}
 	}
-	if s.ConsoleURL != "" && !strings.HasPrefix(s.ConsoleURL, "http://") && !strings.HasPrefix(s.ConsoleURL, "https://") {
-		return errors.New("console_url must be an http(s) URL")
+	if s.EscalateAfter != "" {
+		if _, err := ParseEscalateAfter(s.EscalateAfter); err != nil {
+			return err
+		}
+	}
+	switch strings.ToLower(strings.TrimSpace(s.ChatActions)) {
+	case "", "off", "mattermost":
+	default:
+		return errors.New("chat_actions must be mattermost or off")
+	}
+	for name, v := range map[string]string{"console_url": s.ConsoleURL, "action_url": s.ActionURL} {
+		if v != "" && !strings.HasPrefix(v, "http://") && !strings.HasPrefix(v, "https://") {
+			return fmt.Errorf("%s must be an http(s) URL", name)
+		}
 	}
 	return nil
 }
 
 // LoadSettings captures the current configuration as the defaults and
-// applies stored runtime overrides. Call once after the default notifier,
+// applies stored runtime overrides. Call once after the default channels,
 // Factory and Resolve are set.
 func (e *Engine) LoadSettings() error {
 	e.evalMu.Lock()
 	defer e.evalMu.Unlock()
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.base = &settingsBase{cfg: e.cfg, notifier: e.Notifier, consoleURL: e.ConsoleURL}
+	e.base = e.captureBase()
 	if e.cfg.Dir == "" {
-		return nil
+		return e.applyLocked()
 	}
 	b, err := os.ReadFile(filepath.Join(e.cfg.Dir, "settings.json"))
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		return e.applyLocked()
 	}
 	if err != nil {
 		return err
@@ -149,12 +256,19 @@ func (e *Engine) LoadSettings() error {
 	return e.applyLocked()
 }
 
-// applyLocked recomputes cfg and the default notifier from base + stored.
+// applyLocked recomputes the effective configuration from base + stored.
 func (e *Engine) applyLocked() error {
 	if e.base == nil {
-		e.base = &settingsBase{cfg: e.cfg, notifier: e.Notifier, consoleURL: e.ConsoleURL}
+		e.base = e.captureBase()
 	}
-	cfg, notifier, console := e.base.cfg, e.base.notifier, e.base.consoleURL
+	b := *e.base
+	cfg, notifier, console, heartbeat, escalation, chat, action := b.cfg, b.notifier, b.consoleURL, b.heartbeatURL, b.escalation, b.chatActions, b.actionURL
+	resolve := func(ref string) (string, error) {
+		if e.Resolve == nil {
+			return "", errors.New("no webhook resolver")
+		}
+		return e.Resolve(ref)
+	}
 	if e.stored != nil {
 		s := e.stored.Settings
 		if s.MinNotifySeverity != "" {
@@ -175,11 +289,34 @@ func (e *Engine) applyLocked() error {
 		if s.HostDiskStaleAfter != "" {
 			cfg.HostDiskStaleAfter, _ = parseSettingDuration("", s.HostDiskStaleAfter, false)
 		}
+		if s.EscalateAfter != "" {
+			cfg.EscalateAfter, _ = ParseEscalateAfter(s.EscalateAfter)
+		}
 		if s.ConsoleURL != "" {
 			console = s.ConsoleURL
 		}
-		if s.WebhookRef != "" && e.Resolve != nil && e.Factory != nil {
-			url, err := e.Resolve(s.WebhookRef)
+		if s.ChatActions != "" {
+			chat = strings.ToLower(s.ChatActions)
+		}
+		if s.ActionURL != "" {
+			action = s.ActionURL
+		}
+		if s.HeartbeatRef != "" {
+			url, err := resolve(s.HeartbeatRef)
+			if err != nil {
+				return err
+			}
+			heartbeat = url
+		}
+		if s.EscalationRef != "" && e.Factory != nil {
+			url, err := resolve(s.EscalationRef)
+			if err != nil {
+				return err
+			}
+			escalation = e.Factory(url, console)
+		}
+		if s.WebhookRef != "" && e.Factory != nil {
+			url, err := resolve(s.WebhookRef)
 			if err != nil {
 				return err
 			}
@@ -190,7 +327,14 @@ func (e *Engine) applyLocked() error {
 			}
 		}
 	}
+	if chat == "mattermost" {
+		// the signing key exists only once buttons are on
+		if err := e.loadActionKeyLocked(); err != nil {
+			return err
+		}
+	}
 	e.cfg, e.Notifier, e.ConsoleURL = cfg, notifier, console
+	e.HeartbeatURL, e.Escalation, e.ChatActions, e.ActionURL = heartbeat, escalation, chat, action
 	return nil
 }
 
@@ -200,32 +344,49 @@ func (e *Engine) Settings() SettingsView {
 	defer e.mu.Unlock()
 	v := SettingsView{
 		MinNotifySeverity: e.cfg.MinNotifySeverity, RenotifyInterval: fmtDuration(e.cfg.RenotifyInterval, "off"),
-		DigestAt: e.cfg.DigestAt, MaintenanceEvery: e.cfg.MaintenanceEvery.String(), SchemaEvery: fmtDuration(e.cfg.SchemaEvery, "off"),
-		HostDiskStaleAfter: e.cfg.HostDiskStaleAfter.String(), ConsoleURL: e.ConsoleURL, Source: map[string]string{},
+		DigestAt: e.cfg.DigestAt, MaintenanceEvery: shortDuration(e.cfg.MaintenanceEvery), SchemaEvery: fmtDuration(e.cfg.SchemaEvery, "off"),
+		HostDiskStaleAfter: shortDuration(e.cfg.HostDiskStaleAfter), ConsoleURL: e.ConsoleURL, Source: map[string]string{},
+		EscalateAfter: fmtEscalate(e.cfg.EscalateAfter), ChatActions: e.ChatActions, ActionURL: e.actionBaseLocked(),
 	}
 	if v.DigestAt == "" {
 		v.DigestAt = "off"
 	}
+	if v.ChatActions == "" {
+		v.ChatActions = "off"
+	}
 	if e.Notifier != nil {
 		v.Webhook = e.Notifier.Target()
 	}
-	fields := map[string]string{}
+	if e.Escalation != nil {
+		v.Escalation = e.Escalation.Target()
+	}
+	if e.HeartbeatURL != "" {
+		v.Heartbeat = MaskURL(e.HeartbeatURL)
+	}
+	stored := Settings{}
 	if e.stored != nil {
-		s := e.stored.Settings
-		fields = map[string]string{"webhook_ref": s.WebhookRef, "console_url": s.ConsoleURL, "min_notify_severity": s.MinNotifySeverity, "renotify_interval": s.RenotifyInterval, "digest_at": s.DigestAt, "maintenance_interval": s.MaintenanceEvery, "schema_interval": s.SchemaEvery, "host_disk_stale_after": s.HostDiskStaleAfter}
-		if s.WebhookRef != "" {
-			v.WebhookRef = maskRef(s.WebhookRef)
-		}
+		stored = e.stored.Settings
 		at := e.stored.UpdatedAt
 		v.UpdatedAt, v.UpdatedBy = &at, e.stored.UpdatedBy
 	}
-	for _, name := range []string{"webhook_ref", "console_url", "min_notify_severity", "renotify_interval", "digest_at", "maintenance_interval", "schema_interval", "host_disk_stale_after"} {
+	v.WebhookRef, v.HeartbeatRef, v.EscalationRef = maskRef(stored.WebhookRef), maskRef(stored.HeartbeatRef), maskRef(stored.EscalationRef)
+	for _, name := range settingNames {
 		v.Source[name] = "default"
-		if fields[name] != "" {
+		if *stored.field(name) != "" {
 			v.Source[name] = "runtime"
 		}
 	}
 	return v
+}
+
+func fmtEscalate(d time.Duration) string {
+	switch {
+	case d < 0:
+		return "off"
+	case d < time.Second:
+		return "0m"
+	}
+	return shortDuration(d)
 }
 
 func maskRef(ref string) string {
@@ -244,68 +405,48 @@ func (e *Engine) UpdateSettings(patch Settings, reset []string, actor string) (S
 	}
 	e.evalMu.Lock()
 	e.mu.Lock()
+	unlock := func() { e.mu.Unlock(); e.evalMu.Unlock() }
 	next := storedSettings{}
 	if e.stored != nil {
 		next = *e.stored
 	}
 	for _, name := range reset {
-		switch strings.TrimSpace(name) {
-		case "all":
+		name = strings.TrimSpace(name)
+		if name == "all" {
 			next.Settings = Settings{}
-		case "webhook_ref":
-			next.WebhookRef = ""
-		case "console_url":
-			next.ConsoleURL = ""
-		case "min_notify_severity":
-			next.MinNotifySeverity = ""
-		case "renotify_interval":
-			next.RenotifyInterval = ""
-		case "digest_at":
-			next.DigestAt = ""
-		case "maintenance_interval":
-			next.MaintenanceEvery = ""
-		case "schema_interval":
-			next.SchemaEvery = ""
-		case "host_disk_stale_after":
-			next.HostDiskStaleAfter = ""
-		default:
-			e.mu.Unlock()
-			e.evalMu.Unlock()
+			continue
+		}
+		f := next.field(name)
+		if f == nil {
+			unlock()
 			return SettingsView{}, fmt.Errorf("unknown setting %q", name)
 		}
+		*f = ""
 	}
-	if strings.TrimSpace(patch.WebhookRef) == "plain:****" {
-		patch.WebhookRef = "" // the masked echo of the stored value: keep it
-	}
-	merge := func(dst *string, v string) {
-		if strings.TrimSpace(v) != "" {
-			*dst = strings.TrimSpace(v)
+	for _, name := range settingNames {
+		v := strings.TrimSpace(*patch.field(name))
+		if v == "" || secretFields[name] && v == "plain:****" {
+			continue // empty keeps; a masked echo keeps the stored secret
 		}
+		if name == "min_notify_severity" || name == "chat_actions" {
+			v = strings.ToLower(v)
+		}
+		*next.field(name) = v
 	}
-	merge(&next.WebhookRef, patch.WebhookRef)
-	merge(&next.ConsoleURL, patch.ConsoleURL)
-	merge(&next.MinNotifySeverity, strings.ToLower(patch.MinNotifySeverity))
-	merge(&next.RenotifyInterval, patch.RenotifyInterval)
-	merge(&next.DigestAt, patch.DigestAt)
-	merge(&next.MaintenanceEvery, patch.MaintenanceEvery)
-	merge(&next.SchemaEvery, patch.SchemaEvery)
-	merge(&next.HostDiskStaleAfter, patch.HostDiskStaleAfter)
 	next.UpdatedAt, next.UpdatedBy = e.now(), actor
 	prev := e.stored
 	e.stored = &next
 	if err := e.applyLocked(); err != nil {
 		e.stored = prev
 		_ = e.applyLocked()
-		e.mu.Unlock()
-		e.evalMu.Unlock()
+		unlock()
 		return SettingsView{}, err
 	}
 	var saveErr error
 	if e.cfg.Dir != "" {
 		saveErr = writeJSONAtomic(filepath.Join(e.cfg.Dir, "settings.json"), next)
 	}
-	e.mu.Unlock()
-	e.evalMu.Unlock()
+	unlock()
 	if saveErr != nil {
 		return SettingsView{}, saveErr
 	}

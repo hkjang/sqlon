@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,6 +34,9 @@ type WebhookNotifier struct {
 	Client *http.Client
 	// ConsoleURL, when set, is linked from the message footer.
 	ConsoleURL string
+	// Attach, when set, returns a chat attachment (buttons) per
+	// notification; nil results are skipped.
+	Attach func(Notification) map[string]any
 }
 
 func (w *WebhookNotifier) Target() string { return MaskURL(w.URL) }
@@ -40,13 +44,28 @@ func (w *WebhookNotifier) Target() string { return MaskURL(w.URL) }
 func (w *WebhookNotifier) ID() string { return "webhook:" + shortHash(w.URL) }
 
 func (w *WebhookNotifier) Notify(ctx context.Context, notes []Notification, names map[string]string) error {
-	return w.post(ctx, map[string]any{
+	payload := map[string]any{
 		"source":        "sqlon_early_warning",
 		"kind":          "alerts",
 		"ts":            time.Now().UTC().Format(time.RFC3339),
 		"text":          FormatText(notes, names, w.ConsoleURL),
 		"notifications": notes,
-	})
+	}
+	if w.Attach != nil {
+		var attachments []map[string]any
+		for _, n := range notes {
+			if len(attachments) == 10 {
+				break
+			}
+			if a := w.Attach(n); a != nil {
+				attachments = append(attachments, a)
+			}
+		}
+		if len(attachments) > 0 {
+			payload["attachments"] = attachments
+		}
+	}
+	return w.post(ctx, payload)
 }
 
 func (w *WebhookNotifier) NotifyText(ctx context.Context, kind, text string) error {
@@ -63,7 +82,7 @@ func (w *WebhookNotifier) post(ctx context.Context, payload map[string]any) erro
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.URL, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return fmt.Errorf("webhook: invalid url %s", MaskURL(w.URL))
 	}
 	req.Header.Set("Content-Type", "application/json")
 	client := w.Client
@@ -72,7 +91,7 @@ func (w *WebhookNotifier) post(ctx context.Context, payload map[string]any) erro
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("webhook: %w", err)
+		return fmt.Errorf("webhook: %w", redactURL(err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -84,6 +103,17 @@ func (w *WebhookNotifier) post(ctx context.Context, payload map[string]any) erro
 
 // MaskURL keeps scheme and host and hides the path, where incoming-webhook
 // URLs carry their secret.
+// redactURL masks the URL inside a transport error: webhook and ping URLs
+// carry their secret in the path, and errors end up on the board, in logs
+// and in heartbeat status.
+func redactURL(err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return &url.Error{Op: ue.Op, URL: MaskURL(ue.URL), Err: ue.Err}
+	}
+	return err
+}
+
 func MaskURL(raw string) string {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Host == "" {
@@ -129,7 +159,7 @@ func FormatText(notes []Notification, names map[string]string, consoleURL string
 		counts[n.Kind]++
 	}
 	var head []string
-	for _, k := range []struct{ kind, label string }{{KindFiring, "새 경보"}, {KindEscalated, "격상"}, {KindReminder, "지속"}, {KindResolved, "해소"}} {
+	for _, k := range []struct{ kind, label string }{{KindPage, "당직 호출"}, {KindFiring, "새 경보"}, {KindEscalated, "격상"}, {KindReminder, "지속"}, {KindResolved, "해소"}, {KindPageResolved, "호출 해소"}} {
 		if counts[k.kind] > 0 {
 			head = append(head, fmt.Sprintf("%s %d", k.label, counts[k.kind]))
 		}
@@ -137,9 +167,12 @@ func FormatText(notes []Notification, names map[string]string, consoleURL string
 	var b strings.Builder
 	icon := "🛡️"
 	for _, n := range notes {
-		if n.Kind != KindResolved && n.Alert.Severity == SevCritical {
-			icon = "🚨"
+		if n.Kind == KindPage {
+			icon = "📟"
 			break
+		}
+		if n.Kind != KindResolved && n.Kind != KindPageResolved && n.Alert.Severity == SevCritical {
+			icon = "🚨"
 		}
 	}
 	fmt.Fprintf(&b, "#### %s SQLON 예방 경보 — %s\n", icon, strings.Join(head, " · "))
@@ -159,6 +192,15 @@ func FormatText(notes []Notification, names map[string]string, consoleURL string
 		case KindResolved:
 			fmt.Fprintf(&b, "\n✅ **해소** · %s · %s", name, a.Title)
 			continue
+		case KindPageResolved:
+			fmt.Fprintf(&b, "\n✅ **호출 해소** · %s · %s", name, a.Title)
+			continue
+		case KindPage:
+			since := a.FirstSeen
+			if a.CriticalSince != nil {
+				since = *a.CriticalSince
+			}
+			fmt.Fprintf(&b, "\n📟 **긴급 — %s째 확인되지 않음** · %s · %s", humanDays(time.Since(since).Hours()/24), name, a.Title)
 		case KindEscalated:
 			fmt.Fprintf(&b, "\n%s **%s 격상** · %s · %s", sevIcon(a.Severity), strings.ToUpper(a.Severity), name, a.Title)
 		case KindReminder:
@@ -178,7 +220,13 @@ func FormatText(notes []Notification, names map[string]string, consoleURL string
 			fmt.Fprintf(&b, "\n> 조치: %s", a.Recommendation)
 		}
 	}
-	if consoleURL != "" {
+	open := false // anything still firing that an ack would quiet
+	for _, n := range notes {
+		open = open || (n.Kind != KindResolved && n.Kind != KindPageResolved)
+	}
+	if consoleURL != "" && !open {
+		fmt.Fprintf(&b, "\n\n[예방 경보 콘솔 열기](%s)", consoleURL)
+	} else if consoleURL != "" {
 		fmt.Fprintf(&b, "\n\n[예방 경보 콘솔 열기](%s) — 확인(ack)하면 지속 알림이 멈춥니다.", consoleURL)
 	}
 	return b.String()

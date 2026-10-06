@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -66,11 +67,11 @@ func (c *captureNotifier) all() []string {
 type fakeMaintenance struct {
 	findings []observability.MaintenanceFinding
 	status   string
-	calls    int
+	calls    atomic.Int64 // profiles run concurrently
 }
 
 func (f *fakeMaintenance) Maintenance(context.Context, dbconn.Profile) observability.Response[observability.MaintenanceData] {
-	f.calls++
+	f.calls.Add(1)
 	status := f.status
 	if status == "" {
 		status = "ok"
@@ -183,15 +184,15 @@ func TestEngineCollectionDownAndRecovery(t *testing.T) {
 	eng, notifier, maint, _ := newTestEngine(t, t.TempDir(), p, &clock)
 	maint.findings = []observability.MaintenanceFinding{{Category: "wal_archive", Object: "archive_command", Severity: "critical", Detail: "failing"}}
 	eng.Evaluate(context.Background(), okBatch(footprintSnapshot(p, clock, 100*gib, gib, nil)), EvaluateOptions{})
-	if maint.calls != 1 {
-		t.Fatalf("maintenance must run on the first cycle, ran %d", maint.calls)
+	if maint.calls.Load() != 1 {
+		t.Fatalf("maintenance must run on the first cycle, ran %d", maint.calls.Load())
 	}
 	failed := collector.BatchResult{Results: []collector.ProfileResult{{Status: "error", ErrorCode: "COLLECTION_FAILED", Error: "no space left on device", Snapshot: collector.Snapshot{ProfileID: p.ID}}}}
 	for i := 1; i <= 3; i++ {
 		clock = clock.Add(time.Minute)
 		eng.Evaluate(context.Background(), failed, EvaluateOptions{})
 	}
-	if maint.calls != 1 {
+	if maint.calls.Load() != 1 {
 		t.Fatalf("maintenance must not run against an unreachable DB")
 	}
 	board := eng.Board([]dbconn.Profile{p})

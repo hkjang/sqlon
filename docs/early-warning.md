@@ -107,7 +107,8 @@ SQL로는 볼륨의 **다른 파일**(덤프 백업·외부 로그·코어 파�
 **스키마 변경 심각도**: 실행된 변경계획(대상·단계 명령)에 테이블 이름이 있으면
 정보. 계획 외라면 삭제는 긴급, 타입·키·뷰 변경은 경고, 그 밖의 변경은 운영 환경
 (`environment=production` 또는 `criticality=critical`)에서 경고·그 외 정보입니다.
-운영이 아닌 프로파일은 경고가 상한입니다. 첫 점검은 기준선만 만들고, 부분 수집된
+운영이 아닌 프로파일은 경고가 상한입니다. 마이그레이션 도구가 같은 시각에 기록한 변경은 배포로 봅니다
+(아래 "배포 마이그레이션 인식"). 첫 점검은 기준선만 만들고, 부분 수집된
 스냅숏은 비교하지 않습니다(사라진 테이블로 오인하지 않도록). 주석 변경은 무시합니다.
 
 ## 경보 수명주기
@@ -133,7 +134,7 @@ SQL로는 볼륨의 **다른 파일**(덤프 백업·외부 로그·코어 파�
 프로파일의 `alerting` 으로 DB마다 다른 채널과 최소 위험도를 지정합니다.
 
 ```json
-"alerting": { "webhook_ref": "env:TEAM_ORDERS_WEBHOOK", "min_severity": "warning" }
+"alerting": { "webhook_ref": "env:TEAM_ORDERS_WEBHOOK", "escalation_ref": "env:ORDERS_ONCALL_WEBHOOK", "min_severity": "warning" }
 ```
 
 - `webhook_ref` 는 비밀번호와 같은 참조(`env:`·`file:`·`plain:`)입니다. 웹훅 URL은 경로에 비밀이
@@ -151,6 +152,63 @@ SQL로는 볼륨의 **다른 파일**(덤프 백업·외부 로그·코어 파�
 조치"라면 리포트는 60일 뒤 고갈 같은 느린 추세를 놓치지 않게 합니다. 그 시각부터 2시간 안에만
 보내므로, 서버가 그 시간에 꺼져 있었으면 그날은 건너뜁니다. `off` 로 끕니다.
 
+## 당직 호출 (확인되지 않은 긴급 경보)
+
+팀 채널은 음소거되어 있거나 새벽에는 아무도 보지 않습니다. 밤새 차오르는 디스크가 바로 그 경우라서,
+**긴급(critical) 경보가 일정 시간 확인(ack)되지 않으면** 별도의 당직 채널로 한 번 더, 더 크게 알립니다.
+
+```sh
+SQLON_ALERT_ESCALATION_WEBHOOK=https://mattermost.example.com/hooks/oncall-xxxx   # 당직 채널
+SQLON_ALERT_ESCALATE_AFTER=30m    # 기본 30m · 0 = 즉시 · off = 끔
+```
+
+- 기준 시각은 경보가 **긴급이 된 순간**입니다(경고에서 격상된 경우 격상 시각). 긴급에서 내려가면 초기화됩니다.
+- 경보 하나당 한 번만 호출하고, 호출한 경보가 해소되면 당직 채널에 **호출 해소**를 보냅니다.
+- 확인(ack)하거나 무음을 건 경보는 호출하지 않습니다 — 누군가 보고 있다는 뜻이기 때문입니다.
+- DB마다 다른 당직 채널은 프로파일의 `alerting.escalation_ref` 로 지정합니다(`webhook_ref` 와 같은 참조 형식).
+  없으면 서버의 당직 채널을 씁니다.
+- 실패한 호출은 다른 채널과 같은 간격으로 재시도하며 콘솔의 채널 상태에 "📟 당직 호출" 로 표시됩니다.
+- `test_alert_channel`(MCP, `channel=escalation`)이나 `POST /api/early-warning/test-notification?channel=escalation` 으로 경로를 시험합니다.
+
+## SQLON 자신의 생존 신호 (heartbeat)
+
+예방 경보가 DB를 지켜보는 동안, SQLON 자신이 멈추면 아무 경보도 오지 않고 그 침묵은 "이상 없음" 과
+구별되지 않습니다. 외부 감시 서비스(healthchecks.io, Uptime Kuma push, Cronitor 등)의 핑 URL을 주면
+**평가 주기마다** GET 으로 호출하고, 핑이 끊기면 그 서비스가 알려줍니다(dead man's switch).
+
+```sh
+SQLON_HEARTBEAT_URL=https://hc-ping.com/<uuid>     # 감시 서비스에서 주기 1분·유예 5분 정도로 설정
+```
+
+핑은 **SQLON이 실제로 경고할 수 있을 때만** 보냅니다. 평가가 실패했거나 기본 알림 채널 전달이 실패
+중이면 핑을 보류합니다 — 경보가 나가지 못하는 상태도 감시 서비스가 잡아냅니다. 보류 사유와 마지막 핑
+시각은 콘솔의 채널 상태(💓)에 표시됩니다. URL의 경로는 비밀로 취급해 화면·오류 메시지에서 가립니다.
+
+## Mattermost 버튼 (확인·무음·수정안)
+
+`SQLON_ALERT_CHAT_ACTIONS=mattermost` 면 알림 메시지의 경보마다 버튼이 붙습니다.
+
+| 버튼 | 동작 |
+| --- | --- |
+| ✅ 확인 | 경보를 ack — 기록되는 확인자는 `mattermost:<사용자명>` |
+| 🔕 2시간 무음 | 그 DB·규칙의 알림을 2시간 멈춤 (경보는 콘솔에 계속 표시) |
+| 🛠 수정안 만들기 | 자동 수정이 있는 경보(슬롯·VACUUM 차단·블로트·설정 위험·모니터링 권한)만. **변경계획 초안(draft)만** 만들고 실행하지 않습니다. 같은 경보에 진행 중인 계획이 있으면 새로 만들지 않고 그 계획을 알려줍니다 |
+
+설정:
+
+1. Mattermost가 SQLON에 닿는 주소를 지정합니다. 기본값은 `SQLON_ALERT_CONSOLE_URL` 의 origin 이고,
+   다르면 `SQLON_ALERT_ACTION_URL=https://sqlon.internal:6767` 처럼 줍니다. 버튼은
+   `POST <주소>/api/early-warning/chat-action` 을 호출합니다.
+2. SQLON이 사설 IP라면 Mattermost 시스템 콘솔의 **Allow untrusted internal connections to**
+   (`ServiceSettings.AllowedUntrustedInternalConnections`)에 SQLON 호스트를 추가해야 버튼이 동작합니다.
+
+콜백은 Mattermost가 보내므로 SQLON 자격 증명이 없습니다. 대신 버튼마다 **서명된 토큰**(HMAC-SHA256,
+7일 만료)이 들어 있어, 그 토큰은 경보 하나에 대한 동작 하나만 허용합니다. 서명 키는 버튼을 켤 때
+`<data>/operations/earlywarning/action.key`(권한 0600)에 만들어지며, 이 파일을 지우면 이미 게시된 모든
+버튼이 무효가 됩니다. 버튼을 끄면(`off`) 게시된 버튼도 즉시 거부됩니다. 위조·만료 토큰은 403 으로
+거부하고 감사 로그(`early_warning_chat_action_rejected`)에 남깁니다. Slack incoming webhook은 버튼을
+지원하지 않으므로 Slack에는 켜지 마세요.
+
 ## 원인 추정과 흔들림 억제
 
 함께 발생한 경보는 알려진 원인→결과 관계로 묶어 **사건(incident)** 으로 보여줍니다. 예를 들어
@@ -163,6 +221,40 @@ SQL로는 볼륨의 **다른 파일**(덤프 백업·외부 로그·코어 파�
 사용률이 임계값 근처에서 오르내리면 같은 경보가 발생·해소를 반복합니다. 1시간 안에 3번 이상
 발생한 경보는 **흔들림(flapping)** 으로 보고 발생·해소·지속 알림을 보류합니다(격상은 보냄). 안정되면
 여전히 유효한 경보를 그때 보냅니다. 콘솔에는 "흔들림 — 알림 보류" 로 표시됩니다.
+
+## 무엇이 늘었나 (증가 원인)
+
+"사흘 뒤 가득 찬다" 다음 질문은 "무엇이 늘고 있나" 입니다. DB 점유량과 디스크 볼륨의 최근 7일(이력이
+짧으면 있는 만큼, 최소 1시간) 증가분을 SQLON이 이미 추적하는 부분으로 나눕니다 — 크기 상위 테이블,
+WAL·binlog, 임시파일, 로그. 디스크 볼륨은 먼저 **DB 점유량** 과 **DB 밖 파일**(덤프 백업·외부 로그)로
+나눕니다. 이번 주에 새로 생긴 테이블(예: `CREATE TABLE … AS` 백업 사본)은 0부터 자란 것으로 셉니다.
+
+```
+최근 7.0일 증가 +42.0 GiB 중 public.events +34.5 GiB(82%), WAL +5.1 GiB(12%), …
+```
+
+저장공간 경보의 상세, 콘솔 예측 표의 "증가 원인", 용량 계획, `explain_early_warning`, 일일 리포트("증가
+1위")에 표시됩니다. 테이블 크기는 인덱스·TOAST를 포함하며, 비율의 합이 100%가 안 되면 나머지는 추적하지 않는 작은 테이블과
+시스템 카탈로그 등입니다.
+
+## 배포 마이그레이션 인식
+
+스키마 변경을 감지하면 수집된 스키마에 있는 마이그레이션 도구의 이력 테이블을 읽기 전용으로 조회합니다.
+
+| 도구 | 이력 테이블 |
+| --- | --- |
+| Flyway | `flyway_schema_history` (실패한 행 제외) |
+| Liquibase | `databasechangelog` |
+| Django | `django_migrations` |
+| Prisma | `_prisma_migrations` |
+| Knex | `knex_migrations` |
+
+직전 점검 이후 **새로 기록된** 마이그레이션이 있으면 그 변경은 배포입니다: 제목에 "(배포 마이그레이션 N건)",
+상세에 적용된 마이그레이션(도구·버전·설명·실행자·시각)을 붙이고, 추가 위주의 변경은 정보로 낮춥니다.
+단 **테이블·컬럼 삭제는 배포여도 경고**입니다 — 잘못된 마이그레이션이 데이터를 지운 경우가 바로 봐야 할
+이상 징후이기 때문입니다. 직전 점검에 이미 있던 마이그레이션은 이후의 변경을 설명하지 못하므로, 배포
+직후의 수동 `ALTER` 는 그대로 "계획 외" 로 남습니다. PostgreSQL·MySQL·MariaDB에서 동작하며, 이력
+테이블이 수집 범위 밖의 스키마에 있으면 보지 못합니다.
 
 ## 용량 계획
 
@@ -203,10 +295,10 @@ SQL로는 볼륨의 **다른 파일**(덤프 백업·외부 로그·코어 파�
 | `acknowledge_early_warning` | 프로파일 | 확인(ack) |
 | `manage_early_warning_silences` | 프로파일(전체 무음은 관리자) | 무음 list·create·end |
 | `report_host_disk` | 프로파일 | 디스크(df) 보고 |
-| `configure_early_warning` | 관리자 | 서버 설정 get·set·reset (재시작 없이) |
-| `configure_profile_alerting` | 관리자 | DB별 용량 한도·채널·최소 위험도 |
+| `configure_early_warning` | 관리자 | 서버 설정 get·set·reset (재시작 없이) — 당직 호출·생존 신호·버튼 포함 |
+| `configure_profile_alerting` | 관리자 | DB별 용량 한도·채널·당직 채널·최소 위험도 |
 | `run_early_warning_check` | 관리자 | 즉시 평가, 새로 생긴/해소된 경보 |
-| `test_alert_channel` | 관리자 | 채널 테스트 |
+| `test_alert_channel` | 관리자 | 채널 테스트 (`channel=escalation` 은 당직 채널) |
 | `propose_early_warning_fix` | DBA | 승인 대기 수정안 생성 |
 
 **전략적으로 쓰는 법**: MCP 프롬프트 `early_warning_triage` 가 순서를 안내합니다 —
@@ -236,12 +328,19 @@ SQL로는 볼륨의 **다른 파일**(덤프 백업·외부 로그·코어 파�
 | `-alert-digest-at` | `SQLON_ALERT_DIGEST_AT` (`off` 로 끔) | `09:00` |
 | `-maintenance-interval` | `SQLON_MAINTENANCE_INTERVAL` | `5m` |
 | `-schema-watch-interval` | `SQLON_SCHEMA_WATCH_INTERVAL` (0 = 끔) | `15m` |
+| `-alert-escalation-webhook` | `SQLON_ALERT_ESCALATION_WEBHOOK` | (없음) |
+| `-alert-escalate-after` | `SQLON_ALERT_ESCALATE_AFTER` (`0` = 즉시, `off` = 끔) | `30m` |
+| `-alert-heartbeat-url` | `SQLON_HEARTBEAT_URL` | (없음) |
+| `-alert-chat-actions` | `SQLON_ALERT_CHAT_ACTIONS` (`mattermost`·`off`) | `off` |
+| `-alert-action-url` | `SQLON_ALERT_ACTION_URL` | 콘솔 링크의 origin |
+
+런타임 설정 이름은 `escalation_ref`·`escalate_after`·`heartbeat_ref`·`chat_actions`·`action_url` 입니다.
 
 ## 조회 경로
 
-- 콘솔: `/admin/alerts` — 저장공간 예측 표(DB 점유량과 디스크 볼륨), 발생 중 경보(확인 버튼·무음 표시), 무음 관리, 스키마 변경 이력, 해소 이력, 기본·DB별 채널 상태와 일일 리포트 상태, **지금 평가**·**알림 테스트** 버튼
+- 콘솔: `/admin/alerts` — 저장공간 예측 표(DB 점유량과 디스크 볼륨, 증가 원인), 발생 중 경보(확인 버튼·무음·당직 호출 표시), 무음 관리, 스키마 변경 이력, 해소 이력, 기본·DB별·당직 채널 상태와 생존 신호·일일 리포트 상태, **지금 평가**·**알림 테스트** 버튼
 - MCP 도구 11종(위 표)과 프롬프트 `early_warning_triage`
-- REST: `GET /api/early-warning`, `GET /api/early-warning/alerts/{id}`, `POST /api/early-warning/alerts/{id}/ack`, `POST /api/early-warning/alerts/{id}/fix`, `GET /api/early-warning/capacity-plan`, `GET·PUT /api/early-warning/settings`, `POST /api/early-warning/silences`, `DELETE /api/early-warning/silences/{id}`, `POST /api/early-warning/disk`, `POST /api/early-warning/evaluate`, `POST /api/early-warning/test-notification`
+- REST: `GET /api/early-warning`, `GET /api/early-warning/alerts/{id}`, `POST /api/early-warning/alerts/{id}/ack`, `POST /api/early-warning/alerts/{id}/fix`, `GET /api/early-warning/capacity-plan`, `GET·PUT /api/early-warning/settings`, `POST /api/early-warning/silences`, `DELETE /api/early-warning/silences/{id}`, `POST /api/early-warning/disk`, `POST /api/early-warning/evaluate`, `POST /api/early-warning/test-notification`, `POST /api/early-warning/chat-action`(Mattermost 버튼 콜백, 서명 토큰으로 인가)
 - Prometheus (`/metrics`): `sqlon_storage_used_bytes`, `sqlon_storage_limit_bytes`,
   `sqlon_storage_growth_bytes_per_day{window="6h|7d"}`, `sqlon_storage_days_to_full`,
   `sqlon_early_warning_alerts_firing{severity}`, `sqlon_early_warning_notifications_total{outcome}`
@@ -270,4 +369,7 @@ MySQL·MariaDB는 모든 스키마 + binlog 점유량에, Oracle은 엔진이 �
 - MySQL·MariaDB의 relay log, 역할(role)로만 받은 binlog 권한은 감지하지 않습니다.
 - 추세에는 이력이 필요합니다: 6시간 추세는 2시간·표본 6개, 7일 추세는 24시간·표본 12개
   이상부터 계산합니다. 처음 켤 때는 이미 저장된 수집 스냅숏(최근 8일)으로 이력을 복원합니다.
-- 테이블 급증·급감은 크기 상위 100개 테이블만 봅니다.
+- 테이블 급증·급감과 증가 원인은 크기 상위 100개 테이블만 봅니다.
+- 설정 수정안(`autovacuum`·`max_slot_wal_keep_size`)의 검증 단계는 값을 단정하지 않고 표시만 합니다.
+  `pg_reload_conf()` 의 새 값은 같은 세션에서 바로 보이지 않기 때문입니다 — 실행 후 다음 예방 점검에서
+  경보가 해소되는지로 확인하세요.

@@ -21,6 +21,53 @@ type route struct {
 	notifier Notifier
 	notes    []Notification
 	profiles map[string]bool
+	page     bool // escalation: bookkeeping goes to PagedAt
+}
+
+const escalationDestination = "escalation"
+
+// pageRoutesLocked routes due pages: a database's own escalation channel
+// when it declares one, else the server's.
+func (e *Engine) pageRoutesLocked(profiles map[string]dbconn.Profile, silences []Silence, now time.Time) []*route {
+	pages := e.st.pendingPages(now, e.cfg.EscalateAfter, func(a *Alert) bool { return silencedUntil(silences, a, now) != nil })
+	byID := map[string]*route{}
+	var order []string
+	for _, n := range pages {
+		var target Notifier
+		id := escalationDestination
+		if p, ok := profiles[n.Alert.ProfileID]; ok && e.RouteEscalation != nil {
+			custom, err := e.RouteEscalation(p)
+			if err != nil {
+				st := e.channelLocked("escalation:"+p.ID, "(호출 채널 설정 오류)")
+				st.LastError, st.Profiles = err.Error(), []string{p.ID}
+			} else if custom != nil {
+				target, id = custom, "escalation:"+custom.ID()
+			}
+		}
+		if target == nil {
+			target = e.Escalation
+		}
+		if target == nil {
+			continue
+		}
+		r := byID[id]
+		if r == nil {
+			r = &route{id: id, notifier: target, profiles: map[string]bool{}, page: true}
+			byID[id] = r
+			order = append(order, id)
+		}
+		r.notes = append(r.notes, n)
+		r.profiles[n.Alert.ProfileID] = true
+	}
+	var out []*route
+	for _, id := range order {
+		st := e.statusLocked(id, byID[id].notifier)
+		if st.NextRetryAt != nil && now.Before(*st.NextRetryAt) {
+			continue
+		}
+		out = append(out, byID[id])
+	}
+	return out
 }
 
 // routeLocked groups notifications by destination, skipping destinations
@@ -68,6 +115,11 @@ func (e *Engine) routeLocked(notes []Notification, profiles map[string]dbconn.Pr
 }
 
 func (e *Engine) statusLocked(id string, n Notifier) *DeliveryStatus {
+	if id == escalationDestination {
+		e.st.Escalation.Configured = true
+		e.st.Escalation.Target = n.Target()
+		return &e.st.Escalation
+	}
 	if id == defaultDestination {
 		e.st.Delivery.Configured = true
 		e.st.Delivery.Target = n.Target()
@@ -117,7 +169,11 @@ func (e *Engine) deliver(ctx context.Context, routes []*route, names map[string]
 			st.Delivered += int64(len(r.notes))
 			st.ConsecutiveFailures, st.LastError, st.NextRetryAt = 0, "", nil
 			st.LastSuccessAt = &at
-			e.st.markDelivered(r.notes, at)
+			if r.page {
+				e.st.markPaged(r.notes, at)
+			} else {
+				e.st.markDelivered(r.notes, at)
+			}
 			report.Delivered = true
 		}
 		e.mu.Unlock()

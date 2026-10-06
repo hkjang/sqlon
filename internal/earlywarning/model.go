@@ -117,9 +117,14 @@ type Alert struct {
 	NotifiedSeverity string     `json:"notified_severity,omitempty"`
 	NotifyCount      int        `json:"notify_count"`
 	ResolveNotified  bool       `json:"resolve_notified,omitempty"`
-	AckedBy          string     `json:"acked_by,omitempty"`
-	AckedAt          *time.Time `json:"acked_at,omitempty"`
-	AckNote          string     `json:"ack_note,omitempty"`
+	// Escalation bookkeeping: when the alert became critical, when the
+	// on-call channel was paged, and whether that channel heard it resolve.
+	CriticalSince       *time.Time `json:"critical_since,omitempty"`
+	PagedAt             *time.Time `json:"paged_at,omitempty"`
+	PageResolveNotified bool       `json:"page_resolve_notified,omitempty"`
+	AckedBy             string     `json:"acked_by,omitempty"`
+	AckedAt             *time.Time `json:"acked_at,omitempty"`
+	AckNote             string     `json:"ack_note,omitempty"`
 	// SilencedUntil and Flapping are filled in read models only (Board).
 	SilencedUntil *time.Time `json:"silenced_until,omitempty"`
 	Flapping      bool       `json:"flapping,omitempty"`
@@ -165,8 +170,10 @@ type Forecast struct {
 	DaysToFull *float64   `json:"days_to_full,omitempty"`
 	FullAt     *time.Time `json:"full_at,omitempty"`
 	Basis      string     `json:"basis,omitempty"` // window behind DaysToFull
-	Status     string     `json:"status"`          // ok | info | warning | critical | unknown
-	Note       string     `json:"note,omitempty"`
+	// Attribution splits the recent growth into what grew.
+	Attribution *Attribution `json:"attribution,omitempty"`
+	Status      string       `json:"status"` // ok | info | warning | critical | unknown
+	Note        string       `json:"note,omitempty"`
 }
 
 // Fit is a least-squares line through a series window.

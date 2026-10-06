@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	neturl "net/url"
 	"time"
 )
 
@@ -99,6 +101,10 @@ func (s *Server) postDigestWebhook(ctx context.Context, url string, digest map[s
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		var ue *neturl.Error
+		if errors.As(err, &ue) {
+			err = ue.Err // the URL path is the webhook's secret
+		}
 		log.Printf("digest webhook: POST failed: %v", err)
 		return
 	}

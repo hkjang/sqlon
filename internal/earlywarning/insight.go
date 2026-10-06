@@ -32,14 +32,15 @@ type AssetPlan struct {
 	GrowthBasis  string  `json:"growth_basis"` // 7d | 6h | none
 	// NeededBytes is the usage expected at the horizon; RecommendedBytes
 	// keeps that usage under the warning threshold.
-	NeededBytes      float64    `json:"needed_bytes"`
-	RecommendedBytes float64    `json:"recommended_bytes"`
-	ShortfallBytes   float64    `json:"shortfall_bytes"`
-	WarnCrossAt      *time.Time `json:"warn_cross_at,omitempty"` // usage reaches the warning threshold
-	FullAt           *time.Time `json:"full_at,omitempty"`
-	Verdict          string     `json:"verdict"` // ok | resize | unknown
-	Advice           string     `json:"advice"`
-	Scenarios        []Scenario `json:"scenarios"`
+	NeededBytes      float64      `json:"needed_bytes"`
+	RecommendedBytes float64      `json:"recommended_bytes"`
+	ShortfallBytes   float64      `json:"shortfall_bytes"`
+	WarnCrossAt      *time.Time   `json:"warn_cross_at,omitempty"` // usage reaches the warning threshold
+	FullAt           *time.Time   `json:"full_at,omitempty"`
+	Verdict          string       `json:"verdict"` // ok | resize | unknown
+	Advice           string       `json:"advice"`
+	Scenarios        []Scenario   `json:"scenarios"`
+	Attribution      *Attribution `json:"attribution,omitempty"` // what grew
 }
 
 type Scenario struct {
@@ -64,7 +65,7 @@ func (e *Engine) PlanCapacity(p dbconn.Profile, targetDays float64) CapacityPlan
 		if !f.Primary && f.LimitBytes <= 0 {
 			continue
 		}
-		a := AssetPlan{Asset: f.Asset, Label: assetLabel(f.Scope, f.Name), UsedBytes: f.UsedBytes, LimitBytes: f.LimitBytes, LimitSource: f.LimitSource, GrowthBasis: "none", Verdict: "unknown"}
+		a := AssetPlan{Asset: f.Asset, Label: assetLabel(f.Scope, f.Name), UsedBytes: f.UsedBytes, LimitBytes: f.LimitBytes, LimitSource: f.LimitSource, GrowthBasis: "none", Verdict: "unknown", Attribution: f.Attribution}
 		switch {
 		case f.GrowthLong != nil && f.GrowthLong.Valid:
 			a.GrowthPerDay, a.GrowthBasis = f.GrowthLong.BytesPerDay, f.GrowthLong.Window

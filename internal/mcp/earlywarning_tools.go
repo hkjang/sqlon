@@ -37,7 +37,7 @@ var earlyWarningToolNames = map[string]bool{
 func init() { dbaTools["propose_early_warning_fix"] = true }
 
 func earlyWarningToolDefs() []map[string]any {
-	settings := map[string]any{"type": "object", "description": "변경할 항목만: webhook_ref(env:NAME|file:PATH|plain:URL), console_url, min_notify_severity(info|warning|critical), renotify_interval(6h|off), digest_at(HH:MM|off), maintenance_interval(5m), schema_interval(15m|off), host_disk_stale_after(15m)"}
+	settings := map[string]any{"type": "object", "description": "변경할 항목만: webhook_ref(env:NAME|file:PATH|plain:URL), console_url, min_notify_severity(info|warning|critical), renotify_interval(6h|off), digest_at(HH:MM|off), maintenance_interval(5m), schema_interval(15m|off), host_disk_stale_after(15m), heartbeat_ref(외부 감시 핑 URL — SQLON 자신이 멈추면 감시 서비스가 알림), escalation_ref(당직 호출 채널), escalate_after(30m|0=즉시|off — critical 이 이 시간 동안 ack 안 되면 당직 호출), chat_actions(mattermost|off — 알림에 확인·2시간 무음·수정안 버튼), action_url(채팅 서버가 버튼 콜백을 보낼 SQLON 주소, 비우면 console_url 의 origin)"}
 	return []map[string]any{
 		tool("explain_early_warning", "예방 경보 하나를 깊게 봅니다: 같은 DB에서 함께 발생 중인 경보와 원인 사슬(예: WAL 아카이브 실패 → pg_wal 과다 → 고갈 예측), 같은 경보의 과거 발생 이력, 저장공간 경보면 예측(6시간·7일 추세)과 최근 시계열, 무음·흔들림 여부, 그리고 다음에 쓸 도구(next_actions)와 자동 수정안 존재 여부. 원인 경보부터 고치는 것이 전략입니다.", objectSchema(map[string]any{
 			"alert_id": str("get_early_warnings 의 firing[].id"),
@@ -64,20 +64,21 @@ func earlyWarningToolDefs() []map[string]any {
 			"host":     str("호스트 이름"),
 			"volumes":  arrayOfObjects("[{mount, filesystem, total_bytes, used_bytes, avail_bytes}] — df -Pk 값×1024"),
 		}, []string{"volumes"})),
-		tool("configure_early_warning", "관리자: 예방 경보 서버 설정을 재시작 없이 조회·변경·초기화합니다 — 기본 알림 채널(webhook_ref, 비밀은 가려짐), 콘솔 링크, 최소 알림 위험도, 재알림 간격, 일일 리포트 시각, 예방 점검·스키마 감시 주기, 디스크 보고 중단 판정 시간. action=get|set|reset. 변경은 감사 로그에 남고 settings.json 에 저장됩니다.", objectSchema(map[string]any{
+		tool("configure_early_warning", "관리자: 예방 경보 서버 설정을 재시작 없이 조회·변경·초기화합니다 — 기본 알림 채널(webhook_ref, 비밀은 가려짐), 콘솔 링크, 최소 알림 위험도, 재알림 간격, 일일 리포트 시각, 예방 점검·스키마 감시 주기, 디스크 보고 중단 판정 시간, SQLON 생존 신호(heartbeat_ref), 당직 호출(escalation_ref·escalate_after), Mattermost 버튼(chat_actions·action_url). action=get|set|reset. 변경은 감사 로그에 남고 settings.json 에 저장됩니다.", objectSchema(map[string]any{
 			"action":   str("get | set | reset"),
 			"settings": settings,
 			"fields":   arrayOf("string", "reset 할 항목 이름 (all = 전체)"),
 		}, []string{"action"})),
-		tool("configure_profile_alerting", "관리자: DB 하나의 예방 경보 설정을 바꿉니다 — capacity(storage_limit 볼륨 크기 예: 500GiB, warn/critical_percent, warn/critical_days)와 alerting(webhook_ref 팀 채널 env:/file:/plain:, min_severity). 지정한 묶음만 바꾸고 clear 로 묶음을 지웁니다. 프로파일의 다른 설정은 그대로입니다.", objectSchema(map[string]any{
+		tool("configure_profile_alerting", "관리자: DB 하나의 예방 경보 설정을 바꿉니다 — capacity(storage_limit 볼륨 크기 예: 500GiB, warn/critical_percent, warn/critical_days)와 alerting(webhook_ref 팀 채널 env:/file:/plain:, escalation_ref 이 DB의 당직 호출 채널, min_severity). 지정한 묶음만 바꾸고 clear 로 묶음을 지웁니다. 프로파일의 다른 설정은 그대로입니다.", objectSchema(map[string]any{
 			"profile":  str("DB 프로파일 ID"),
 			"capacity": map[string]any{"type": "object", "description": "{storage_limit, warn_percent, critical_percent, warn_days, critical_days}"},
-			"alerting": map[string]any{"type": "object", "description": "{webhook_ref, min_severity}"},
+			"alerting": map[string]any{"type": "object", "description": "{webhook_ref, escalation_ref, min_severity}"},
 			"clear":    arrayOf("string", "capacity | alerting"),
 		}, []string{"profile"})),
 		tool("run_early_warning_check", "관리자: 모든 DB를 지금 수집하고 예방 점검·스키마 점검까지 주기와 무관하게 실행해 경보를 갱신합니다. 이번에 새로 생긴 경보와 해소된 경보를 돌려줍니다 — 조치 후 효과를 확인할 때 씁니다. 알림도 평소처럼 나갑니다.", objectSchema(map[string]any{}, nil)),
-		tool("test_alert_channel", "관리자: 알림 채널로 테스트 메시지를 보냅니다. profile 을 주면 그 DB의 전용 채널(alerting.webhook_ref)을, 없으면 기본 채널을 시험합니다.", objectSchema(map[string]any{
+		tool("test_alert_channel", "관리자: 알림 채널로 테스트 메시지를 보냅니다. profile 을 주면 그 DB의 전용 채널(alerting.webhook_ref)을, 없으면 기본 채널을 시험합니다. channel=escalation 이면 당직 호출 채널을 시험합니다.", objectSchema(map[string]any{
 			"profile": str("DB별 채널을 시험할 프로파일 ID (선택)"),
+			"channel": str("team(기본) | escalation"),
 		}, nil)),
 		tool("propose_early_warning_fix", "DBA: 경보를 고치는 변경계획 초안(draft)을 만듭니다 — 버려진 복제 슬롯 제거, VACUUM 을 막는 세션 종료·prepared 트랜잭션 롤백, 블로트 VACUUM, max_slot_wal_keep_size 상한 설정, autovacuum 켜기, 모니터링 계정에 pg_monitor 부여. 실행하지 않으며 submit_change → approve_change → execute_approved_change 승인 게이트를 거쳐야 합니다. 검증 단계는 조치가 실제로 적용되지 않으면 실패합니다. 자동 수정이 없는 경보(아카이브 대상 장애·용량)는 무엇을 해야 하는지 안내합니다.", objectSchema(map[string]any{
 			"alert_id": str("경보 ID"),
@@ -427,31 +428,55 @@ func (s *Server) earlyWarningToolScoped(ctx context.Context, profiles []dbconn.P
 	case "test_alert_channel":
 		var a struct {
 			Profile string `json:"profile"`
+			Channel string `json:"channel"`
 		}
 		if err := decodeArgs(raw, &a); err != nil {
 			return nil, err
 		}
-		notifier, scope := s.EarlyWarning.DefaultNotifier(), "기본 채널"
+		var prof *dbconn.Profile
 		if a.Profile != "" {
 			p, ok := allowedProfile(profiles, a.Profile)
 			if !ok {
 				return ewError("not_found", "db profile not found or not permitted"), nil
 			}
-			custom, err := s.EarlyWarning.Route(p)
+			prof = &p
+		}
+		var notifier earlywarning.Notifier
+		scope, title := "기본 채널", "#### 🛡️ SQLON 예방 경보 — 알림 경로 테스트\n이 메시지가 보이면 %s의 예방 경보가 이 채널로 전달됩니다."
+		switch strings.ToLower(a.Channel) {
+		case "", "team":
+			notifier = s.EarlyWarning.DefaultNotifier()
+			if prof != nil && s.EarlyWarning.Route != nil {
+				custom, err := s.EarlyWarning.Route(*prof)
+				if err != nil {
+					return ewError("invalid", err.Error()), nil
+				}
+				if custom != nil {
+					notifier, scope = custom, prof.ID+" 전용 채널"
+				}
+			}
+		case "escalation":
+			n, err := s.EarlyWarning.EscalationNotifier(prof)
 			if err != nil {
 				return ewError("invalid", err.Error()), nil
 			}
-			if custom != nil {
-				notifier, scope = custom, p.ID+" 전용 채널"
+			notifier, scope, title = n, "당직 호출 채널", "#### 📟 SQLON 당직 호출 — 경로 테스트\n이 메시지가 보이면 확인되지 않은 critical 경보가 %s로 호출됩니다."
+			if prof != nil {
+				scope = prof.ID + "의 당직 호출 채널"
 			}
+		default:
+			return ewError("invalid", "channel must be team or escalation"), nil
 		}
 		if notifier == nil {
+			if strings.EqualFold(a.Channel, "escalation") {
+				return ewError("not_configured", "no escalation channel; set one with configure_early_warning (escalation_ref)"), nil
+			}
 			return ewError("not_configured", "no notification channel; set one with configure_early_warning (webhook_ref)"), nil
 		}
 		tctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
-		err := notifier.NotifyText(tctx, "test", "#### 🛡️ SQLON 예방 경보 — 알림 경로 테스트\n이 메시지가 보이면 "+scope+"의 예방 경보가 이 채널로 전달됩니다.")
-		audit("early_warning_test_notification", a.Profile, map[string]any{"delivered": err == nil, "target": notifier.Target()})
+		err := notifier.NotifyText(tctx, "test", fmt.Sprintf(title, scope))
+		audit("early_warning_test_notification", a.Profile, map[string]any{"delivered": err == nil, "target": notifier.Target(), "channel": a.Channel})
 		if err != nil {
 			return map[string]any{"status": "error", "delivered": false, "target": notifier.Target(), "error": err.Error()}, nil
 		}
@@ -479,11 +504,15 @@ func (s *Server) earlyWarningToolScoped(ctx context.Context, profiles []dbconn.P
 			return ewError("error", err.Error()), nil
 		}
 		if proposal.Available && proposal.Plan != nil {
-			created, err := s.Changes.Create(*proposal.Plan, proposal.Plan.ID)
+			created, reused, err := s.saveFixDraft(alert.ID, *proposal.Plan)
 			if err != nil {
 				return ewError("error", err.Error()), nil
 			}
 			proposal.Plan = &created
+			if reused {
+				proposal.Guidance = "이 경보의 변경계획 " + created.ID + " (" + string(created.State) + ")이 이미 진행 중입니다 — 새로 만들지 않았습니다. " + proposal.Guidance
+				return map[string]any{"status": "ok", "alert_id": alert.ID, "proposal": proposal, "existing": true}, nil
+			}
 			audit("early_warning_fix_proposed", alert.ProfileID, map[string]any{"alert": alert.ID, "plan": created.ID, "kind": proposal.Kind})
 		}
 		return map[string]any{"status": "ok", "alert_id": alert.ID, "proposal": proposal}, nil

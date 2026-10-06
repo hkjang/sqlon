@@ -3,8 +3,14 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -208,6 +214,24 @@ func TestEarlyWarningToolsStrategicLoop(t *testing.T) {
 	if got := callEW(t, s, ctx, "test_alert_channel", nil); got["status"] != "not_configured" {
 		t.Fatalf("no channel: %v", got)
 	}
+	if got := callEW(t, s, ctx, "test_alert_channel", map[string]any{"channel": "escalation"}); got["status"] != "not_configured" || !strings.Contains(fmt.Sprint(got), "escalation_ref") {
+		t.Fatalf("no on-call channel: %v", got)
+	}
+	var paged atomic.Value
+	oncall := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		paged.Store(string(b))
+	}))
+	defer oncall.Close()
+	if got := callEW(t, s, ctx, "configure_early_warning", map[string]any{"action": "set", "settings": map[string]any{"escalation_ref": "plain:" + oncall.URL, "escalate_after": "15m"}}); got["status"] != "ok" {
+		t.Fatalf("set escalation: %v", got)
+	}
+	if got := callEW(t, s, ctx, "test_alert_channel", map[string]any{"channel": "escalation"}); got["delivered"] != true {
+		t.Fatalf("escalation test: %v", got)
+	}
+	if body, _ := paged.Load().(string); !strings.Contains(body, "당직 호출") {
+		t.Fatalf("the on-call channel got the test page: %q", body)
+	}
 }
 
 func TestEarlyWarningToolsRespectProfilePermissionsInMetaMode(t *testing.T) {
@@ -329,5 +353,96 @@ func TestEarlyWarningToolListsAreNeverNull(t *testing.T) {
 				t.Fatalf("%s.%s must be an array, got %s", name, k, m[k])
 			}
 		}
+	}
+}
+
+// Mattermost calls the action URL with {user_id, user_name, context}; it
+// carries no SQLON credentials, only the signed token from the button.
+func TestChatActionCallbackActsOnlyWithAValidToken(t *testing.T) {
+	s, _ := earlyWarningFixture(t)
+	mux := newMuxFor(s)
+	s.EarlyWarning.ChatActions, s.EarlyWarning.ConsoleURL = "mattermost", "https://sqlon.example/admin/alerts"
+	_ = s.EarlyWarning.LoadSettings()
+	tokenFor := func(rule, action string) (string, string) {
+		board := s.EarlyWarning.Board([]dbconn.Profile{{ID: "orders-prod"}})
+		for _, a := range board.Firing {
+			if a.Rule == rule {
+				att := s.EarlyWarning.ChatAttachment(earlywarning.Notification{Kind: earlywarning.KindFiring, Alert: a})
+				for _, b := range att["actions"].([]map[string]any) {
+					if strings.HasPrefix(b["id"].(string), action) {
+						return a.ID, b["integration"].(map[string]any)["context"].(map[string]any)["token"].(string)
+					}
+				}
+			}
+		}
+		t.Fatalf("no %s button for %s", action, rule)
+		return "", ""
+	}
+	post := func(token string) (int, string) {
+		body, _ := json.Marshal(map[string]any{"user_id": "u1", "user_name": "kim.dba", "context": map[string]any{"token": token}})
+		rec := doReq(t, mux, "POST", earlywarning.ChatActionPath, string(body), map[string]string{"Content-Type": "application/json"})
+		var out map[string]string
+		_ = json.Unmarshal(rec.Body.Bytes(), &out)
+		return rec.Code, out["ephemeral_text"]
+	}
+	if code, text := post("forged.token"); code != 403 || !strings.Contains(text, "invalid") {
+		t.Fatalf("a forged token must be refused: %d %s", code, text)
+	}
+	usageID, ack := tokenFor(earlywarning.RuleCapacityUsage, "ack")
+	if code, text := post(ack); code != 200 || !strings.Contains(text, "확인했습니다") {
+		t.Fatalf("ack: %d %s", code, text)
+	}
+	if a, _ := s.EarlyWarning.Alert(usageID); a.AckedBy != "mattermost:kim.dba" {
+		t.Fatalf("the ack must record the chat user: %+v", a)
+	}
+	_, silence := tokenFor("maint_wal_archive", "silence")
+	if code, text := post(silence); code != 200 || !strings.Contains(text, "멈췄습니다") || len(s.EarlyWarning.Board([]dbconn.Profile{{ID: "orders-prod"}}).Silences) != 1 {
+		t.Fatalf("silence: %d %s", code, text)
+	}
+	_, fix := tokenFor("maint_bloat", "fix")
+	code, text := post(fix)
+	if code != 200 || !strings.Contains(text, "변경계획 초안") || !strings.Contains(text, "실행되지 않습니다") {
+		t.Fatalf("fix: %d %s", code, text)
+	}
+	if code, again := post(fix); code != 200 || again == "" { // a double click
+		t.Fatalf("second click: %d %s", code, again)
+	}
+	drafts := 0
+	for _, p := range s.Changes.List() {
+		if p.State == change.Draft && strings.Contains(p.Reason, "블로트") {
+			drafts++
+		}
+	}
+	if drafts != 1 {
+		t.Fatalf("the fix button creates exactly one draft, even when clicked twice, and never executes: %d", drafts)
+	}
+}
+
+// docker stop, systemd and Kubernetes send SIGTERM: the server must stop
+// and write the early-warning series it keeps in memory between saves.
+func TestServeServerContextFlushesOnShutdown(t *testing.T) {
+	s, p := earlyWarningFixture(t)
+	series := filepath.Join(s.opDir(), "operations", "earlywarning", "series", "orders-prod.json")
+	_ = os.Remove(series)
+	// a second cycle inside the ten-minute save throttle: held in memory only
+	s.EarlyWarning.Evaluate(context.Background(), footprintBatch(p, time.Now().UTC().Add(time.Minute), 96*gib), earlywarning.EvaluateOptions{})
+	if _, err := os.Stat(series); !os.IsNotExist(err) {
+		t.Fatalf("precondition: the periodic save is throttled: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- ServeServerContext(ctx, "127.0.0.1:0", s) }()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("shutdown: %v", err)
+		}
+	case <-time.After(8 * time.Second):
+		t.Fatal("server did not stop")
+	}
+	if _, err := os.Stat(series); err != nil {
+		t.Fatalf("series must be flushed on shutdown: %v", err)
 	}
 }

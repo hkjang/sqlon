@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -35,6 +36,12 @@ type SchemaCollector interface {
 
 type PlanLister interface {
 	List() []change.Plan
+}
+
+// MigrationSource reads migration-tool history tables (Flyway, Liquibase,
+// Django, Prisma, Knex) found in a schema snapshot.
+type MigrationSource interface {
+	RecentMigrations(context.Context, *metasync.RawSnapshot, time.Time) ([]metasync.Migration, error)
 }
 
 // HistoryScanner streams stored collector snapshots, oldest first. It seeds
@@ -67,6 +74,9 @@ type Config struct {
 	// DigestAt is the local "HH:MM" of the daily capacity report to the
 	// default channel ("" = off).
 	DigestAt string
+	// EscalateAfter pages the escalation channel for critical alerts left
+	// unacknowledged this long (0 = default 30m, negative = never).
+	EscalateAfter time.Duration
 }
 
 func (c Config) withDefaults() Config {
@@ -100,6 +110,9 @@ func (c Config) withDefaults() Config {
 	if c.HostDiskStaleAfter <= 0 {
 		c.HostDiskStaleAfter = 15 * time.Minute
 	}
+	if c.EscalateAfter == 0 {
+		c.EscalateAfter = 30 * time.Minute
+	}
 	return c
 }
 
@@ -131,6 +144,10 @@ type profileMeta struct {
 	SchemaStatus      string    `json:"schema_status,omitempty"`
 	SchemaBaselineAt  time.Time `json:"schema_baseline_at,omitempty"`
 	SchemaTables      int       `json:"schema_tables,omitempty"`
+	// MigrationsSeen are the migrations (tool:version) already recorded at
+	// the last schema check: only migrations new since then can explain a
+	// schema change, so a manual ALTER right after a deploy is not excused.
+	MigrationsSeen []string `json:"migrations_seen,omitempty"`
 }
 
 type persisted struct {
@@ -143,6 +160,8 @@ type persisted struct {
 	// Channels are per-database destinations keyed by notifier ID.
 	Channels       map[string]*DeliveryStatus `json:"channels,omitempty"`
 	HostDisk       map[string]*HostDiskReport `json:"host_disk,omitempty"`
+	Heartbeat      HeartbeatStatus            `json:"heartbeat"`
+	Escalation     DeliveryStatus             `json:"escalation"`
 	Silences       []Silence                  `json:"silences,omitempty"`
 	LastDigestDate string                     `json:"last_digest_date,omitempty"`
 	LastDigestErr  string                     `json:"last_digest_error,omitempty"`
@@ -156,6 +175,7 @@ type Engine struct {
 	Maintenance MaintenanceChecker
 	Schema      SchemaCollector
 	Plans       PlanLister
+	Migrations  MigrationSource
 	History     HistoryScanner
 	Notifier    Notifier
 	// Route returns a database's own channel (nil = the default Notifier).
@@ -165,8 +185,18 @@ type Engine struct {
 	Factory    NotifierFactory
 	Resolve    WebhookResolver
 	ConsoleURL string
-	Now        func() time.Time
-	Logf       func(string, ...any)
+	// HeartbeatURL is pinged after each healthy cycle (dead man's switch).
+	HeartbeatURL string
+	// Escalation is the on-call channel; RouteEscalation overrides it per
+	// database (nil = use Escalation).
+	Escalation      Notifier
+	RouteEscalation func(dbconn.Profile) (Notifier, error)
+	// ChatActions ("mattermost") adds buttons calling back ActionURL.
+	ChatActions string
+	ActionURL   string
+	actionKey   []byte
+	Now         func() time.Time
+	Logf        func(string, ...any)
 
 	evalMu    sync.Mutex
 	mu        sync.Mutex
@@ -216,6 +246,20 @@ func (e *Engine) DefaultNotifier() Notifier {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.Notifier
+}
+
+// EscalationNotifier returns the on-call channel for a profile: its own
+// alerting.escalation_ref, else the server's escalation channel.
+func (e *Engine) EscalationNotifier(p *dbconn.Profile) (Notifier, error) {
+	if p != nil && e.RouteEscalation != nil {
+		custom, err := e.RouteEscalation(*p)
+		if err != nil || custom != nil {
+			return custom, err
+		}
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.Escalation, nil
 }
 
 func (e *Engine) now() time.Time {
@@ -278,6 +322,7 @@ type profileWork struct {
 	maintState string
 	schemaNote string
 	newBase    *metasync.RawSnapshot
+	migsSeen   []string // nil when the history was not read
 }
 
 // Evaluate turns one collection batch into alert state and notifications.
@@ -428,6 +473,9 @@ func (e *Engine) Evaluate(ctx context.Context, batch collector.BatchResult, opts
 			if w.newBase != nil {
 				m.SchemaBaselineAt, m.SchemaTables = w.newBase.CollectedAt, len(w.newBase.Tables)
 			}
+			if w.migsSeen != nil {
+				m.MigrationsSeen = w.migsSeen
+			}
 		}
 	}
 	for pid := range e.st.Profiles {
@@ -462,6 +510,7 @@ func (e *Engine) Evaluate(ctx context.Context, batch collector.BatchResult, opts
 		notes[i].Cause = causes[notes[i].Alert.ID]
 	}
 	routes := e.routeLocked(notes, byID, now)
+	routes = append(routes, e.pageRoutesLocked(byID, silences, now)...)
 	names := map[string]string{}
 	for _, p := range byID {
 		names[p.ID] = p.Name
@@ -501,6 +550,7 @@ func (e *Engine) Evaluate(ctx context.Context, batch collector.BatchResult, opts
 			}
 		}
 	}
+	e.heartbeat(ctx, report)
 	return report
 }
 
@@ -547,18 +597,58 @@ func (e *Engine) runSchema(ctx context.Context, w *profileWork, plans []change.P
 		return
 	}
 	w.ran[CheckSchema] = true
+	// Read the migration history every check, not only on a change, so the
+	// migrations already present are known before the next change arrives.
+	var fresh []metasync.Migration
+	note := ""
+	if e.Migrations != nil {
+		since := now.Add(-migrationSlack)
+		if base != nil {
+			since = base.CollectedAt.Add(-migrationSlack)
+		}
+		e.mu.Lock()
+		prev := append([]string(nil), e.meta(w.p.ID).MigrationsSeen...)
+		e.mu.Unlock()
+		seen := map[string]bool{}
+		for _, k := range prev {
+			seen[k] = true
+		}
+		found, err := e.Migrations.RecentMigrations(ctx, snap, since)
+		if err != nil {
+			note = " · 마이그레이션 이력 일부 조회 실패: " + err.Error()
+		}
+		w.migsSeen = []string{}
+		for _, m := range found {
+			key := m.Tool + ":" + m.Version
+			w.migsSeen = append(w.migsSeen, key)
+			if !seen[key] {
+				fresh = append(fresh, m)
+			}
+		}
+		if err != nil { // a history table could not be read: keep what we knew
+			for _, k := range prev {
+				if !slices.Contains(w.migsSeen, k) {
+					w.migsSeen = append(w.migsSeen, k)
+				}
+			}
+		}
+	}
 	switch {
 	case base == nil:
 		w.newBase = snap
-		w.schemaNote = fmt.Sprintf("기준선 수립 (테이블 %d개)", len(snap.Tables))
+		w.schemaNote = fmt.Sprintf("기준선 수립 (테이블 %d개)", len(snap.Tables)) + note
 	case base.SchemaHash == snap.SchemaHash:
-		w.schemaNote = fmt.Sprintf("변경 없음 (테이블 %d개)", len(snap.Tables))
+		w.schemaNote = fmt.Sprintf("변경 없음 (테이블 %d개)", len(snap.Tables)) + note
 	default:
-		w.conds = append(w.conds, schemaConditions(w.p, base, snap, plans, w.tableBytes)...)
+		w.conds = append(w.conds, schemaConditions(w.p, base, snap, plans, w.tableBytes, fresh)...)
 		w.newBase = snap
-		w.schemaNote = fmt.Sprintf("변경 감지 (테이블 %d개)", len(snap.Tables))
+		w.schemaNote = fmt.Sprintf("변경 감지 (테이블 %d개, 배포 마이그레이션 %d건)%s", len(snap.Tables), len(fresh), note)
 	}
 }
+
+// migrationSlack allows for clock skew between SQLON and the database,
+// whose clock stamps the migration history.
+const migrationSlack = 10 * time.Minute
 
 // Ack acknowledges a firing alert.
 func (e *Engine) Ack(id, actor, note string) (Alert, error) {
@@ -798,6 +888,9 @@ type Board struct {
 	Channels []DeliveryStatus `json:"channels"`
 	Silences []Silence        `json:"silences"`
 	Digest   DigestStatus     `json:"digest"`
+	// Escalation is the on-call channel's health; Heartbeat SQLON's own.
+	Escalation DeliveryStatus  `json:"escalation"`
+	Heartbeat  HeartbeatStatus `json:"heartbeat"`
 	// Incidents group firing alerts linked by cause and effect.
 	Incidents []Incident `json:"incidents"`
 }
@@ -828,7 +921,16 @@ func (e *Engine) boardLocked(profiles []dbconn.Profile) Board {
 	board := Board{GeneratedAt: e.now(), LastCycleAt: timePtr(e.st.LastCycleAt), Delivery: e.st.Delivery,
 		Settings: BoardSettings{MinNotifySeverity: e.cfg.MinNotifySeverity, RenotifyHours: e.cfg.RenotifyInterval.Hours(), MaintenanceMinutes: e.cfg.MaintenanceEvery.Minutes(), SchemaMinutes: e.cfg.SchemaEvery.Minutes(), CollectionDownAfter: e.cfg.CollectionDownAfter},
 		Profiles: []ProfileBoard{}, Firing: []Alert{}, Recent: []Alert{}, SchemaEvents: []Alert{}, Channels: []DeliveryStatus{}, Silences: []Silence{},
-		Digest: DigestStatus{At: e.cfg.DigestAt, LastSent: e.st.LastDigestDate, LastError: e.st.LastDigestErr}}
+		Digest:     DigestStatus{At: e.cfg.DigestAt, LastSent: e.st.LastDigestDate, LastError: e.st.LastDigestErr},
+		Escalation: e.st.Escalation, Heartbeat: e.st.Heartbeat}
+	board.Escalation.Configured = e.Escalation != nil
+	if e.Escalation != nil {
+		board.Escalation.Target = e.Escalation.Target()
+	}
+	board.Heartbeat.Configured = e.HeartbeatURL != ""
+	if e.HeartbeatURL != "" {
+		board.Heartbeat.Target = MaskURL(e.HeartbeatURL)
+	}
 	board.Delivery.Configured = e.Notifier != nil
 	if e.Notifier != nil {
 		board.Delivery.Target = e.Notifier.Target()

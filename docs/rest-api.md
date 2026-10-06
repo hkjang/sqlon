@@ -40,7 +40,8 @@ REST와 MCP 도구(`put_dataset` 등)는 **동일한 서버 코드**를 호출�
 | `POST /api/early-warning/alerts/{id}/fix` | 승인 대기 수정 변경계획 초안 (DBA) |
 | `GET /api/early-warning/capacity-plan?profile=&days=` | 용량 계획 |
 | `GET·PUT /api/early-warning/settings` | 런타임 설정 조회·변경·초기화 (admin) |
-| `POST /api/early-warning/test-notification` | 알림 경로 테스트 (admin, `?profile=` 로 DB별 채널) |
+| `POST /api/early-warning/test-notification` | 알림 경로 테스트 (admin, `?profile=` 로 DB별 채널, `?channel=escalation` 으로 당직 채널) |
+| `POST /api/early-warning/chat-action` | Mattermost 버튼 콜백 — SQLON 자격 증명 대신 버튼의 서명 토큰(경보 하나·동작 하나, 7일 만료)으로 인가 |
 
 상세: [early-warning.md](early-warning.md)
 

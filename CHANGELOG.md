@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+## v0.5.0 — 2026-10-06
+
+### 예방 경보가 확실히 사람에게 닿도록
+
+- **당직 호출**: 긴급 경보가 `SQLON_ALERT_ESCALATE_AFTER`(기본 30분) 동안 확인되지 않으면
+  당직 채널(`SQLON_ALERT_ESCALATION_WEBHOOK`, DB별 `alerting.escalation_ref`)로 한 번 더 알리고,
+  해소되면 "호출 해소" 를 보냅니다. 확인(ack)·무음이 걸린 경보는 호출하지 않습니다.
+- **SQLON 생존 신호**: `SQLON_HEARTBEAT_URL`(healthchecks.io·Uptime Kuma 등)을 평가 주기마다
+  호출합니다. 평가가 실패하거나 기본 채널 전달이 실패 중이면 핑을 보류해, SQLON이 멈추거나 경고를
+  내보내지 못하는 상태를 외부 감시가 잡아냅니다.
+- **Mattermost 버튼**: `SQLON_ALERT_CHAT_ACTIONS=mattermost` 면 알림마다 ✅ 확인 · 🔕 2시간 무음 ·
+  🛠 수정안 만들기 버튼이 붙습니다. 콜백(`POST /api/early-warning/chat-action`)은 경보 하나·동작
+  하나만 허용하는 서명 토큰(HMAC-SHA256, 7일 만료)으로 인가하고, 수정안은 변경계획 초안만 만듭니다
+  (같은 경보에 진행 중인 계획이 있으면 재사용). 버튼을 끄면 게시된 버튼도 무효가 됩니다.
+
+### 이상 징후를 더 정확하게
+
+- **증가 원인**: 저장공간 경보·예측·용량 계획·일일 리포트가 최근 증가분을 테이블·WAL·임시파일·로그,
+  볼륨이면 DB 점유량·DB 밖 파일로 나눠 "무엇이 늘었나" 를 보여줍니다. 이번 주 새로 생긴 테이블은 0부터
+  자란 것으로 셉니다.
+- **배포 마이그레이션 인식**: 스키마 변경과 함께 Flyway·Liquibase·Django·Prisma·Knex 이력 테이블에
+  새 마이그레이션이 기록됐으면 배포로 표시하고(정보, 마이그레이션 목록 첨부) 계획 외 변경과 구분합니다.
+  배포여도 테이블·컬럼 삭제는 경고로 남기고, 직전 점검에 이미 있던 마이그레이션은 이후의 수동 `ALTER`
+  를 설명하지 못합니다.
+
+### 관리
+
+- MCP `configure_early_warning` 에 `escalation_ref`·`escalate_after`·`heartbeat_ref`·`chat_actions`·
+  `action_url`, `configure_profile_alerting` 에 `alerting.escalation_ref`, `test_alert_channel` 에
+  `channel=escalation` 을 추가했습니다. 콘솔 설정 패널·채널 상태(📟 당직, 💓 생존 신호)·경보 표의 당직
+  호출 표시·예측 표의 증가 원인, DB 프로파일의 당직 채널 입력도 같이 바뀌었습니다.
+
+### 수정
+
+- 웹훅·핑 전송 오류 메시지가 URL 경로(웹훅의 비밀)를 그대로 담아 콘솔·상태·로그에 노출하던 문제를
+  고쳤습니다. 이제 `https://host/…` 로 가립니다.
+- SIGTERM·Ctrl+C(docker stop, systemd, Kubernetes)에 요청을 마무리하고 예방 경보 상태·시계열을 디스크에
+  기록한 뒤 종료합니다. 이전에는 재시작·배포 때마다 마지막 저장 이후 최대 10분의 시계열이 사라졌습니다.
+- 스키마 변경이 배포로 분류되면 "권한 오남용일 수 있습니다" 대신 배포에 맞는 조치 안내를 붙입니다.
+- 설정 값의 기간을 `6h0m0s` 대신 `6h` 처럼 입력한 모양 그대로 보여줍니다.
+
 ## v0.4.0 — 2026-10-06
 
 ### MCP 로 예방 경보 전체 운영
