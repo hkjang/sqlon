@@ -4,7 +4,7 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sqlon DBA 코파일럿</title>
+<title>인시던트 · 진단 · sqlon</title>
 <style>
   :root{
     --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
@@ -13,15 +13,15 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
-  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header{background:var(--inverse-bg);color:var(--inverse-text);padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
   header h1{font-size:16px;margin:0 10px 0 0;}
   .grow{flex:1;}
-  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:150px;}
-  header select#profile{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;min-width:170px;}
+  header input#adminToken{background:var(--inverse-2);border:1px solid var(--inverse-border);color:var(--inverse-text);border-radius:6px;padding:6px 10px;width:150px;}
+  header select#profile{background:var(--inverse-2);border:1px solid var(--inverse-border);color:var(--inverse-text);border-radius:6px;padding:6px 10px;min-width:170px;}
   main{max-width:1300px;margin:0 auto;padding:16px 20px 90px;}
   .tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
-  .tab{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 15px;font-size:13px;cursor:pointer;font-weight:600;color:var(--sub);}
-  .tab.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+  .tab{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 15px;font-size:13px;cursor:pointer;font-weight:600;color:var(--sub);}
+  .tab.active{background:var(--accent-solid);border-color:var(--blue);color:var(--on-accent);}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
   .card h2{font-size:13px;margin:0 0 12px;color:var(--sub);font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:14px;}
@@ -33,46 +33,48 @@
   th{font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);}
   td.mono,code{font-family:var(--mono);font-size:12px;}
   td.num{text-align:right;font-variant-numeric:tabular-nums;}
-  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
+  .btn{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
   .btn:hover{border-color:var(--blue);color:var(--blue);}
-  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;}
-  .btn.primary:hover{opacity:.9;color:#fff;}
+  .btn.primary{background:var(--accent-solid);border-color:var(--blue);color:var(--on-accent);}
+  .btn.primary:hover{opacity:.9;color:var(--on-accent);}
   .btn.mini{padding:3px 9px;font-size:11.5px;}
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
   .toolbar input[type=number]{border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:13px;width:90px;}
   textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:12.5px;resize:vertical;}
   .mini{font-size:12px;color:var(--sub);}
-  .sev{display:inline-block;min-width:52px;text-align:center;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;color:#fff;text-transform:uppercase;}
-  .sev.high{background:var(--red);} .sev.medium{background:var(--amber);} .sev.low{background:#64748b;} .sev.info{background:#0ea5e9;}
-  .ddl{background:#0f172a;color:#d7e3f4;font-family:var(--mono);font-size:12px;padding:8px 10px;border-radius:7px;white-space:pre-wrap;word-break:break-all;}
+  .sev{display:inline-block;min-width:52px;text-align:center;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;color:var(--on-accent);text-transform:uppercase;}
+  .sev.high{background:var(--danger-solid);} .sev.medium{background:var(--warn-solid);} .sev.low{background:var(--faint);} .sev.info{background:var(--info-solid);}
+  .ddl{background:var(--inverse-bg);color:var(--inverse-text);font-family:var(--mono);font-size:12px;padding:8px 10px;border-radius:7px;white-space:pre-wrap;word-break:break-all;}
   .finding{border:1px solid var(--line);border-left-width:3px;border-radius:0 8px 8px 0;padding:8px 12px;margin:8px 0;}
   .finding.high{border-left-color:var(--red);} .finding.medium{border-left-color:var(--amber);}
-  .finding.low{border-left-color:#64748b;} .finding.info{border-left-color:#0ea5e9;}
+  .finding.low{border-left-color:var(--faint);} .finding.info{border-left-color:var(--info);}
   .finding b{font-family:var(--mono);}
-  .summary{font-size:15px;line-height:1.7;padding:12px 14px;background:#eff5ff;border:1px solid #cfe0ff;border-radius:10px;}
+  .summary{font-size:15px;line-height:1.7;padding:12px 14px;background:var(--surface-2);border:1px solid var(--accent-border);border-radius:10px;}
   .msg{font-size:12.5px;margin-left:6px;} .msg.ok{color:var(--green);} .msg.bad{color:var(--red);}
   .pane{display:none;} .pane.active{display:block;}
   .note{font-size:12px;color:var(--sub);margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);}
-  .bar{height:8px;border-radius:4px;background:#eef1f5;overflow:hidden;min-width:60px;display:inline-block;width:120px;vertical-align:middle;}
-  .bar>i{display:block;height:100%;border-radius:4px;background:var(--blue);}
+  .bar{height:8px;border-radius:4px;background:var(--surface-3);overflow:hidden;min-width:60px;display:inline-block;width:120px;vertical-align:middle;}
+  .bar>i{display:block;height:100%;border-radius:4px;background:var(--accent-solid);}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 <header>
-  <h1>🩺 DBA 코파일럿</h1>
-  <span class="mini" id="scope" style="color:#9db4dd"></span>
+  <h1>인시던트 · 진단</h1>
+  <span class="mini" id="scope" style="color:var(--accent)"></span>
   <span class="grow"></span>
   <select id="profile" title="DB 프로파일"></select>
   <input id="adminToken" type="password" placeholder="관리 토큰">
   <span class="msg" id="msg"></span>
 </header>
 <main>
-  <div class="card" id="digestBanner" style="display:none;background:linear-gradient(90deg,#101a2e,#1d2b47);color:#e8eefc;border:none">
+  <div class="card" id="digestBanner" style="display:none;background:linear-gradient(90deg,var(--inverse-bg),var(--inverse-2));color:var(--inverse-text);border:none">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <span style="font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;opacity:.7">DBA 다이제스트</span>
       <b id="digestHeadline" style="font-size:15px"></b>
       <span class="grow"></span>
-      <span id="digestMeta" class="mini" style="color:#9db4dd"></span>
+      <span id="digestMeta" class="mini" style="color:var(--accent)"></span>
     </div>
   </div>
   <div class="tabs" id="tabs">
@@ -312,7 +314,7 @@ function runRewrite(){
     var base=d.baseline_plan?('<div class="note">원본 EXPLAIN 기준선 — 위험도 <b>'+esc(d.baseline_plan.risk)+'</b>, 비용 '+esc(d.baseline_plan.total_cost)+', 예상 최대행 '+esc(d.baseline_plan.max_cardinality)+'. 재작성 채택 후 다시 EXPLAIN해 실제 개선을 확인하세요.</div>'):'';
     out.innerHTML=base+(s.length?s.map(function(x){
       return '<div class="finding '+esc(x.severity)+'"><span class="'+sevCls(x.severity)+'">'+esc(x.severity)+'</span> <b>'+esc(x.rule)+'</b>'+
-        (x.auto_applicable?' <span class="mini" style="color:#15803d">정확 변환</span>':' <span class="mini" style="color:#a16207">검토 필요</span>')+
+        (x.auto_applicable?' <span class="mini" style="color:var(--ok-strong)">정확 변환</span>':' <span class="mini" style="color:var(--warn-strong)">검토 필요</span>')+
         '<div style="margin-top:4px">'+esc(x.message)+'</div>'+
         '<div class="mini" style="margin-top:5px">변경 전</div><div class="ddl">'+esc(x.before)+'</div>'+
         '<div class="mini" style="margin-top:4px">변경 후</div><div class="ddl">'+esc(x.after)+'</div>'+
@@ -398,9 +400,9 @@ function loadDigest(){
 }
 function loadProfiles(){
   return fetch('/api/db-profiles',{headers:headers()}).then(function(r){return r.json();}).then(function(d){
-    var ps=d.profiles||[];var last=localStorage.getItem('jasqlLastProfile');
+    var ps=d.profiles||[];var last=localStorage.getItem('sqlonObserveProfile');
     $('profile').innerHTML=(ps.length?ps.map(function(p){return '<option value="'+esc(p.id)+'"'+(p.id===last?' selected':'')+'>'+esc(p.id)+(p.name?' — '+esc(p.name):'')+'</option>';}).join(''):'<option value="">프로파일 없음</option>');
-    $('profile').onchange=function(){localStorage.setItem('jasqlLastProfile',$('profile').value);loadDigest();};
+    $('profile').onchange=function(){localStorage.setItem('sqlonObserveProfile',$('profile').value);loadDigest();};
   }).catch(function(){});
 }
 

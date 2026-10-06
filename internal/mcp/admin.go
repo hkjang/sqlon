@@ -31,6 +31,8 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", s.guardPage(s.serveWebUI("webui/fleet.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /welcome", s.serveWebUI("webui/landing.html", "text/html; charset=utf-8"))
 	mux.HandleFunc("GET /admin/nav.js", s.serveWebUI("webui/nav.js", "application/javascript"))
+	mux.HandleFunc("GET /admin/ui.css", s.serveWebUI("webui/ui.css", "text/css; charset=utf-8"))
+	mux.HandleFunc("GET /admin/theme.js", s.serveWebUI("webui/theme.js", "application/javascript"))
 	mux.HandleFunc("GET /admin/onboarding.md", s.serveWebUI("webui/onboarding.md", "text/markdown; charset=utf-8"))
 	mux.HandleFunc("GET /admin/logo-transparent.png", s.serveWebUI("webui/logo-transparent.png", "image/png"))
 	mux.HandleFunc("GET /favicon.ico", s.serveWebUI("webui/favicon.ico", "image/x-icon"))

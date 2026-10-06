@@ -4,7 +4,7 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sqlon 데이터셋 관리 콘솔</title>
+<title>데이터셋 · sqlon</title>
 <style>
   :root {
     --bg:#f5f7fa; --card:#ffffff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
@@ -16,28 +16,28 @@
   body { margin:0; background:var(--bg); color:var(--ink);
          font:14px/1.6 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
   a { color:var(--blue); }
-  header { background:#101a2e; color:#e8eefc; padding:14px 22px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+  header { background:var(--inverse-bg); color:var(--inverse-text); padding:14px 22px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
   header h1 { font-size:17px; margin:0 14px 0 0; }
-  .chip { display:inline-block; padding:2px 10px; border-radius:20px; font-size:12px; background:#243654; color:#cfe0ff; }
-  .chip.err { background:#5b1d1d; color:#ffc9c9; }
-  .chip.warn { background:#54401a; color:#ffe1a6; }
+  .chip { display:inline-block; padding:2px 10px; border-radius:20px; font-size:12px; background:var(--inverse-2); color:var(--inverse-text); }
+  .chip.err { background:var(--danger-bg); color:var(--danger); border-color:var(--danger-border); }
+  .chip.warn { background:var(--warn-bg); color:var(--warn); border-color:var(--warn-border); }
   header .grow { flex:1; }
-  header input { background:#1d2b47; border:1px solid #35507f; color:#e8eefc; border-radius:6px; padding:6px 10px; width:220px; }
+  header input { background:var(--inverse-2); border:1px solid var(--inverse-border); color:var(--inverse-text); border-radius:6px; padding:6px 10px; width:220px; }
   .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px;
          padding:7px 14px; cursor:pointer; font-size:13px; }
   .btn:hover { border-color:var(--blue); color:var(--blue); }
-  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
-  .btn.primary:hover { opacity:.9; color:#fff; }
-  .btn.danger { color:var(--red); border-color:#efc4c4; }
+  .btn.primary { background:var(--accent-solid); border-color:var(--blue); color:var(--on-accent); }
+  .btn.primary:hover { opacity:.9; color:var(--on-accent); }
+  .btn.danger { color:var(--red); border-color:var(--danger-border); }
   .btn.danger:hover { background:var(--red-soft); }
   .btn:disabled { opacity:.45; cursor:not-allowed; }
   main { max-width:1500px; margin:0 auto; padding:18px 22px 60px; }
-  .hero { margin-bottom:16px; background:linear-gradient(135deg,#fff 45%,#edf3ff); display:grid; grid-template-columns:1fr auto; gap:18px; align-items:center; }
+  .hero { margin-bottom:16px; background:linear-gradient(135deg,var(--surface) 45%,var(--accent-bg)); display:grid; grid-template-columns:1fr auto; gap:18px; align-items:center; }
   .hero h2 { margin:0 0 4px; font-size:20px; }.hero p{margin:0;color:var(--sub)}
-  .flow { display:flex; gap:7px; flex-wrap:wrap; }.flow span{border:1px solid #c9d7f2;background:#fff;border-radius:18px;padding:6px 10px;color:var(--sub);font-size:12px}.flow b{color:var(--blue)}
+  .flow { display:flex; gap:7px; flex-wrap:wrap; }.flow span{border:1px solid var(--border-strong);background:var(--surface);border-radius:18px;padding:6px 10px;color:var(--sub);font-size:12px}.flow b{color:var(--blue)}
   .summary { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:10px 0 12px; }
-  .summary div { padding:9px 10px;border-radius:8px;background:#f7f9fc;border:1px solid var(--line); }.summary span{display:block;color:var(--sub);font-size:11px}.summary b{font-size:16px}
-  .filters { display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.filters button{border:1px solid var(--line);background:#fff;border-radius:16px;padding:4px 9px;cursor:pointer;color:var(--sub)}.filters button.on{background:var(--blue-soft);border-color:#9db9f6;color:var(--blue);font-weight:700}
+  .summary div { padding:9px 10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--line); }.summary span{display:block;color:var(--sub);font-size:11px}.summary b{font-size:16px}
+  .filters { display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.filters button{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:4px 9px;cursor:pointer;color:var(--sub)}.filters button.on{background:var(--blue-soft);border-color:var(--accent-border);color:var(--blue);font-weight:700}
   #dsSearch { width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
   /* guide */
@@ -47,10 +47,10 @@
   details.guide[open] > summary { border-radius:12px 12px 0 0; border-bottom:0; }
   details.guide .card { border-radius:0 0 12px 12px; }
   .guide-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:14px; margin-top:6px; }
-  .guide-step { border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:#fbfcfe; }
+  .guide-step { border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:var(--surface-2); }
   .guide-step h3 { margin:0 0 6px; font-size:14px; }
-  .guide-step h3 .no { display:inline-block; width:22px; height:22px; border-radius:50%; background:var(--blue);
-    color:#fff; text-align:center; line-height:22px; font-size:12px; margin-right:7px; }
+  .guide-step h3 .no { display:inline-block; width:22px; height:22px; border-radius:50%; background:var(--accent-solid);
+    color:var(--on-accent); text-align:center; line-height:22px; font-size:12px; margin-right:7px; }
   .guide-step p, .guide-step ul { margin:4px 0; color:var(--sub); font-size:13px; }
   .guide-step ul { padding-left:18px; }
   .guide-step code, td code, .mini code { background:var(--gray-soft); border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
@@ -85,34 +85,36 @@
   .sect { margin-top:16px; }
   .sect > h4 { margin:0 0 8px; font-size:13px; color:var(--sub); text-transform:uppercase; letter-spacing:.4px;
     border-bottom:1px solid var(--line); padding-bottom:5px; }
-  pre.schema, pre.sample { background:#0f1729; color:#d5e2ff; border-radius:8px; padding:12px; overflow:auto;
+  pre.schema, pre.sample { background:var(--inverse-bg); color:var(--inverse-text); border-radius:8px; padding:12px; overflow:auto;
     font-family:var(--mono); font-size:12px; max-height:260px; margin:0; white-space:pre-wrap; word-break:break-all; }
   .kv { display:grid; grid-template-columns:130px 1fr; gap:4px 12px; font-size:13px; }
   .kv dt { color:var(--sub); } .kv dd { margin:0; }
   textarea#editor { width:100%; min-height:300px; font-family:var(--mono); font-size:12.5px; border:1px solid var(--line);
-    border-radius:8px; padding:10px; resize:vertical; background:#fbfcfe; }
-  textarea#editor.bad { border-color:var(--red); background:#fff7f7; }
+    border-radius:8px; padding:10px; resize:vertical; background:var(--surface-2); }
+  textarea#editor.bad { border-color:var(--red); background:var(--danger-bg); }
   .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }
   .toolbar label { font-size:13px; color:var(--sub); display:flex; align-items:center; gap:5px; }
   .result { border-radius:8px; padding:12px 14px; margin-top:8px; font-size:13px; display:none; white-space:pre-wrap; }
-  .result.ok   { display:block; background:var(--green-soft); border:1px solid #bfe4cc; }
-  .result.bad  { display:block; background:var(--red-soft);   border:1px solid #efc4c4; }
-  .result.info { display:block; background:var(--blue-soft);  border:1px solid #c4d6f7; }
+  .result.ok   { display:block; background:var(--green-soft); border:1px solid var(--ok-border); }
+  .result.bad  { display:block; background:var(--red-soft);   border:1px solid var(--danger-border); }
+  .result.info { display:block; background:var(--blue-soft);  border:1px solid var(--accent-border); }
   .mini { font-size:12px; color:var(--sub); }
   ul.issues { margin:6px 0; padding-left:18px; font-size:12.5px; color:var(--red); }
   .empty { color:var(--sub); padding:40px 0; text-align:center; }
-  #toast { position:fixed; right:18px; bottom:18px; background:#101a2e; color:#e8eefc; border-radius:10px;
+  #toast { position:fixed; right:18px; bottom:18px; background:var(--inverse-bg); color:var(--inverse-text); border-radius:10px;
     padding:12px 18px; font-size:13px; display:none; max-width:480px; box-shadow:0 6px 24px rgba(0,0,0,.25); z-index:50;}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 
 <header>
-  <h1>🗂 sqlon 데이터셋 관리 콘솔</h1>
+  <h1>데이터셋</h1>
   <span id="healthChips"></span>
   <span class="grow"></span>
   <input id="adminToken" type="password" placeholder="관리 토큰 (미설정 시 비워두기)" title="서버가 -admin-token으로 기동된 경우에만 필요합니다. 브라우저에만 저장됩니다.">
-  <button class="btn" onclick="reloadCatalog()">🔄 카탈로그 리로드</button>
+  <button class="btn" onclick="reloadCatalog()">카탈로그 리로드</button>
   <button class="btn" onclick="refreshAll()">새로고침</button>
 </header>
 

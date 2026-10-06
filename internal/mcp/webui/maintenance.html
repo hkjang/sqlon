@@ -3,28 +3,30 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
-<title>SQLON 예방 점검</title>
+<title>예방 점검 · sqlon</title>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--line:#dce4ee;--ink:#172033;--sub:#607086;--blue:#2563eb;--ok:#15803d;--warn:#a16207;--bad:#b91c1c;--mono:ui-monospace,'Cascadia Code',Consolas,monospace}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif}
-header{padding:13px 26px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}
-select,input,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff}button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}
+header{padding:13px 26px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}
+select,input,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--surface)}button{cursor:pointer}button.primary{background:var(--accent-solid);border-color:var(--blue);color:var(--on-accent);font-weight:700}
 main{max-width:1400px;margin:auto;padding:20px 26px 60px}
-.context{padding:11px 14px;background:#17243b;color:#e9f0ff;border-radius:10px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap}.context span{padding-right:9px;border-right:1px solid #42516b}.context span:last-child{border:0}
-.notice{padding:11px 14px;background:#eef4ff;border:1px solid #c4d5f5;border-radius:10px;margin-bottom:14px;font-size:13px;color:#1d3f7a}
+.context{padding:11px 14px;background:var(--inverse-bg);color:var(--inverse-text);border-radius:10px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap}.context span{padding-right:9px;border-right:1px solid var(--inverse-border)}.context span:last-child{border:0}
+.notice{padding:11px 14px;background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:10px;margin-bottom:14px;font-size:13px;color:var(--accent-strong)}
 .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:14px}.card small{display:block;color:var(--sub)}.card b{font-size:24px}.bad b{color:var(--bad)}.warn b{color:var(--warn)}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:11px;margin-bottom:14px;overflow:hidden}.panel h2{font-size:15px;margin:0;padding:13px 15px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}.panel h2 .grow{flex:1}
-.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap}th{font-size:12px;color:#536176;background:#f8fafc}
+.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}th{font-size:12px;color:var(--text-2);background:var(--surface-2)}
 td.wrap{white-space:normal;max-width:520px}
 .muted{color:var(--sub);font-size:12px}.empty{padding:32px;text-align:center;color:var(--sub)}
-.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:700;background:#eef2f7;color:#475569}
-.sev-critical{background:#fee2e2;color:#991b1b}.sev-warning{background:#fef3c7;color:#854d0e}.sev-info{background:#e0f2fe;color:#075985}
-.cat-wraparound{background:#fde8e8;color:#9b1c1c}.cat-bloat{background:#fdf0d5;color:#8a5a00}.cat-replication_slot{background:#e6e9f7;color:#3730a3}.cat-wal_archive{background:#fde8e8;color:#9b1c1c}.cat-wal_retention{background:#fdf0d5;color:#8a5a00}.cat-vacuum_blocker{background:#f3e8ff;color:#6b21a8}.cat-config_risk{background:#e0f2fe;color:#075985}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:700;background:var(--surface-3);color:var(--text-2)}
+.sev-critical{background:var(--danger-bg);color:var(--danger-strong)}.sev-warning{background:var(--warn-bg);color:var(--warn-strong)}.sev-info{background:var(--accent-bg);color:var(--accent-strong)}
+.cat-wraparound{background:var(--danger-bg);color:var(--danger-strong)}.cat-bloat{background:var(--warn-bg);color:var(--warn-strong)}.cat-replication_slot{background:var(--accent-bg);color:var(--accent)}.cat-wal_archive{background:var(--danger-bg);color:var(--danger-strong)}.cat-wal_retention{background:var(--warn-bg);color:var(--warn-strong)}.cat-vacuum_blocker{background:var(--purple-bg);color:var(--purple)}.cat-config_risk{background:var(--accent-bg);color:var(--accent-strong)}
 .mono{font-family:var(--mono);font-size:12.5px}
-.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}
-.filterbtn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 11px;font-size:12.5px;cursor:pointer}.filterbtn.active{background:#17243b;color:#fff;border-color:#17243b}
+.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn-strong)}.message.error{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-strong)}
+.filterbtn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:5px 11px;font-size:12.5px;cursor:pointer}.filterbtn.active{background:var(--inverse-bg);color:var(--on-accent);border-color:var(--inverse-border)}
 @media(max-width:950px){.cards{grid-template-columns:repeat(2,1fr)}main{padding:15px}}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 <header><h1>예방 점검</h1><select id="profile" aria-label="DB 프로파일"></select><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><button class="primary" id="refresh">새로고침</button><span class="grow"></span><span class="muted" id="fresh">수집 전</span></header>

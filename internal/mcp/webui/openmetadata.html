@@ -4,7 +4,7 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sqlon · OpenMetadata 연동</title>
+<title>OpenMetadata · sqlon</title>
 <style>
   :root{
     --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
@@ -13,19 +13,19 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
-  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header{background:var(--inverse-bg);color:var(--inverse-text);padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
   header h1{font-size:16px;margin:0 10px 0 0;}
   .grow{flex:1;}
-  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:160px;}
+  header input#adminToken{background:var(--inverse-2);border:1px solid var(--inverse-border);color:var(--inverse-text);border-radius:6px;padding:6px 10px;width:160px;}
   main{max-width:1200px;margin:0 auto;padding:16px 20px 90px;}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
   .card h2{font-size:13px;margin:0 0 12px;color:var(--sub);font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-  input,select{border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px;background:#fff;}
-  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
+  input,select{border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px;background:var(--surface);}
+  .btn{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
   .btn:hover{border-color:var(--blue);color:var(--blue);}
-  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600;}
-  .btn.warn{background:var(--amber);border-color:var(--amber);color:#fff;}
+  .btn.primary{background:var(--accent-solid);border-color:var(--blue);color:var(--on-accent);font-weight:600;}
+  .btn.warn{background:var(--warn-solid);border-color:var(--amber);color:var(--on-accent);}
   .pill{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;}
   .pill.ok{background:var(--green-soft);color:var(--green);} .pill.bad{background:var(--red-soft);color:var(--red);}
   .mini{font-size:12px;color:var(--sub);}
@@ -33,25 +33,27 @@
   th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top;}
   th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);}
   td.mono{font-family:var(--mono);font-size:12px;}
-  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef1f5;color:#334;margin-right:3px;}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:var(--surface-3);color:var(--accent-strong);margin-right:3px;}
   .tag.pii{background:var(--red-soft);color:var(--red);}
   .counts{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0;}
   .counts b{font-size:20px;font-variant-numeric:tabular-nums;}
   .msg{font-size:12.5px;margin-left:6px;} .msg.ok{color:var(--green);} .msg.bad{color:var(--red);}
-  pre{background:#0d1626;color:#dbe6ff;border-radius:10px;padding:12px;font-family:var(--mono);font-size:12px;overflow:auto;max-height:280px;}
+  pre{background:var(--inverse-bg);color:var(--inverse-text);border-radius:10px;padding:12px;font-family:var(--mono);font-size:12px;overflow:auto;max-height:280px;}
   .empty{color:var(--sub);padding:16px 0;}
   label.f{font-size:12px;color:var(--sub);display:flex;gap:6px;align-items:center;}
-  .hero{background:linear-gradient(135deg,#10203c,#245b91 65%,#28787b);color:#fff;border:0;padding:22px;box-shadow:0 12px 34px rgba(20,55,105,.16)}.hero h2{color:#fff;text-transform:none;font-size:21px;letter-spacing:-.3px;margin-bottom:5px}.hero p{margin:0;color:#d2e2f2;max-width:780px}
-  .flow{display:grid;grid-template-columns:repeat(4,1fr);margin-top:18px;border-radius:9px;overflow:hidden;background:rgba(255,255,255,.14)}.step{padding:10px 12px;background:rgba(255,255,255,.06);font-size:12px}.step b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#fff;color:#245b91;margin-right:6px}.step span{display:block;margin-left:32px;color:#c8daec;font-size:11px}
-  .connection{border-left:4px solid #94a3b8}.connection.ready{border-left-color:#16a34a}.connection.fail{border-left-color:#dc2626}.fieldgrid{display:grid;grid-template-columns:minmax(260px,2fr) minmax(220px,1fr);gap:12px}.field{display:flex;flex-direction:column;gap:4px;color:var(--sub);font-size:12px}.field input{width:100%}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}.btn:disabled{opacity:.45;cursor:not-allowed}.btn.safe{background:#0f766e;border-color:#0f766e;color:#fff}.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
-  .op-head{display:flex;gap:12px;align-items:flex-start}.op-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:#e8efff;font-size:19px}.op-head h2{font-size:15px;color:var(--ink);text-transform:none;margin:0}.op-head p{font-size:12px;color:var(--sub);margin:2px 0 0}.prereq{margin:10px 0;padding:9px 11px;background:#fff8e7;border:1px solid #f2d99d;border-radius:8px;color:#7c5209;font-size:12px}.warning{margin-top:8px;padding:9px 11px;background:#fff8e7;border-radius:8px;color:#7c5209;font-size:12px}.raw-toggle{cursor:pointer;font-weight:700}.busy:after{content:' 처리 중…';font-weight:400}.result-state{font-size:12px;color:var(--sub);margin-left:auto}
+  .hero{background:linear-gradient(135deg,var(--inverse-bg),var(--accent-solid) 65%,var(--info-solid));color:var(--on-accent);border:0;padding:22px;box-shadow:0 12px 34px rgba(20,55,105,.16)}.hero h2{color:var(--on-accent);text-transform:none;font-size:21px;letter-spacing:-.3px;margin-bottom:5px}.hero p{margin:0;color:var(--inverse-text);max-width:780px}
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);margin-top:18px;border-radius:9px;overflow:hidden;background:rgba(255,255,255,.14)}.step{padding:10px 12px;background:rgba(255,255,255,.06);font-size:12px}.step b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--surface);color:var(--accent-strong);margin-right:6px}.step span{display:block;margin-left:32px;color:var(--inverse-text);font-size:11px}
+  .connection{border-left:4px solid var(--faint)}.connection.ready{border-left-color:var(--ok)}.connection.fail{border-left-color:var(--danger)}.fieldgrid{display:grid;grid-template-columns:minmax(260px,2fr) minmax(220px,1fr);gap:12px}.field{display:flex;flex-direction:column;gap:4px;color:var(--sub);font-size:12px}.field input{width:100%}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}.btn:disabled{opacity:.45;cursor:not-allowed}.btn.safe{background:var(--info-solid);border-color:var(--info);color:var(--on-accent)}.btn.danger{background:var(--danger-solid);border-color:var(--red);color:var(--on-accent)}
+  .op-head{display:flex;gap:12px;align-items:flex-start}.op-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:var(--accent-bg);font-size:19px}.op-head h2{font-size:15px;color:var(--ink);text-transform:none;margin:0}.op-head p{font-size:12px;color:var(--sub);margin:2px 0 0}.prereq{margin:10px 0;padding:9px 11px;background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:8px;color:var(--warn-strong);font-size:12px}.warning{margin-top:8px;padding:9px 11px;background:var(--warn-bg);border-radius:8px;color:var(--warn-strong);font-size:12px}.raw-toggle{cursor:pointer;font-weight:700}.busy:after{content:' 처리 중…';font-weight:400}.result-state{font-size:12px;color:var(--sub);margin-left:auto}
   @media(max-width:700px){main{padding:12px}.flow{grid-template-columns:1fr 1fr}.fieldgrid{grid-template-columns:1fr}.actions .btn{flex:1}.hero{padding:17px}}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 <header>
-  <h1>🔗 OpenMetadata 연동</h1>
-  <span class="mini" id="target" style="color:#9db4dd"></span>
+  <h1>OpenMetadata</h1>
+  <span class="mini" id="target" style="color:var(--accent)"></span>
   <input id="adminToken" type="password" placeholder="관리 토큰">
   <span class="grow"></span>
   <span id="statusPill"></span>
@@ -60,7 +62,7 @@
 <main>
   <div class="card hero"><h2>OpenMetadata와 안전하게 메타데이터를 동기화하세요</h2><p>연결을 먼저 검증하고 변경 계획을 확인한 뒤, 검토 큐 또는 직접 반영을 선택하세요.</p><div class="flow"><div class="step"><b>1</b>연결 검증<span>URL·토큰 확인</span></div><div class="step"><b>2</b>Drift 분석<span>차이와 충돌 파악</span></div><div class="step"><b>3</b>미리보기<span>변경 범위 검토</span></div><div class="step"><b>4</b>승인·반영<span>Import/Export/Lineage</span></div></div></div>
   <div class="card connection" id="connectionCard">
-    <div class="op-head"><div class="op-icon">🔌</div><div><h2>연결 설정</h2><p>테스트가 성공한 설정만 저장하는 것을 권장합니다. 토큰을 비우면 저장된 토큰으로 테스트합니다.</p></div><span class="grow"></span><span class="mini" id="cfgSource"></span></div>
+    <div class="op-head"><div class="op-icon"></div><div><h2>연결 설정</h2><p>테스트가 성공한 설정만 저장하는 것을 권장합니다. 토큰을 비우면 저장된 토큰으로 테스트합니다.</p></div><span class="grow"></span><span class="mini" id="cfgSource"></span></div>
     <div class="fieldgrid" style="margin-top:12px"><label class="field">OpenMetadata URL<input id="cfgUrl" placeholder="http://openmetadata:8585"></label><label class="field">Bot JWT Token<input id="cfgToken" type="password" placeholder="비우면 기존 토큰 유지"></label></div>
     <div class="actions"><button class="btn" id="testBtn">1. 입력값 연결 테스트</button><button class="btn primary" id="cfgSave" disabled>2. 검증된 설정 저장</button><button class="btn" id="statusBtn">저장된 연결 재확인</button><span class="result-state" id="testState">입력값을 먼저 테스트하세요.</span></div>
     <div class="mini" id="statusDetail" style="margin-top:6px"></div>

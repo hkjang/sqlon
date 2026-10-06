@@ -4,7 +4,7 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sqlon 메타 검토</title>
+<title>메타 검토 · sqlon</title>
 <style>
   :root{
     --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
@@ -14,19 +14,19 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
-  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header{background:var(--inverse-bg);color:var(--inverse-text);padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
   header h1{font-size:16px;margin:0 10px 0 0;}
   .grow{flex:1;}
-  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:160px;}
+  header input#adminToken{background:var(--inverse-2);border:1px solid var(--inverse-border);color:var(--inverse-text);border-radius:6px;padding:6px 10px;width:160px;}
   main{max-width:1300px;margin:0 auto;padding:16px 20px 90px;}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;}
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
-  .toolbar select,.toolbar input{border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px;background:#fff;}
-  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
+  .toolbar select,.toolbar input{border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px;background:var(--surface);}
+  .btn{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
   .btn:hover{border-color:var(--blue);color:var(--blue);}
-  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600;}
-  .btn.ok{background:var(--green);border-color:var(--green);color:#fff;}
-  .btn.bad{background:var(--red);border-color:var(--red);color:#fff;}
+  .btn.primary{background:var(--accent-solid);border-color:var(--blue);color:var(--on-accent);font-weight:600;}
+  .btn.ok{background:var(--ok-solid);border-color:var(--green);color:var(--on-accent);}
+  .btn.bad{background:var(--danger-solid);border-color:var(--red);color:var(--on-accent);}
   .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;}
   .chip{font-size:12px;padding:4px 10px;border-radius:20px;background:var(--blue-soft);color:var(--blue);font-weight:600;}
   .chip.g{background:var(--green-soft);color:var(--green);} .chip.a{background:var(--amber-soft);color:var(--amber);}
@@ -35,27 +35,29 @@
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
   th{font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);font-weight:600;}
   td.mono{font-family:var(--mono);font-size:12px;}
-  .kind{display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;background:#eef1f5;color:#334;font-weight:600;}
-  .kind.mt{background:#efe7fb;color:#6b21a8;} .kind.rl{background:#e2f1fb;color:#0369a1;}
-  .kind.cd{background:#fdf3e2;color:#b45309;} .kind.ln,.kind.st,.kind.ds{background:var(--green-soft);color:var(--green);}
+  .kind{display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;background:var(--surface-3);color:var(--accent-strong);font-weight:600;}
+  .kind.mt{background:var(--purple-bg);color:var(--purple);} .kind.rl{background:var(--accent-bg);color:var(--accent-strong);}
+  .kind.cd{background:var(--warn-bg);color:var(--warn);} .kind.ln,.kind.st,.kind.ds{background:var(--green-soft);color:var(--green);}
   .conf{font-variant-numeric:tabular-nums;font-weight:600;}
   .status{font-size:12px;font-weight:600;}
   .status.pending{color:var(--amber);} .status.approved{color:var(--green);} .status.rejected{color:var(--red);}
-  .sug{max-width:360px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:11.5px;color:#334;}
+  .sug{max-width:360px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:11.5px;color:var(--accent-strong);}
   .ev{font-size:11px;color:var(--sub);}
   .rowacts{display:flex;gap:6px;}
   .rowacts button{font-size:12px;padding:4px 9px;}
   .empty{color:var(--sub);padding:24px;text-align:center;}
   .msg{font-size:13px;margin-left:8px;}
   .msg.ok{color:var(--green);} .msg.bad{color:var(--red);}
-  pre.snip{background:#0d1626;color:#dbe6ff;border-radius:10px;padding:14px;font-family:var(--mono);font-size:12px;overflow:auto;max-height:340px;}
-  .sel-actions{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 0;display:flex;gap:8px;align-items:center;}
+  pre.snip{background:var(--inverse-bg);color:var(--inverse-text);border-radius:10px;padding:14px;font-family:var(--mono);font-size:12px;overflow:auto;max-height:340px;}
+  .sel-actions{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:10px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 <header>
-  <h1>🧾 메타 검토</h1>
-  <span class="mini" id="scope" style="color:#9db4dd;font-size:12px"></span>
+  <h1>메타 검토</h1>
+  <span class="mini" id="scope" style="color:var(--accent);font-size:12px"></span>
   <input id="adminToken" type="password" placeholder="관리 토큰">
   <span class="grow"></span>
   <span class="msg" id="msg"></span>

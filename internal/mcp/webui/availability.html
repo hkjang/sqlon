@@ -3,24 +3,26 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
-<title>SQLON 복제·백업</title>
+<title>복제 · 백업 · sqlon</title>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--line:#dce4ee;--ink:#172033;--sub:#607086;--blue:#2563eb;--ok:#15803d;--warn:#a16207;--bad:#b91c1c;--mono:ui-monospace,'Cascadia Code',Consolas,monospace}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif}
-header{padding:13px 26px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}
-select,input,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff}button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}
+header{padding:13px 26px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}
+select,input,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--surface)}button{cursor:pointer}button.primary{background:var(--accent-solid);border-color:var(--blue);color:var(--on-accent);font-weight:700}
 main{max-width:1500px;margin:auto;padding:20px 26px 60px}
-.context{padding:11px 14px;background:#17243b;color:#e9f0ff;border-radius:10px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap}.context span{padding-right:9px;border-right:1px solid #42516b}.context span:last-child{border:0}
+.context{padding:11px 14px;background:var(--inverse-bg);color:var(--inverse-text);border-radius:10px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap}.context span{padding-right:9px;border-right:1px solid var(--inverse-border)}.context span:last-child{border:0}
 .cards{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:14px}.card,.panel{background:var(--card);border:1px solid var(--line);border-radius:11px}.card{padding:14px}.card small{display:block;color:var(--sub)}.card b{font-size:22px}.bad b{color:var(--bad)}.warn b{color:var(--warn)}.ok b{color:var(--ok)}
 .panel{margin-bottom:14px;overflow:hidden}.panel h2{font-size:15px;margin:0;padding:13px 15px;border-bottom:1px solid var(--line)}
-.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap}th{font-size:12px;color:#536176;background:#f8fafc}
+.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}th{font-size:12px;color:var(--text-2);background:var(--surface-2)}
 .muted{color:var(--sub);font-size:12px}.empty{padding:32px;text-align:center;color:var(--sub)}
-.badge{display:inline-block;padding:2px 8px;border-radius:10px;background:#eef2f7;font-size:11.5px;font-weight:700}
-.badge.ok{background:#dcfce7;color:#166534}.badge.bad{background:#fee2e2;color:#991b1b}.badge.warn{background:#fef3c7;color:#854d0e}.badge.role{background:#e0e7ff;color:#3730a3}
-.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}
-.detailrow{display:flex;flex-wrap:wrap;gap:8px;padding:12px 15px;border-bottom:1px solid #edf1f5}.detailrow span{font-size:12.5px;background:#f4f6fa;border-radius:8px;padding:4px 9px}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;background:var(--surface-3);font-size:11.5px;font-weight:700}
+.badge.ok{background:var(--ok-bg);color:var(--ok-strong)}.badge.bad{background:var(--danger-bg);color:var(--danger-strong)}.badge.warn{background:var(--warn-bg);color:var(--warn-strong)}.badge.role{background:var(--accent-bg);color:var(--accent)}
+.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn-strong)}.message.error{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-strong)}
+.detailrow{display:flex;flex-wrap:wrap;gap:8px;padding:12px 15px;border-bottom:1px solid var(--border)}.detailrow span{font-size:12.5px;background:var(--surface-2);border-radius:8px;padding:4px 9px}
 @media(max-width:950px){.cards{grid-template-columns:repeat(3,1fr)}main{padding:15px}}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 <header><h1>복제 · 백업</h1><select id="profile" aria-label="DB 프로파일"></select><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><button class="primary" id="refresh">새로고침</button><span class="grow"></span><span class="muted" id="fresh">수집 전</span></header>

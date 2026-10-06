@@ -4,7 +4,7 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sqlon 메타 품질</title>
+<title>메타 품질 · sqlon</title>
 <style>
   :root{
     --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
@@ -13,10 +13,10 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
-  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header{background:var(--inverse-bg);color:var(--inverse-text);padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
   header h1{font-size:16px;margin:0 10px 0 0;}
   .grow{flex:1;}
-  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:160px;}
+  header input#adminToken{background:var(--inverse-2);border:1px solid var(--inverse-border);color:var(--inverse-text);border-radius:6px;padding:6px 10px;width:160px;}
   main{max-width:1300px;margin:0 auto;padding:16px 20px 90px;}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
   .card h2{font-size:13px;margin:0 0 12px;color:var(--sub);font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
@@ -24,30 +24,32 @@
   .kpi{border:1px solid var(--line);border-radius:12px;padding:16px 18px;}
   .kpi .n{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px;}
   .kpi .l{font-size:12.5px;color:var(--sub);margin-top:2px;}
-  .grade{display:inline-block;min-width:30px;text-align:center;border-radius:8px;padding:2px 10px;font-weight:800;color:#fff;}
-  .gA{background:#15803d;}.gB{background:#4d9a2a;}.gC{background:#b45309;}.gD{background:#c2410c;}.gE{background:#b91c1c;}
+  .grade{display:inline-block;min-width:30px;text-align:center;border-radius:8px;padding:2px 10px;font-weight:800;color:var(--on-accent);}
+  .gA{background:var(--ok-solid);}.gB{background:var(--ok-solid);}.gC{background:var(--warn-solid);}.gD{background:var(--warn-solid);}.gE{background:var(--danger-solid);}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);}
   th{font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);cursor:pointer;}
   td.mono{font-family:var(--mono);font-size:12px;}
   td.num{text-align:right;font-variant-numeric:tabular-nums;}
-  .bar{height:8px;border-radius:4px;background:#eef1f5;overflow:hidden;min-width:80px;}
-  .bar>i{display:block;height:100%;border-radius:4px;background:var(--blue);}
-  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
+  .bar{height:8px;border-radius:4px;background:var(--surface-3);overflow:hidden;min-width:80px;}
+  .bar>i{display:block;height:100%;border-radius:4px;background:var(--accent-solid);}
+  .btn{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:7px 13px;font-size:13px;cursor:pointer;}
   .btn:hover{border-color:var(--blue);color:var(--blue);}
   .pill{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;}
-  .pill.ok{background:#e6f6ec;color:var(--green);} .pill.bad{background:#fdeaea;color:var(--red);}
-  .viol{font-size:12.5px;padding:6px 10px;border-left:3px solid var(--red);background:#fdf2f2;margin:6px 0;border-radius:0 6px 6px 0;}
-  .viol.warn{border-color:var(--amber);background:#fdf7ec;}
+  .pill.ok{background:var(--ok-bg);color:var(--green);} .pill.bad{background:var(--danger-bg);color:var(--red);}
+  .viol{font-size:12.5px;padding:6px 10px;border-left:3px solid var(--red);background:var(--danger-bg);margin:6px 0;border-radius:0 6px 6px 0;}
+  .viol.warn{border-color:var(--amber);background:var(--warn-bg);}
   .msg{font-size:12.5px;margin-left:6px;} .msg.ok{color:var(--green);} .msg.bad{color:var(--red);}
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
   .mini{font-size:12px;color:var(--sub);}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 <header>
-  <h1>📈 메타 품질</h1>
-  <span class="mini" id="scope" style="color:#9db4dd"></span>
+  <h1>메타 품질</h1>
+  <span class="mini" id="scope" style="color:var(--accent)"></span>
   <input id="adminToken" type="password" placeholder="관리 토큰">
   <span class="grow"></span>
   <span class="msg" id="msg"></span>

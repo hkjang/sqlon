@@ -3,31 +3,33 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
-<title>SQLON 컴플라이언스</title>
+<title>컴플라이언스 · sqlon</title>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--line:#dce4ee;--ink:#172033;--sub:#607086;--blue:#2563eb;--ok:#15803d;--warn:#a16207;--bad:#b91c1c;--mono:ui-monospace,'Cascadia Code',Consolas,monospace}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif}
-header{padding:13px 26px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}
-select,input,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff}button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}
+header{padding:13px 26px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}
+select,input,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--surface)}button{cursor:pointer}button.primary{background:var(--accent-solid);border-color:var(--blue);color:var(--on-accent);font-weight:700}
 main{max-width:1200px;margin:auto;padding:20px 26px 60px}
-.context{padding:11px 14px;background:#17243b;color:#e9f0ff;border-radius:10px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap}.context span{padding-right:9px;border-right:1px solid #42516b}.context span:last-child{border:0}
-.notice{padding:11px 14px;background:#eef4ff;border:1px solid #c4d5f5;border-radius:10px;margin-bottom:14px;font-size:13px;color:#1d3f7a}
+.context{padding:11px 14px;background:var(--inverse-bg);color:var(--inverse-text);border-radius:10px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap}.context span{padding-right:9px;border-right:1px solid var(--inverse-border)}.context span:last-child{border:0}
+.notice{padding:11px 14px;background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:10px;margin-bottom:14px;font-size:13px;color:var(--accent-strong)}
 .scorewrap{display:flex;gap:14px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
 .scorebig{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 22px;text-align:center}.scorebig b{font-size:38px;display:block;line-height:1}.scorebig small{color:var(--sub)}
 .pills{display:flex;gap:8px;flex-wrap:wrap}.pill{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}.pill b{font-size:20px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:11px;overflow:hidden}
-table{width:100%;border-collapse:collapse}th,td{padding:11px 13px;border-bottom:1px solid #edf1f5;text-align:left;vertical-align:top}th{font-size:12px;color:#536176;background:#f8fafc}
+table{width:100%;border-collapse:collapse}th,td{padding:11px 13px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}th{font-size:12px;color:var(--text-2);background:var(--surface-2)}
 td.wrap{white-space:normal}
 .badge{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11.5px;font-weight:700}
-.st-pass{background:#dcfce7;color:#166534}.st-fail{background:#fee2e2;color:#991b1b}.st-manual{background:#e5e7eb;color:#374151}.st-unknown{background:#fef3c7;color:#854d0e}
-.fw{display:inline-block;font-size:11px;color:#475569;background:#eef2f7;border-radius:8px;padding:1px 7px;margin:1px 3px 1px 0}
+.st-pass{background:var(--ok-bg);color:var(--ok-strong)}.st-fail{background:var(--danger-bg);color:var(--danger-strong)}.st-manual{background:var(--surface-3);color:var(--text-2)}.st-unknown{background:var(--warn-bg);color:var(--warn-strong)}
+.fw{display:inline-block;font-size:11px;color:var(--text-2);background:var(--surface-3);border-radius:8px;padding:1px 7px;margin:1px 3px 1px 0}
 .muted{color:var(--sub);font-size:12px}.empty{padding:32px;text-align:center;color:var(--sub)}
-.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}
-@media print{header .grow~*,select,button,.notice{display:none!important}header{position:static}body{background:#fff}}
+.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn-strong)}.message.error{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-strong)}
+@media print{header .grow~*,select,button,.notice{display:none!important}header{position:static}body{background:var(--surface)}}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
-<header><h1>컴플라이언스 포스처</h1><select id="profile" aria-label="DB 프로파일"></select><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><button class="primary" id="refresh">진단</button><button id="print">리포트 저장/인쇄</button><span class="grow"></span><span class="muted" id="fresh">수집 전</span></header>
+<header><h1>컴플라이언스</h1><select id="profile" aria-label="DB 프로파일"></select><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><button class="primary" id="refresh">진단</button><button id="print">리포트 저장/인쇄</button><span class="grow"></span><span class="muted" id="fresh">수집 전</span></header>
 <main>
   <div class="context" id="context"><span>환경 -</span><span>업무서비스 -</span><span>엔진 -</span><span>인스턴스 -</span><span>수집 시각 -</span></div>
   <div class="notice">읽기 전용 진단을 ISMS-P · PCI-DSS · 개인정보보호법(PIPA) 통제 항목에 매핑한 <b>참고 리포트</b>입니다. 공식 인증/심사를 대체하지 않으며, 수집 불가 항목은 fail이 아닌 <b>manual(수동 확인)</b>로 표시합니다. 조치는 반드시 변경 관리로 수행하세요.</div>
@@ -45,7 +47,7 @@ td.wrap{white-space:normal}
     <tbody id="rows"><tr><td colspan="4" class="empty">수집 전</td></tr></tbody></table>
   </section>
 
-  <h2 style="font-size:16px;margin:22px 0 8px">🔎 PII 노출 진단</h2>
+  <h2 style="font-size:16px;margin:22px 0 8px">PII 노출 진단</h2>
   <div class="pills" style="margin-bottom:10px">
     <div class="pill st-pass"><b id="pProtected">-</b><div class="muted">마스킹됨(태그)</div></div>
     <div class="pill st-fail"><b id="pExposed">-</b><div class="muted">노출 후보(미태그)</div></div>

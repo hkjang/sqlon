@@ -4,7 +4,7 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sqlon 호출 통계</title>
+<title>통계 · sqlon</title>
 <style>
   :root{
     --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
@@ -14,10 +14,10 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
-  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header{background:var(--inverse-bg);color:var(--inverse-text);padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
   header h1{font-size:16px;margin:0 10px 0 0;}
   .grow{flex:1;}
-  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:180px;}
+  header input#adminToken{background:var(--inverse-2);border:1px solid var(--inverse-border);color:var(--inverse-text);border-radius:6px;padding:6px 10px;width:180px;}
   main{max-width:1400px;margin:0 auto;padding:16px 20px 90px;}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
   .card h2{font-size:14px;margin:0 0 12px;color:var(--sub);font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
@@ -31,29 +31,31 @@
   @media(max-width:900px){.cols2{grid-template-columns:1fr;}}
   .bar-row{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:13px;}
   .bar-row .lab{width:150px;flex-shrink:0;font-family:var(--mono);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .bar-row .track{flex:1;background:#eef1f5;border-radius:5px;height:16px;overflow:hidden;}
-  .bar-row .fill{height:100%;background:var(--blue);border-radius:5px;}
+  .bar-row .track{flex:1;background:var(--surface-3);border-radius:5px;height:16px;overflow:hidden;}
+  .bar-row .fill{height:100%;background:var(--accent-solid);border-radius:5px;}
   .bar-row .val{width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--sub);}
   .toolbar{display:flex;gap:10px;align-items:center;}
-  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 12px;font-size:13px;cursor:pointer;}
+  .btn{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:6px 12px;font-size:13px;cursor:pointer;}
   .btn:hover{border-color:var(--blue);color:var(--blue);}
   .mini{font-size:12px;color:var(--sub);}
   canvas{width:100%;height:160px;display:block;}
   .empty{color:var(--sub);font-size:13px;padding:8px 0;}
-  .hero{background:linear-gradient(135deg,#10203c,#295a85);color:#fff;border:0;padding:20px}.hero h2{color:#fff;text-transform:none;font-size:20px;margin:0 0 4px}.hero p{margin:0;color:#cfdeed}.hero .btn{background:#fff;font-weight:700}.insight{border-left:4px solid var(--blue);padding:12px 14px;background:#f3f7fd;border-radius:0 9px 9px 0;margin-bottom:14px}.insight b{display:block;margin-bottom:2px}.fill.bad{background:var(--red)}.fill.green{background:var(--green)}.linkrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.linkbtn{color:var(--blue);text-decoration:none;background:#e8efff;padding:6px 10px;border-radius:7px;font-size:12px}
+  .hero{background:linear-gradient(135deg,var(--inverse-bg),var(--accent-solid));color:var(--on-accent);border:0;padding:20px}.hero h2{color:var(--on-accent);text-transform:none;font-size:20px;margin:0 0 4px}.hero p{margin:0;color:var(--inverse-text)}.hero .btn{background:var(--surface);font-weight:700}.insight{border-left:4px solid var(--blue);padding:12px 14px;background:var(--surface-2);border-radius:0 9px 9px 0;margin-bottom:14px}.insight b{display:block;margin-bottom:2px}.fill.bad{background:var(--danger-solid)}.fill.green{background:var(--ok-solid)}.linkrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.linkbtn{color:var(--blue);text-decoration:none;background:var(--accent-bg);padding:6px 10px;border-radius:7px;font-size:12px}
   @media(max-width:700px){main{padding:12px}.hero .toolbar{align-items:flex-start;flex-direction:column}.bar-row .lab{width:110px}}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 <header>
-  <h1>📊 호출 통계</h1>
+  <h1>통계</h1>
   <span class="mini" id="scopeChip"></span>
   <input id="adminToken" type="password" placeholder="관리 토큰">
   <span class="grow"></span>
-  <label class="mini" id="allWrap" style="display:none;color:#cfe0ff"><input type="checkbox" id="allChk"> 전체 사용자 (admin)</label>
+  <label class="mini" id="allWrap" style="display:none;color:var(--inverse-text)"><input type="checkbox" id="allChk"> 전체 사용자 (admin)</label>
 </header>
 <main>
-  <div class="card hero"><div class="toolbar"><div><h2>사용 흐름과 품질 신호를 한눈에 확인하세요</h2><p>호출량뿐 아니라 SQL 유효율과 실행 상태를 확인하고 개선이 필요한 작업으로 바로 이동합니다.</p></div><span class="grow"></span><div><button class="btn" id="refreshBtn">새로고침</button><div class="mini" id="updatedAt" style="color:#cbdcf5;margin-top:4px"></div></div></div></div>
+  <div class="card hero"><div class="toolbar"><div><h2>사용 흐름과 품질 신호를 한눈에 확인하세요</h2><p>호출량뿐 아니라 SQL 유효율과 실행 상태를 확인하고 개선이 필요한 작업으로 바로 이동합니다.</p></div><span class="grow"></span><div><button class="btn" id="refreshBtn">새로고침</button><div class="mini" id="updatedAt" style="color:var(--inverse-text);margin-top:4px"></div></div></div></div>
   <div class="insight" id="insight"><b>데이터를 분석하고 있습니다</b><span class="mini">잠시만 기다려주세요.</span></div>
   <div class="kpis" id="kpis"></div>
 

@@ -449,3 +449,40 @@ func TestServeServerContextFlushesOnShutdown(t *testing.T) {
 		t.Fatalf("series must be flushed on shutdown: %v", err)
 	}
 }
+
+// The console badge counts what still needs someone: an acknowledged or
+// silenced alert drops out, and plan counts are shown only to DBAs.
+func TestConsoleSummaryCountsUnhandledAlerts(t *testing.T) {
+	s, p := earlyWarningFixture(t)
+	mux := newMuxFor(s)
+	get := func(hdr map[string]string) (int, map[string]map[string]int) {
+		rec := doReq(t, mux, "GET", "/api/console/summary", "", hdr)
+		var out map[string]map[string]int
+		_ = json.Unmarshal(rec.Body.Bytes(), &out)
+		return rec.Code, out
+	}
+	if code, _ := get(nil); code != http.StatusUnauthorized {
+		t.Fatalf("the summary needs the admin token in standalone mode: %d", code)
+	}
+	auth := map[string]string{"X-Admin-Token": "tok"}
+	code, before := get(auth)
+	if code != 200 || before["alerts"]["critical"] == 0 || before["alerts"]["warning"] == 0 {
+		t.Fatalf("summary: %d %+v", code, before)
+	}
+	if _, ok := before["changes"]["awaiting_approval"]; !ok {
+		t.Fatalf("an admin sees the approval queue: %+v", before)
+	}
+	var critical string
+	for _, a := range s.EarlyWarning.Board([]dbconn.Profile{p}).Firing {
+		if a.Severity == earlywarning.SevCritical {
+			critical = a.ID
+			break
+		}
+	}
+	if _, err := s.EarlyWarning.Ack(critical, "dba", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, after := get(auth); after["alerts"]["critical"] != before["alerts"]["critical"]-1 {
+		t.Fatalf("an acknowledged alert no longer asks for attention: %+v → %+v", before, after)
+	}
+}

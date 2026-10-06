@@ -3,23 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SQLON 운영 현황</title>
+<title>운영 현황 · sqlon</title>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--line:#dce4ee;--ink:#172033;--sub:#607086;--ok:#15803d;--warn:#a16207;--bad:#b91c1c;--critical:#7f1d1d;--unk:#64748b;--blue:#2563eb}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif}
-header{min-height:66px;padding:12px 28px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+header{min-height:66px;padding:12px 28px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
 header h1{font-size:20px;margin:0}header p{margin:2px 0 0;color:var(--sub);font-size:12px}.fresh{font-size:12px;color:var(--sub)}
 header .grow{flex:1}header input{border:1px solid var(--line);border-radius:8px;padding:7px 10px}
 main{padding:24px 28px 56px;max-width:1600px;margin:auto}.cards{display:grid;grid-template-columns:repeat(7,minmax(120px,1fr));gap:14px;margin-bottom:18px}
 .card,.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 10px rgba(20,35,60,.04)}.card{padding:17px}.card span{display:block;color:var(--sub);font-size:12px}.card b{font-size:27px}.card.bad b{color:var(--bad)}.card.ok b{color:var(--ok)}
 .panel{overflow:hidden}.panel-head{padding:15px 17px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.panel-head h2{font-size:15px;margin:0}.actions a{color:var(--blue);text-decoration:none;margin-left:14px}
-table{width:100%;border-collapse:collapse}th,td{padding:12px 14px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap}th{background:#f8fafc;color:#536176;font-size:12px;position:sticky;top:0}tr:last-child td{border-bottom:0}tr.failed{background:#fff7f7}
-.state{display:inline-flex;align-items:center;gap:6px;font-weight:700}.dot{width:8px;height:8px;border-radius:50%;background:var(--unk)}.healthy .dot{background:var(--ok)}.warning .dot{background:var(--warn)}.critical .dot{background:var(--critical)}.failed .dot{background:var(--bad)}
-.caps{display:flex;gap:5px;flex-wrap:wrap}.cap{font-size:11px;padding:2px 7px;border-radius:10px;background:#e8efff;color:#244c9a}.muted{color:var(--sub)}.empty{padding:42px;text-align:center;color:var(--sub)}
-.context{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}.tag{font-size:11px;padding:1px 6px;border-radius:8px;background:#eef2f7;color:#455468}.tag.prod{background:#fee2e2;color:#991b1b;font-weight:700}.risk{font-weight:800}.risk.critical,.risk.high{color:var(--bad)}.risk.medium{color:var(--warn)}
-.warning{margin-top:14px;padding:12px 14px;border:1px solid #f1d58a;background:#fff9e8;border-radius:9px;color:#785a0b}.error{border-color:#f1aaaa;background:#fff3f3;color:#991b1b}
+table{width:100%;border-collapse:collapse}th,td{padding:12px 14px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}th{background:var(--surface-2);color:var(--text-2);font-size:12px;position:sticky;top:0}tr:last-child td{border-bottom:0}tr.failed{background:var(--danger-bg)}
+.state{display:inline-flex;align-items:center;gap:6px;font-weight:700}.dot{width:8px;height:8px;border-radius:50%;background:var(--unk)}.healthy .dot{background:var(--ok-solid)}.warning .dot{background:var(--warn-solid)}.critical .dot{background:var(--critical)}.failed .dot{background:var(--danger-solid)}
+.caps{display:flex;gap:5px;flex-wrap:wrap}td.jump{white-space:nowrap}td.jump a{display:inline-block;margin:0 8px 4px 0;font-size:12.5px;font-weight:600}.capsum{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--ok-bg);color:var(--ok);cursor:help}.capoff{font-size:12px;margin-top:3px;white-space:normal;max-width:200px}td.why{white-space:normal;min-width:260px;max-width:420px;color:var(--text-2);font-size:13px}.cap{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--accent-bg);color:var(--accent)}.muted{color:var(--sub)}.empty{padding:42px;text-align:center;color:var(--sub)}
+.context{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}.tag{font-size:11px;padding:1px 6px;border-radius:8px;background:var(--surface-3);color:var(--text-2)}.tag.prod{background:var(--danger-bg);color:var(--danger-strong);font-weight:700}.risk{font-weight:800}.risk.critical,.risk.high{color:var(--bad)}.risk.medium{color:var(--warn)}
+.warning{margin-top:14px;padding:12px 14px;border:1px solid var(--warn-border);background:var(--warn-bg);border-radius:9px;color:var(--warn-strong)}.error{border-color:var(--danger-border);background:var(--danger-bg);color:var(--danger-strong)}
 @media(max-width:950px){.cards{grid-template-columns:repeat(2,1fr)}main{padding:18px 14px}.scroll{overflow:auto}}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 <header><div><h1>운영 현황</h1><p>전체 데이터베이스의 연결·수집 상태와 지원 기능</p></div><span class="grow"></span><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><div class="fresh" id="fresh">수집 시각 확인 중…</div></header>
@@ -35,7 +37,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px 14px;border-bottom:
   </section>
   <section class="panel">
     <div class="panel-head"><h2>DB 플릿 위험 순위</h2><div class="actions"><a href="/admin/dba">진단</a><a href="/admin/ask">SQL Lab</a></div></div>
-    <div class="scroll"><table><thead><tr><th>상태·위험</th><th>업무서비스·인스턴스</th><th>환경·엔진·역할</th><th>담당·위치</th><th>응답</th><th>지원 기능</th><th>수집 시각</th><th>근거·제한</th></tr></thead><tbody id="rows"><tr><td colspan="8" class="empty">불러오는 중…</td></tr></tbody></table></div>
+    <div class="scroll"><table><thead><tr><th>상태·위험</th><th>업무서비스·인스턴스</th><th>환경·엔진·역할</th><th>담당·위치</th><th>응답</th><th>지원 기능</th><th>수집 시각</th><th>근거·제한</th><th>바로가기</th></tr></thead><tbody id="rows"><tr><td colspan="9" class="empty">불러오는 중…</td></tr></tbody></table></div>
   </section>
   <div id="messages"></div>
 </main>
@@ -45,6 +47,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px 14px;border-bottom:
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const label={healthy:'정상',warning:'주의',critical:'위험',failed:'수집 실패',unknown:'미확인'};
 const riskLabel={critical:'치명적',high:'높음',medium:'중간',low:'낮음'};
+const capLabel={backup_status:'백업',lock_tree:'잠금 트리',maintenance:'예방 점검',query_plans:'실행계획',replication:'복제',sessions:'세션',storage:'용량',user_management:'사용자 관리',workload:'워크로드'};
 const token=document.getElementById('adminToken');token.value=localStorage.getItem('sqlonAdminToken')||localStorage.getItem('jasqlAdminToken')||'';token.onchange=()=>{localStorage.setItem('sqlonAdminToken',token.value);loadFleet()};
 function time(v){if(!v)return '-';const d=new Date(v);return isNaN(d)?v:d.toLocaleString('ko-KR')}
 async function loadFleet(){
@@ -59,15 +62,18 @@ async function loadFleet(){
     document.getElementById('avgScore').textContent=(sum.average_score==null?'-':sum.average_score);document.getElementById('worstScore').textContent=(sum.worst_score==null?'':' 최저 '+sum.worst_score);
     document.getElementById('fresh').textContent='최신 수집 '+time(body.collected_at)+' · '+esc(body.trace_id||'trace 없음');
     document.getElementById('rows').innerHTML=list.length?list.map(x=>{
-      const caps=Object.keys(x.capabilities||{}).filter(k=>x.capabilities[k]).map(k=>'<span class="cap">'+esc(k)+'</span>').join('');
+      const capKeys=Object.keys(x.capabilities||{}),capOn=capKeys.filter(k=>x.capabilities[k]),capOff=capKeys.filter(k=>!x.capabilities[k]);
+      const caps='<span class="capsum" title="'+esc(capOn.map(k=>capLabel[k]||k).join(', '))+'">'+capOn.length+'/'+capKeys.length+' 지원</span>'+(capOff.length?'<div class="muted capoff">미지원: '+esc(capOff.map(k=>capLabel[k]||k).join(', '))+'</div>':'');
       const evidence=(x.evidence||[]).map(e=>e.summary).filter(Boolean).join(' · ');const failure=x.failure||{};
       const detail=[failure.message,failure.hint,evidence].filter(Boolean).join(' · ')||'-';const prod=x.environment==='production';
-      return '<tr class="'+esc(x.status)+'"><td><span class="state '+esc(x.status)+'"><i class="dot"></i>'+esc(label[x.status]||x.status)+'</span><div class="risk '+esc(x.risk_level)+'">'+esc(riskLabel[x.risk_level]||x.risk_level)+' · '+esc(x.risk_score)+'</div><div class="muted">등급 '+esc(x.grade||'-')+' · 점수 '+esc(x.health_score==null?'-':x.health_score)+'</div></td><td><b>'+esc(x.service_name||'업무 미지정')+'</b><div>'+esc(x.name||x.id)+'</div><div class="muted">'+esc(x.id)+'</div></td><td><div class="context"><span class="tag '+(prod?'prod':'')+'">'+esc(x.environment)+'</span><span class="tag">'+esc(x.engine)+'</span><span class="tag">'+esc(x.role)+'</span><span class="tag">'+esc(x.criticality)+'</span></div></td><td>'+esc(x.owner_team||'-')+'<div class="muted">'+esc(x.location||'-')+'</div></td><td>'+esc(x.elapsed_ms??'-')+' ms<div class="muted">'+esc(x.collection_status)+'</div></td><td><div class="caps">'+(caps||'<span class="muted">선언 없음</span>')+'</div></td><td>'+time(x.collected_at)+'</td><td class="muted">'+esc(detail)+'</td></tr>';
-    }).join(''):'<tr><td colspan="8" class="empty">등록된 DB 프로파일이 없습니다. DB 연결 관리에서 프로파일을 추가하세요.</td></tr>';
+      return '<tr class="'+esc(x.status)+'"><td><span class="state '+esc(x.status)+'"><i class="dot"></i>'+esc(label[x.status]||x.status)+'</span><div class="risk '+esc(x.risk_level)+'">'+esc(riskLabel[x.risk_level]||x.risk_level)+' · '+esc(x.risk_score)+'</div><div class="muted">등급 '+esc(x.grade||'-')+' · 점수 '+esc(x.health_score==null?'-':x.health_score)+'</div></td><td><b>'+esc(x.service_name||'업무 미지정')+'</b><div>'+esc(x.name||x.id)+'</div><div class="muted">'+esc(x.id)+'</div></td><td><div class="context"><span class="tag '+(prod?'prod':'')+'">'+esc(x.environment)+'</span><span class="tag">'+esc(x.engine)+'</span><span class="tag">'+esc(x.role)+'</span><span class="tag">'+esc(x.criticality)+'</span></div></td><td>'+esc(x.owner_team||'-')+'<div class="muted">'+esc(x.location||'-')+'</div></td><td>'+esc(x.elapsed_ms??'-')+' ms<div class="muted">'+esc(x.collection_status)+'</div></td><td><div class="caps">'+(caps||'<span class="muted">선언 없음</span>')+'</div></td><td>'+time(x.collected_at)+'</td><td class="why">'+esc(detail)+'</td><td class="jump">'+[['/admin/sessions','세션'],['/admin/workload','워크로드'],['/admin/maintenance','점검'],['/admin/alerts','경보']].map(l=>'<a href="'+l[0]+'" data-prof="'+esc(x.id)+'">'+l[1]+'</a>').join('')+'</td></tr>';
+    }).join(''):'<tr><td colspan="9" class="empty">등록된 DB 프로파일이 없습니다. <a href="/admin/db">DB 연결</a>에서 첫 데이터베이스를 등록하세요.</td></tr>';
     const msgs=[...(body.warnings||[]),...(body.limitations||[])];
     box.innerHTML=msgs.map(m=>'<div class="warning">'+esc(m)+'</div>').join('');
-  }catch(e){document.getElementById('rows').innerHTML='<tr><td colspan="8" class="empty">플릿 데이터를 불러오지 못했습니다. 등록 데이터 없음과 다른 수집 오류입니다.</td></tr>';box.innerHTML='<div class="warning error">수집 실패: '+esc(e.message)+'</div>';document.getElementById('fresh').textContent='수집 실패'}
+  }catch(e){document.getElementById('rows').innerHTML='<tr><td colspan="9" class="empty">플릿 데이터를 불러오지 못했습니다. 등록 데이터 없음과 다른 수집 오류입니다.</td></tr>';box.innerHTML='<div class="warning error">수집 실패: '+esc(e.message)+'</div>';document.getElementById('fresh').textContent='수집 실패'}
 }
+// jumping into a DB's detail pages opens them on that DB
+document.getElementById('rows').addEventListener('click',e=>{const a=e.target.closest('a[data-prof]');if(a)try{localStorage.setItem('sqlonObserveProfile',a.dataset.prof)}catch(_){}});
 JASQL.mount({page:'fleet',onReady:loadFleet});
 </script>
 </body>

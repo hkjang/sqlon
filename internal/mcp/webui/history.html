@@ -4,7 +4,7 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sqlon 내 이력 · MCP 쿼리/실행 기록</title>
+<title>내 이력 · sqlon</title>
 <style>
   :root{
     --bg:#f5f7fa;--card:#fff;--ink:#1c2430;--sub:#5b6b7f;--line:#dde4ec;
@@ -14,20 +14,20 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif;}
-  header{background:#101a2e;color:#e8eefc;padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
+  header{background:var(--inverse-bg);color:var(--inverse-text);padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:20;}
   header h1{font-size:16px;margin:0 10px 0 0;}
   .grow{flex:1;}
-  header input#adminToken{background:#1d2b47;border:1px solid #35507f;color:#e8eefc;border-radius:6px;padding:6px 10px;width:180px;}
+  header input#adminToken{background:var(--inverse-2);border:1px solid var(--inverse-border);color:var(--inverse-text);border-radius:6px;padding:6px 10px;width:180px;}
   main{max-width:1500px;margin:0 auto;padding:16px 20px 90px;}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;}
   .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
-  .btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 12px;font-size:13px;cursor:pointer;}
+  .btn{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:6px 12px;font-size:13px;cursor:pointer;}
   .btn:hover{border-color:var(--blue);color:var(--blue);}
-  .btn.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+  .btn.active{background:var(--accent-solid);border-color:var(--blue);color:var(--on-accent);}
   select,input.f{border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-size:13px;}
   .mini{font-size:12px;color:var(--sub);}
   table.t{width:100%;border-collapse:collapse;font-size:13px;}
-  table.t th{text-align:left;color:var(--sub);font-weight:600;padding:8px 9px;border-bottom:2px solid var(--line);position:sticky;top:0;background:#fff;}
+  table.t th{text-align:left;color:var(--sub);font-weight:600;padding:8px 9px;border-bottom:2px solid var(--line);position:sticky;top:0;background:var(--surface);}
   table.t td{padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:top;}
   .b{display:inline-block;font-size:11px;font-weight:700;border-radius:5px;padding:1px 7px;}
   .b.prompt{background:var(--blue-soft);color:var(--blue);}
@@ -35,21 +35,23 @@
   .b.execute{background:var(--green-soft);color:var(--green);}
   .b.ok{background:var(--green-soft);color:var(--green);}
   .b.bad{background:var(--red-soft);color:var(--red);}
-  .b.gray{background:#eef1f5;color:var(--sub);}
+  .b.gray{background:var(--surface-3);color:var(--sub);}
   .prompt-cell{max-width:320px;color:var(--ink);}
   .sql-cell{max-width:420px;}
-  code.sql{display:block;background:#0e1726;color:#e6edf7;border-radius:6px;padding:7px 9px;font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow:auto;}
+  code.sql{display:block;background:var(--inverse-bg);color:var(--inverse-text);border-radius:6px;padding:7px 9px;font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow:auto;}
   .paramtog{cursor:pointer;color:var(--blue);font-size:12px;}
-  pre.params{background:#eef1f5;border-radius:6px;padding:7px 9px;font-family:var(--mono);font-size:11px;white-space:pre-wrap;margin:5px 0 0;display:none;}
-  #toast{position:fixed;right:18px;bottom:18px;background:#101a2e;color:#e8eefc;border-radius:10px;padding:12px 18px;font-size:13px;display:none;z-index:50;}
+  pre.params{background:var(--surface-3);border-radius:6px;padding:7px 9px;font-family:var(--mono);font-size:11px;white-space:pre-wrap;margin:5px 0 0;display:none;}
+  #toast{position:fixed;right:18px;bottom:18px;background:var(--inverse-bg);color:var(--inverse-text);border-radius:10px;padding:12px 18px;font-size:13px;display:none;z-index:50;}
   .empty{padding:30px;text-align:center;color:var(--sub);}
-  .hero{background:linear-gradient(135deg,#10203c,#334f7f);color:#fff;border:0;padding:20px}.hero h2{font-size:20px;margin:0 0 4px}.hero p{margin:0;color:#ccd9ec}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:15px}.sum{background:rgba(255,255,255,.09);border-radius:8px;padding:9px 11px}.sum b{font-size:19px;display:block}.sum span{font-size:11px;color:#c9d7eb}.search{min-width:240px;flex:1}.actbtn{border:0;background:#e8efff;color:var(--blue);border-radius:5px;padding:3px 7px;cursor:pointer;font-size:11px;margin-top:5px}.tablewrap{overflow:auto;max-height:70vh}.filter-label{font-size:11px;color:var(--sub);display:block}.filter-group{display:flex;flex-direction:column;gap:2px}
+  .hero{background:linear-gradient(135deg,var(--inverse-bg),var(--inverse-2));color:var(--on-accent);border:0;padding:20px}.hero h2{font-size:20px;margin:0 0 4px}.hero p{margin:0;color:var(--inverse-text)}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:15px}.sum{background:rgba(255,255,255,.09);border-radius:8px;padding:9px 11px}.sum b{font-size:19px;display:block}.sum span{font-size:11px;color:var(--inverse-text)}.search{min-width:240px;flex:1}.actbtn{border:0;background:var(--accent-bg);color:var(--blue);border-radius:5px;padding:3px 7px;cursor:pointer;font-size:11px;margin-top:5px}.tablewrap{overflow:auto;max-height:70vh}.filter-label{font-size:11px;color:var(--sub);display:block}.filter-group{display:flex;flex-direction:column;gap:2px}
   @media(max-width:800px){main{padding:12px}.summary{grid-template-columns:1fr 1fr}.tablewrap{max-height:none}table.t thead{display:none}table.t tr{display:block;border-bottom:8px solid var(--bg);padding:8px}table.t td{display:block;border:0;padding:4px 8px;max-width:none!important}.toolbar>*{width:100%}}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 <header>
-  <h1>🕘 내 이력</h1>
+  <h1>내 이력</h1>
   <span class="mini" id="scopeChip"></span>
   <input id="adminToken" type="password" placeholder="관리 토큰">
   <span class="grow"></span>
@@ -150,7 +152,7 @@ function render(acts, all) {
   }).join('');
 }
 function reusePrompt(i){const a=DISPLAY_ACTS[i];if(!a||!a.prompt)return;sessionStorage.setItem('jasqlHistoryPrompt',a.prompt);location.href='/admin/ask';}
-function reuseSQL(i){const a=DISPLAY_ACTS[i];if(!a||!a.sql)return;sessionStorage.setItem('jasqlHandoffSQL',a.sql);if(a.profile)localStorage.setItem('jasqlLastProfile',a.profile);location.href='/admin/db';}
+function reuseSQL(i){const a=DISPLAY_ACTS[i];if(!a||!a.sql)return;sessionStorage.setItem('jasqlHandoffSQL',a.sql);if(a.profile)localStorage.setItem('sqlonObserveProfile',a.profile);location.href='/admin/db';}
 function tog(i){ const el=$('#p'+i); el.style.display = el.style.display==='none'||!el.style.display ? 'block' : 'none'; }
 
 $('#allChk').addEventListener('change', load);

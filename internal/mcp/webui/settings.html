@@ -4,18 +4,18 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sqlon 서버 설정</title>
+<title>서버 설정 · sqlon</title>
 <style>
   :root { --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
     --blue:#2563eb; --green:#15803d; --green-soft:#e6f6ec; --red:#b91c1c; --red-soft:#fdeaea;
     --amber:#b45309; --amber-soft:#fdf3e2; --mono:ui-monospace,Consolas,monospace; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
-  header { background:#101a2e; color:#e8eefc; padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  header { background:var(--inverse-bg); color:var(--inverse-text); padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
   header h1 { font-size:16px; margin:0 10px 0 0; } header .grow { flex:1; }
   .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px; padding:6px 12px; cursor:pointer; font-size:13px; text-decoration:none; display:inline-block; }
   .btn:hover { border-color:var(--blue); color:var(--blue); }
-  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .btn.primary { background:var(--accent-solid); border-color:var(--blue); color:var(--on-accent); }
   main { max-width:900px; margin:0 auto; padding:16px 20px 60px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:14px; }
   h2 { font-size:14px; color:var(--sub); text-transform:uppercase; letter-spacing:.4px; border-bottom:1px solid var(--line); padding-bottom:6px; margin:0 0 12px; }
@@ -25,20 +25,22 @@
   input { width:100%; border:1px solid var(--line); border-radius:7px; padding:8px 10px; font-size:13px; font-family:var(--mono); }
   .setbadge { font-size:11px; font-weight:700; border-radius:5px; padding:1px 7px; margin-left:6px; }
   .setbadge.on { background:var(--green-soft); color:var(--green); }
-  .setbadge.off { background:#eef1f5; color:var(--sub); }
+  .setbadge.off { background:var(--surface-3); color:var(--sub); }
   .result { border-radius:8px; padding:11px 14px; margin-top:8px; font-size:13px; display:none; white-space:pre-wrap; }
-  .result.ok { display:block; background:var(--green-soft); border:1px solid #bfe4cc; }
-  .result.bad { display:block; background:var(--red-soft); border:1px solid #efc4c4; }
+  .result.ok { display:block; background:var(--green-soft); border:1px solid var(--ok-border); }
+  .result.bad { display:block; background:var(--red-soft); border:1px solid var(--danger-border); }
   .mini { font-size:12px; color:var(--sub); }
-  code { background:#eef1f5; border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
+  code { background:var(--surface-3); border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
   table.boot { width:100%; border-collapse:collapse; font-size:12.5px; }
   table.boot td { padding:5px 8px; border-bottom:1px solid var(--line); }
-  #userchip { font-size:12px; color:#cfe0ff; }
+  #userchip { font-size:12px; color:var(--inverse-text); }
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 <header>
-  <h1>⚙ 서버 설정</h1>
+  <h1>서버 설정</h1>
   <span class="grow"></span>
 </header>
 <main>
@@ -51,7 +53,7 @@
   <form onsubmit="return save(event)">
     <div id="groups"></div>
     <div class="card">
-      <button class="btn primary" type="submit">💾 저장 (즉시 적용)</button>
+      <button class="btn primary" type="submit">저장 (즉시 적용)</button>
       <div class="result" id="result"></div>
     </div>
   </form>

@@ -5,64 +5,98 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SQLON — AI Database Operations Platform</title>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js"></script>
 <style>
-  :root { --bg:#0e1726; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec; --blue:#2563eb; --blue-soft:#e8efff; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:linear-gradient(180deg,#0e1726 0%,#16233c 260px,#f5f7fa 260px,#f5f7fa 100%);
-         color:var(--ink); font:15px/1.6 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
-  .hero { max-width:1000px; margin:0 auto; padding:46px 24px 0; color:#e8eefc; }
-  .hero h1 { font-size:30px; margin:0 0 8px; }
-  .hero p { font-size:16px; color:#b9c6e0; margin:0 0 4px; max-width:720px; }
-  main { max-width:1000px; margin:0 auto; padding:28px 24px 80px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-bottom:22px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px 22px; box-shadow:0 4px 20px rgba(16,26,46,.06); }
-  .card h2 { font-size:16px; margin:0 0 8px; }
-  .card p { color:var(--sub); font-size:13.5px; margin:0 0 14px; }
-  a.btn { display:inline-block; text-decoration:none; background:var(--blue); color:#fff; border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; }
-  a.btn.ghost { background:var(--blue-soft); color:var(--blue); }
-  a.btn:hover { opacity:.92; }
-  .card ul { margin:6px 0 0; padding-left:18px; color:var(--sub); font-size:13px; }
-  code { background:#eef1f5; border-radius:4px; padding:1px 6px; font-family:ui-monospace,Consolas,monospace; font-size:12.5px; }
-  .mode { font-size:13px; color:var(--sub); background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 18px; }
-  .mode b { color:var(--ink); }
-  .foot { text-align:center; color:var(--sub); font-size:12.5px; margin-top:26px; }
+  .top {
+    color: #e2e8f0;
+    background: radial-gradient(1000px 420px at 0% 0%, rgba(59, 130, 246, .32), transparent 60%), linear-gradient(160deg, #0b1324, #12306b);
+    padding: 22px 24px 96px;
+  }
+  .bar, .intro, main { max-width: 1040px; margin: 0 auto; }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .logo { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800; font-size: 19px; text-decoration: none !important; }
+  .logo img { width: 30px; height: 30px; border-radius: 7px; }
+  .who { font-size: 13px; color: #a9b8d3; }
+  .who b { color: #fff; }
+  .who a { color: #93c5fd; }
+  .intro { padding-top: 54px; }
+  .intro h1 { margin: 0 0 12px; color: #fff; font-size: 34px; line-height: 1.25; letter-spacing: -.025em; }
+  .intro p { margin: 0; max-width: 640px; color: #a9b8d3; font-size: 16px; }
+  main { margin-top: -64px; padding: 0 24px 72px; box-sizing: content-box; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .entry {
+    display: flex; flex-direction: column; gap: 10px; padding: 22px; text-decoration: none !important; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow);
+    transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+  }
+  .entry:hover { border-color: var(--accent-border); box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+  .entry .icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; background: var(--accent-bg); color: var(--accent); }
+  .entry .icon svg { width: 22px; height: 22px; }
+  .entry h2 { margin: 4px 0 0; font-size: 16.5px; }
+  .entry p { margin: 0; color: var(--muted); font-size: 13.5px; flex: 1; }
+  .entry .go { color: var(--accent); font-size: 13.5px; font-weight: 600; }
+  .entry.primary-entry { border-color: var(--accent-border); }
+  .modes { margin-top: 18px; padding: 20px 22px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+  .modes h3 { margin: 0 0 12px; font-size: 14.5px; }
+  .modes dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 0; font-size: 13.5px; }
+  .modes dt { font-weight: 650; color: var(--text); }
+  .modes dd { margin: 0; color: var(--muted); }
+  .hint { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13.5px; color: var(--text-2); }
+  .foot { margin-top: 28px; text-align: center; color: var(--muted); font-size: 12.5px; }
+  @media (max-width: 860px) {
+    .grid { grid-template-columns: 1fr; }
+    .intro { padding-top: 30px; }
+    .intro h1 { font-size: 25px; }
+    .intro p { font-size: 14.5px; }
+    .modes dl { grid-template-columns: 1fr; gap: 2px; }
+    .modes dd { margin-bottom: 8px; }
+  }
 </style>
 </head>
 <body>
-<div class="hero">
-  <h1>🛢️ SQLON</h1>
-  <p>PostgreSQL·MySQL·MariaDB·Oracle를 관찰·진단·통제하는 <b>AI Database Operations Platform</b>입니다.</p>
-  <p>운영 현황을 먼저 확인하고, SQL Lab은 읽기 전용 보조 기능으로 사용하세요.</p>
+<div class="top">
+  <div class="bar">
+    <a class="logo" href="/"><img src="/admin/logo-transparent.png" alt="">SQLON</a>
+    <div class="who" id="who"></div>
+  </div>
+  <div class="intro">
+    <h1>데이터베이스를 관찰하고, 진단하고,<br>승인된 변경으로만 손댑니다.</h1>
+    <p>PostgreSQL · MySQL · MariaDB · Oracle을 위한 AI Database Operations Platform입니다. 운영 현황에서 시작하고, SQL Lab은 읽기 전용 보조 도구로 쓰세요.</p>
+  </div>
 </div>
 
 <main>
   <div class="grid">
-    <div class="card">
-      <h2>📡 운영 현황</h2>
-      <p>연결 상태, 수집 최신성, DBA 진단과 최근 변경 근거를 확인합니다.</p>
-      <a class="btn" href="/admin/dba">운영 워크스페이스 →</a>
-    </div>
-    <div class="card">
-      <h2>🧪 SQL Lab</h2>
-      <p>기존 NL2SQL은 검증된 읽기 전용 SQL Lab으로 유지됩니다.</p>
-      <a class="btn ghost" href="/admin/ask">SQL Lab →</a>
-    </div>
-    <div class="card">
-      <h2>📘 API 문서</h2>
-      <p>REST API(Swagger)와 MCP 도구 레퍼런스를 확인합니다.</p>
-      <a class="btn ghost" href="/docs">Swagger UI →</a>
-    </div>
+    <a class="entry primary-entry" href="/">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>
+      <h2>운영 현황</h2>
+      <p>모든 DB의 연결·수집 상태와 위험 순위, 예방 경보와 최근 변경 근거를 한 화면에서 봅니다.</p>
+      <span class="go">운영 콘솔 열기 →</span>
+    </a>
+    <a class="entry" href="/admin/ask">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.6 18.4A1.8 1.8 0 0 0 6.2 21h11.6a1.8 1.8 0 0 0 1.6-2.6L14 9V3"/><path d="M7.5 15h9"/></svg></span>
+      <h2>SQL Lab</h2>
+      <p>업무 질문을 카탈로그에 근거한 SQL로 준비하고, 검증·실행계획·미리보기를 거쳐 읽기 전용으로 실행합니다.</p>
+      <span class="go">SQL Lab 열기 →</span>
+    </a>
+    <a class="entry" href="/docs">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><path d="M14 2v6h6"/><path d="m10 13-2 2 2 2"/><path d="m14 17 2-2-2-2"/></svg></span>
+      <h2>API 문서</h2>
+      <p>REST API(Swagger)와 MCP 도구 레퍼런스. 에이전트와 스크립트는 같은 안전장치를 거칩니다.</p>
+      <span class="go">Swagger UI 열기 →</span>
+    </a>
   </div>
 
-  <div class="mode" id="modeBox">
-    <b>로그인 방법</b> — 서버 구성에 따라 다음 중 하나를 사용합니다:
-    <ul>
-      <li><b>로컬 계정</b>: 아이디/비밀번호로 웹 콘솔 로그인 (bcrypt·세션 쿠키)</li>
-      <li><b>Keycloak SSO</b>: 조직 IdP 통합 (OIDC authorization code)</li>
-      <li><b>MCP 키</b> <code>ssk_...</code>: LLM 클라이언트/스크립트의 <code>/mcp</code>·<code>/api</code> 접근용 — <code>Authorization: Bearer ssk_...</code></li>
-    </ul>
-    <div id="modeHint"></div>
-  </div>
+  <section class="modes" aria-labelledby="modes-title">
+    <h3 id="modes-title">접속 방법</h3>
+    <dl>
+      <dt>로컬 계정</dt><dd>아이디·비밀번호로 웹 콘솔 로그인 (bcrypt, 세션 쿠키)</dd>
+      <dt>Keycloak SSO</dt><dd>조직 IdP 통합 (OIDC authorization code)</dd>
+      <dt>MCP 키 <code>ssk_…</code></dt><dd>LLM 클라이언트·스크립트의 <code>/mcp</code>·<code>/api</code> 접근 — <code>Authorization: Bearer ssk_…</code></dd>
+    </dl>
+    <div class="hint" id="modeHint">서버 구성을 확인하는 중…</div>
+  </section>
 
   <div class="foot" id="foot">SQLON · AI Database Operations Platform</div>
 </main>
@@ -70,18 +104,26 @@
 <script>
 'use strict';
 (async function () {
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const hint = document.getElementById('modeHint');
+  const who = document.getElementById('who');
   try {
     const me = await (await fetch('/auth/me')).json();
     if (me.version) document.getElementById('foot').textContent = 'SQLON v' + me.version + ' · AI Database Operations Platform';
-    const hint = document.getElementById('modeHint');
     if (!me.auth_enabled) {
-      hint.innerHTML = '<div style="margin-top:8px">현재 <b>단독 모드</b>입니다 — 로그인 없이 콘솔에 접근할 수 있습니다. (<code>-meta-db</code>로 인증을 활성화하세요.)</div>';
+      hint.innerHTML = '현재 <b>단독 모드</b>입니다 — 로그인 없이 콘솔을 쓸 수 있습니다. 계정 인증은 <code>-meta-db</code>로 켭니다.';
+      who.textContent = '단독 모드';
     } else if (me.authenticated) {
-      hint.innerHTML = '<div style="margin-top:8px">✅ <b>' + me.user.username + '</b> (' + me.user.role + ')(으)로 로그인됨. · <a href="/auth/logout" onclick="fetch(\'/auth/logout\',{method:\'POST\'}).then(()=>location.reload());return false;">로그아웃</a></div>';
+      hint.innerHTML = '<b>' + esc(me.user.username) + '</b> (' + esc(me.user.role) + ')(으)로 로그인되어 있습니다.';
+      who.innerHTML = '<b>' + esc(me.user.display_name || me.user.username) + '</b> · <a href="#" id="logout">로그아웃</a>';
+      document.getElementById('logout').onclick = e => { e.preventDefault(); fetch('/auth/logout', { method: 'POST' }).then(() => location.reload()); };
     } else {
-      hint.innerHTML = '<div style="margin-top:10px"><a class="btn" href="/auth/login">로그인 →</a></div>';
+      hint.innerHTML = '<a class="btn primary" href="/auth/login">로그인</a>';
+      who.innerHTML = '<a href="/auth/login">로그인 →</a>';
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    hint.textContent = '서버 상태를 확인하지 못했습니다.';
+  }
 })();
 </script>
 </body>

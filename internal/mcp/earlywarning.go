@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"sqlon/internal/change"
 	"sqlon/internal/collector"
 	"sqlon/internal/dbconn"
 	"sqlon/internal/earlywarning"
@@ -331,6 +332,31 @@ func (s *Server) registerEarlyWarningAPI(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ephemeral_text": s.chatAction(r, alertID, action, "mattermost:"+firstNonEmpty(req.UserName, req.UserID, "unknown"))})
+	})
+	// Console badges: unacknowledged alerts by severity and plans awaiting
+	// approval. Cheap enough to poll from every page.
+	mux.HandleFunc("GET /api/console/summary", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := s.requireQueryActor(w, r); !ok {
+			return
+		}
+		profiles, _, ok := s.fleetProfilesForRequest(w, r)
+		if !ok {
+			return
+		}
+		out := map[string]any{"alerts": map[string]int{"critical": 0, "warning": 0, "info": 0}}
+		if s.EarlyWarning != nil {
+			out["alerts"] = s.EarlyWarning.AttentionCounts(profiles)
+		}
+		if s.Changes != nil && s.requireDBA(discardResponse{}, r) {
+			waiting := 0
+			for _, p := range s.Changes.List() {
+				if p.State == change.ReviewRequired {
+					waiting++
+				}
+			}
+			out["changes"] = map[string]int{"awaiting_approval": waiting}
+		}
+		writeJSON(w, http.StatusOK, out)
 	})
 	mux.HandleFunc("GET /api/early-warning/settings", func(w http.ResponseWriter, r *http.Request) {
 		if !s.requireAdmin(w, r) {
@@ -678,3 +704,11 @@ func (s *Server) chatAction(r *http.Request, alertID, action, actor string) stri
 	}
 	return "알 수 없는 동작입니다."
 }
+
+// discardResponse lets a request be checked against an auth gate that
+// writes its own error response, without sending that response.
+type discardResponse struct{}
+
+func (discardResponse) Header() http.Header         { return http.Header{} }
+func (discardResponse) Write(b []byte) (int, error) { return len(b), nil }
+func (discardResponse) WriteHeader(int)             {}

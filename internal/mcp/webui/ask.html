@@ -4,7 +4,7 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sqlon 질의 · 자연어 → SQL 준비</title>
+<title>SQL Lab · sqlon</title>
 <style>
   :root {
     --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
@@ -15,19 +15,19 @@
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
          font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
-  header { background:#101a2e; color:#e8eefc; padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; position:sticky; top:0; z-index:20; }
+  header { background:var(--inverse-bg); color:var(--inverse-text); padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; position:sticky; top:0; z-index:20; }
   header h1 { font-size:16px; margin:0 10px 0 0; }
   .grow { flex:1; }
-  header input#adminToken { background:#1d2b47; border:1px solid #35507f; color:#e8eefc; border-radius:6px; padding:6px 10px; width:200px; }
+  header input#adminToken { background:var(--inverse-2); border:1px solid var(--inverse-border); color:var(--inverse-text); border-radius:6px; padding:6px 10px; width:200px; }
   .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px; padding:6px 12px; cursor:pointer; font-size:13px; white-space:nowrap; }
   .btn:hover { border-color:var(--blue); color:var(--blue); }
-  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
-  .btn.primary:hover { opacity:.9; color:#fff; }
+  .btn.primary { background:var(--accent-solid); border-color:var(--blue); color:var(--on-accent); }
+  .btn.primary:hover { opacity:.9; color:var(--on-accent); }
   .btn:disabled { opacity:.4; cursor:not-allowed; }
   main { max-width:1400px; margin:0 auto; padding:16px 20px 90px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:14px; }
   h2 { font-size:15px; margin:0 0 10px; }
-  code, .mono { background:#eef1f5; border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
+  code, .mono { background:var(--surface-3); border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
   textarea#q { width:100%; min-height:70px; font-size:15px; border:1px solid var(--line); border-radius:8px; padding:12px 14px; resize:vertical; font-family:inherit; }
   .askbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
   .askbar input { border:1px solid var(--line); border-radius:7px; padding:7px 10px; font-size:13px; }
@@ -36,7 +36,7 @@
   .b.ok { background:var(--green-soft); color:var(--green); }
   .b.bad { background:var(--red-soft); color:var(--red); }
   .b.warn { background:var(--amber-soft); color:var(--amber); }
-  .b.gray { background:#eef1f5; color:var(--sub); }
+  .b.gray { background:var(--surface-3); color:var(--sub); }
   .b.blue { background:var(--blue-soft); color:var(--blue); }
   .cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   @media (max-width:1000px){ .cols { grid-template-columns:1fr; } }
@@ -44,29 +44,31 @@
   .kv { margin:3px 0; }
   .kv b { color:var(--sub); font-weight:600; }
   .chiplist span { display:inline-block; }
-  pre.sql { background:#0e1726; color:#e6edf7; border-radius:10px; padding:14px 16px; font-family:var(--mono); font-size:13px; overflow:auto; white-space:pre; margin:0; }
-  .slot { color:#ffd479; }
+  pre.sql { background:var(--inverse-bg); color:var(--inverse-text); border-radius:10px; padding:14px 16px; font-family:var(--mono); font-size:13px; overflow:auto; white-space:pre; margin:0; }
+  .slot { color:var(--warn); }
   table.t { width:100%; border-collapse:collapse; font-size:13px; }
   table.t th { text-align:left; color:var(--sub); font-weight:600; padding:6px 8px; border-bottom:2px solid var(--line); }
   table.t td { padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
   .result { border-radius:8px; padding:11px 14px; margin-top:10px; font-size:13px; display:none; white-space:pre-wrap; word-break:break-word; }
-  .result.ok { display:block; background:var(--green-soft); border:1px solid #bfe4cc; }
-  .result.bad{ display:block; background:var(--red-soft); border:1px solid #efc4c4; }
-  .result.info{ display:block; background:var(--blue-soft); border:1px solid #c4d6f7; }
+  .result.ok { display:block; background:var(--green-soft); border:1px solid var(--ok-border); }
+  .result.bad{ display:block; background:var(--red-soft); border:1px solid var(--danger-border); }
+  .result.info{ display:block; background:var(--blue-soft); border:1px solid var(--accent-border); }
   details.j > summary { cursor:pointer; color:var(--sub); font-size:12.5px; margin-top:6px; }
   .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }
-  #toast { position:fixed; right:18px; bottom:18px; background:#101a2e; color:#e8eefc; border-radius:10px; padding:12px 18px; font-size:13px; display:none; max-width:480px; z-index:50; box-shadow:0 6px 24px rgba(0,0,0,.25); }
+  #toast { position:fixed; right:18px; bottom:18px; background:var(--inverse-bg); color:var(--inverse-text); border-radius:10px; padding:12px 18px; font-size:13px; display:none; max-width:480px; z-index:50; box-shadow:0 6px 24px rgba(0,0,0,.25); }
   .flow { font-size:12px; color:var(--sub); margin-bottom:12px; }
   .flow b { color:var(--blue); }
-  .hero{background:linear-gradient(135deg,#10203c,#245b91);color:#fff;border:0;padding:22px;box-shadow:0 12px 34px rgba(20,55,105,.16)}.hero h2{font-size:21px;margin:0 0 5px}.hero p{margin:0;color:#cbdcf5}.examples{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}.example{border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);color:#fff;border-radius:999px;padding:5px 10px;cursor:pointer;font-size:12px}.example:hover{background:#fff;color:#245b91}
-  .query-card{border-top:4px solid var(--blue)}.query-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}.query-head h2{margin:0}.profile-select{border:1px solid var(--line);border-radius:7px;padding:7px 10px;min-width:220px}.context{padding:7px 10px;background:#f2f6ff;border-radius:8px;color:#365277;font-size:12px}.steps-nav{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:12px}.steps-nav span{background:#eef2f7;border-radius:6px;padding:6px;text-align:center;font-size:11px;color:var(--sub)}
+  .hero{background:linear-gradient(135deg,var(--inverse-bg),var(--accent-solid));color:var(--on-accent);border:0;padding:22px;box-shadow:0 12px 34px rgba(20,55,105,.16)}.hero h2{font-size:21px;margin:0 0 5px}.hero p{margin:0;color:var(--inverse-text)}.examples{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}.example{border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);color:var(--on-accent);border-radius:999px;padding:5px 10px;cursor:pointer;font-size:12px}.example:hover{background:var(--surface);color:var(--accent-strong)}
+  .query-card{border-top:4px solid var(--blue)}.query-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}.query-head h2{margin:0}.profile-select{border:1px solid var(--line);border-radius:7px;padding:7px 10px;min-width:220px}.context{padding:7px 10px;background:var(--surface-2);border-radius:8px;color:var(--accent-strong);font-size:12px}.steps-nav{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:12px}.steps-nav span{background:var(--surface-3);border-radius:6px;padding:6px;text-align:center;font-size:11px;color:var(--sub)}
   @media(max-width:700px){main{padding:12px}.hero{padding:17px}.steps-nav{grid-template-columns:repeat(3,1fr)}.askbar .profile-select,.askbar input{width:100%!important;flex:auto!important}}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 
 <header>
-  <h1>💬 질의 · 자연어 → SQL</h1>
+  <h1>SQL Lab</h1>
   <input id="adminToken" type="password" placeholder="관리 토큰">
   <span class="grow"></span>
 </header>
@@ -87,7 +89,7 @@
     <div id="askResult" class="result"></div>
   </div>
 
-  <div class="card" id="clarCard" style="display:none; border-color:#f2c94c; background:#fffdf5">
+  <div class="card" id="clarCard" style="display:none; border-color:var(--warn); background:var(--warn-bg)">
     <h2>❓ 확인이 필요합니다</h2>
     <div class="mini" style="margin-bottom:10px">질문을 정확한 SQL로 바꾸기 위해 아래 항목의 답이 필요합니다. 답하지 않으면 SQL 스켈레톤이 제공되지 않습니다.</div>
     <div id="clarList"></div>
@@ -134,8 +136,8 @@
       <div class="mini" style="margin-bottom:8px">주석 <code class="slot">/* SLOT */</code> 부분을 채워 선택한 DB 방언의 단일 SELECT로 완성하세요. 아래는 카탈로그가 안전하게 조립한 뼈대입니다.</div>
       <pre id="skeleton" class="sql">—</pre>
       <div class="toolbar">
-        <button class="btn" onclick="copySkeleton()">📋 스켈레톤 복사</button>
-        <button class="btn primary" onclick="toDB()">🔌 DB 콘솔로 보내기 →</button>
+        <button class="btn" onclick="copySkeleton()">스켈레톤 복사</button>
+        <button class="btn primary" onclick="toDB()">DB 콘솔로 보내기 →</button>
         <span class="mini" id="nextStep"></span>
       </div>
     </div>
@@ -294,12 +296,12 @@ function copySkeleton() {
 function toDB() {
   const sql = (BUNDLE && BUNDLE.skeleton && (BUNDLE.skeleton.skeleton_sql || BUNDLE.skeleton.sql)) || '';
   if (sql) sessionStorage.setItem('jasqlHandoffSQL', sql);
-  if ($('#profile').value) localStorage.setItem('jasqlLastProfile',$('#profile').value);
+  if ($('#profile').value) localStorage.setItem('sqlonObserveProfile',$('#profile').value);
   location.href = '/admin/db';
 }
 
 async function loadProfiles(){
-  try{const r=await fetch('/api/db-profiles',{headers:headers()});const d=await r.json();const last=localStorage.getItem('jasqlLastProfile')||'';
+  try{const r=await fetch('/api/db-profiles',{headers:headers()});const d=await r.json();const last=localStorage.getItem('sqlonObserveProfile')||'';
     $('#profile').innerHTML='<option value="">활성 카탈로그 (기본)</option>'+(d.profiles||[]).map(p=>'<option value="'+esc(p.id)+'"'+(p.id===last?' selected':'')+'>'+esc(p.id)+(p.name?' — '+esc(p.name):'')+'</option>').join('');
     $('#profile').dispatchEvent(new Event('change'));const hp=sessionStorage.getItem('jasqlHistoryPrompt');if(hp){$('#q').value=hp;sessionStorage.removeItem('jasqlHistoryPrompt');}
   }catch(e){}

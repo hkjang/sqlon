@@ -145,8 +145,8 @@ func TestAdminTokenEnforcedOnMutations(t *testing.T) {
 func TestAdminStaticPages(t *testing.T) {
 	_, mux := newAdminMux(t, "")
 	for path, needle := range map[string]string{
-		"/admin":                     "데이터셋 관리 콘솔",
-		"/admin/editor":              "테이블 편집기",
+		"/admin":                     "<h1>데이터셋",
+		"/admin/editor":              "<h1>테이블 편집",
 		"/admin/changes":             "변경 관리",
 		"/admin/availability":        "복제 · 백업",
 		"/admin/security":            "보안 · 권한",
@@ -167,5 +167,49 @@ func TestAdminStaticPages(t *testing.T) {
 	}
 	if spec["openapi"] != "3.0.3" {
 		t.Fatalf("unexpected openapi version: %v", spec["openapi"])
+	}
+}
+
+// Every console page carries the design system: the stylesheet, and the
+// head script that sets the theme before the first paint. A page that
+// forgets them renders unstyled or flashes the wrong theme.
+func TestConsolePagesLoadTheDesignSystem(t *testing.T) {
+	_, mux := newAdminMux(t, "")
+	for _, c := range []struct{ path, ctype, needle string }{
+		{"/admin/ui.css", "text/css", "--accent-solid"},
+		{"/admin/theme.js", "application/javascript", "sqlon-theme"},
+		{"/admin/nav.js", "application/javascript", "openPalette"},
+	} {
+		rec := doReq(t, mux, "GET", c.path, "", nil)
+		if rec.Code != 200 || !strings.HasPrefix(rec.Header().Get("Content-Type"), c.ctype) || !strings.Contains(rec.Body.String(), c.needle) {
+			t.Fatalf("%s: %d %q", c.path, rec.Code, rec.Header().Get("Content-Type"))
+		}
+	}
+	entries, err := webuiFS.ReadDir("webui")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pages := 0
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".html") || e.Name() == "docs.html" {
+			continue
+		}
+		b, _ := webuiFS.ReadFile("webui/" + e.Name())
+		html := string(b)
+		pages++
+		if !strings.Contains(html, `<link rel="stylesheet" href="/admin/ui.css">`) || !strings.Contains(html, `<script src="/admin/theme.js"`) {
+			t.Errorf("%s does not load ui.css and theme.js", e.Name())
+		}
+		if strings.Contains(html, "/admin/nav.js") && !strings.Contains(html, `<script src="/admin/theme.js" data-shell>`) {
+			t.Errorf("%s mounts the shell but its theme.js lacks data-shell (the sidebar would jump in after paint)", e.Name())
+		}
+		// shell pages were written with their own element defaults, which
+		// the design system has to override (login/landing build on it)
+		if strings.Contains(html, "/admin/nav.js") && strings.Index(html, "/admin/ui.css") < strings.Index(html, "</style>") {
+			t.Errorf("%s links ui.css before its own <style>; the design system must come after to win", e.Name())
+		}
+	}
+	if pages < 25 {
+		t.Fatalf("expected the console pages, found %d", pages)
 	}
 }

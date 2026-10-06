@@ -216,6 +216,14 @@ var openAPISpec = `{
         "responses": { "200": {"description":"fleet health envelope"}, "401": {"description":"인증 필요"} }
       }
     },
+    "/api/console/summary": {
+      "get": {
+        "tags": ["early-warning"], "summary": "콘솔 배지 요약",
+        "description": "아직 확인(ack)·무음되지 않은 발생 중 예방 경보 수(심각도별, 볼 수 있는 DB만)와, dba/admin에게는 승인 대기(review_required) 변경계획 수를 돌려줍니다. 콘솔 메뉴 배지가 1분마다 호출합니다.",
+        "security": [{"SessionCookie":[]},{"MCPKey":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{alerts:{critical,warning,info}, changes?:{awaiting_approval}}"} }
+      }
+    },
     "/api/early-warning": {
       "get": {
         "tags": ["early-warning"], "summary": "예방 경보 현황",

@@ -1151,3 +1151,25 @@ func (e *Engine) sendDigest(ctx context.Context, profiles []dbconn.Profile, now 
 	}
 	e.st.LastDigestDate, e.st.LastDigestErr = today, ""
 }
+
+// AttentionCounts counts the firing alerts nobody has acknowledged or
+// silenced, by severity, for the given profiles — what a console badge
+// needs, without building the whole board.
+func (e *Engine) AttentionCounts(profiles []dbconn.Profile) map[string]int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	now := e.now()
+	allowed := map[string]bool{}
+	for _, p := range profiles {
+		allowed[dbconn.ApplyDefaults(p).ID] = true
+	}
+	silences := e.activeSilencesLocked(now)
+	out := map[string]int{SevCritical: 0, SevWarning: 0, SevInfo: 0}
+	for _, a := range e.st.Alerts {
+		if a.State != StateFiring || !allowed[a.ProfileID] || a.AckedAt != nil || silencedUntil(silences, a, now) != nil {
+			continue
+		}
+		out[a.Severity]++
+	}
+	return out
+}

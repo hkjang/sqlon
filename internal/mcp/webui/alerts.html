@@ -3,34 +3,34 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
-<title>SQLON 예방 경보</title>
+<title>예방 경보 · sqlon</title>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--line:#dce4ee;--ink:#172033;--sub:#607086;--blue:#2563eb;--ok:#15803d;--warn:#a16207;--bad:#b91c1c;--mono:ui-monospace,'Cascadia Code',Consolas,monospace}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif}
-header{padding:13px 26px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10;flex-wrap:wrap}h1{font-size:19px;margin:0}header .grow{flex:1}
-input,button,select{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff;font:inherit}button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}button:disabled{opacity:.55;cursor:wait}
+header{padding:13px 26px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10;flex-wrap:wrap}h1{font-size:19px;margin:0}header .grow{flex:1}
+input,button,select{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--surface);font:inherit}button{cursor:pointer}button.primary{background:var(--accent-solid);border-color:var(--blue);color:var(--on-accent);font-weight:700}button:disabled{opacity:.55;cursor:wait}
 main{max-width:1500px;margin:auto;padding:20px 26px 60px}
-.headline{padding:13px 16px;border-radius:11px;margin-bottom:14px;font-size:15px;font-weight:600;background:#e9f7ef;border:1px solid #b5e0c4;color:#14532d}
-.headline.warning{background:#fff8df;border-color:#efd486;color:#74580b}.headline.critical{background:#fff0f0;border-color:#efb0b0;color:#991b1b}
+.headline{padding:13px 16px;border-radius:11px;margin-bottom:14px;font-size:15px;font-weight:600;background:var(--ok-bg);border:1px solid var(--ok-border);color:var(--ok-strong)}
+.headline.warning{background:var(--warn-bg);border-color:var(--warn-border);color:var(--warn-strong)}.headline.critical{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-strong)}
 .cards{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px}.card small{display:block;color:var(--sub)}.card b{font-size:22px}.card.bad b{color:var(--bad)}.card.warn b{color:var(--warn)}.card .muted{display:block;margin-top:2px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:11px;margin-bottom:14px;overflow:hidden}.panel h2{font-size:15px;margin:0;padding:13px 15px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}.panel h2 .grow{flex:1}
-.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #edf1f5;text-align:left;vertical-align:top}th{font-size:12px;color:#536176;background:#f8fafc;white-space:nowrap}
-td.nowrap{white-space:nowrap}.detail{white-space:pre-wrap;max-width:560px;font-size:13px}.rec{color:#334155;font-size:12.5px;margin-top:5px;max-width:560px}
+.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}th{font-size:12px;color:var(--text-2);background:var(--surface-2);white-space:nowrap}
+td.nowrap{white-space:nowrap}.detail{white-space:pre-wrap;max-width:560px;font-size:13px}.rec{color:var(--text-2);font-size:12.5px;margin-top:5px;max-width:560px}
 .muted{color:var(--sub);font-size:12px}.empty{padding:30px;text-align:center;color:var(--sub)}
-.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:700;background:#eef2f7;color:#475569;white-space:nowrap}
-.sev-critical{background:#fee2e2;color:#991b1b}.sev-warning{background:#fef3c7;color:#854d0e}.sev-info{background:#e0f2fe;color:#075985}.sev-ok{background:#dcfce7;color:#166534}.sev-unknown,.sev-pending{background:#eef2f7;color:#475569}
-.bar{position:relative;width:180px;height:9px;background:#edf1f5;border-radius:5px;overflow:hidden;margin-top:5px}.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--ok)}.bar i.warning{background:#d97706}.bar i.critical{background:var(--bad)}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:700;background:var(--surface-3);color:var(--text-2);white-space:nowrap}
+.sev-critical{background:var(--danger-bg);color:var(--danger-strong)}.sev-warning{background:var(--warn-bg);color:var(--warn-strong)}.sev-info{background:var(--accent-bg);color:var(--accent-strong)}.sev-ok{background:var(--ok-bg);color:var(--ok-strong)}.sev-unknown,.sev-pending{background:var(--surface-3);color:var(--text-2)}
+.bar{position:relative;width:180px;height:9px;background:var(--surface-3);border-radius:5px;overflow:hidden;margin-top:5px}.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--ok-solid)}.bar i.warning{background:var(--warn-solid)}.bar i.critical{background:var(--danger-solid)}
 .mono{font-family:var(--mono);font-size:12.5px}
-.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}.message.ok{background:#e9f7ef;border-color:#b5e0c4;color:#14532d}
-.delivery{padding:10px 15px;font-size:13px;border-bottom:1px solid var(--line);background:#fbfcfe}
+.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn-strong)}.message.error{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-strong)}.message.ok{background:var(--ok-bg);border-color:var(--ok-border);color:var(--ok-strong)}
+.delivery{padding:10px 15px;font-size:13px;border-bottom:1px solid var(--line);background:var(--surface-2)}
 details{padding:0}details summary{cursor:pointer;padding:13px 15px;font-weight:700;font-size:15px}
 .ack{font-size:12px;padding:4px 9px}
 .silence-form{display:flex;gap:8px;flex-wrap:wrap;padding:12px 15px;border-bottom:1px solid var(--line)}.silence-form input{flex:1;min-width:180px}
 .asset{margin-bottom:7px}.asset:last-child{margin-bottom:0}
-.badge.silenced{background:#ede9fe;color:#5b21b6}.badge.flap{background:#fce7f3;color:#9d174d}
-.incident{padding:12px 15px;border-bottom:1px solid #edf1f5}.incident:last-child{border-bottom:0}.incident b{font-size:14px}
+.badge.silenced{background:var(--purple-bg);color:var(--purple)}.badge.flap{background:var(--purple-bg);color:var(--purple-strong)}
+.incident{padding:12px 15px;border-bottom:1px solid var(--border)}.incident:last-child{border-bottom:0}.incident b{font-size:14px}
 .modal{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:40px 16px;overflow:auto}
-.modal.open{display:flex}.modal .box{background:#fff;border-radius:12px;max-width:900px;width:100%;padding:18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.modal.open{display:flex}.modal .box{background:var(--surface);border-radius:12px;max-width:900px;width:100%;padding:18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
 .modal h3{margin:0 0 10px;font-size:16px}.modal .close{float:right}.kv{display:grid;grid-template-columns:150px 1fr;gap:6px 12px;font-size:13px;margin:10px 0}.kv dt{color:var(--sub)}.kv dd{margin:0}
 .settings{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px 15px}.settings label{font-size:12px;color:var(--sub);display:block;margin-bottom:3px}.settings input,.settings select{width:100%}
 .src{font-size:11px;color:var(--sub)}.src.runtime{color:var(--blue);font-weight:700}
@@ -38,10 +38,12 @@ details{padding:0}details summary{cursor:pointer;padding:13px 15px;font-weight:7
 @media(max-width:1100px){.cards{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:700px){.cards{grid-template-columns:repeat(2,1fr)}main{padding:14px}header{padding:12px 14px}}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 <header>
-  <h1>🚨 예방 경보</h1>
+  <h1>예방 경보</h1>
   <input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)">
   <button class="primary" id="refresh">새로고침</button>
   <button id="evaluate" title="모든 프로파일을 지금 수집하고 예방 점검·스키마 점검까지 즉시 실행합니다 (관리자)">지금 평가</button>
@@ -305,6 +307,7 @@ async function load(){
     renderForecasts(b.profiles||[]);renderFiring(b.firing||[]);renderSchema(b.schema_events||[]);renderRecent(b.recent||[]);renderDelivery(b.delivery,b.channels,b.digest,b.escalation,b.heartbeat);renderSilences(b.silences||[],b.profiles||[]);renderIncidents(b.incidents||[]);
     document.querySelectorAll('button[data-plan]').forEach(x=>x.onclick=()=>showPlan(x.dataset.plan));
     $('#fresh').textContent='최신 조회 '+new Date().toLocaleTimeString('ko-KR');
+    if(window.JASQL&&JASQL.refreshBadges)JASQL.refreshBadges();
   }catch(e){note('예방 경보 조회 실패: '+e.message,'error');$('#fresh').textContent='조회 실패'}
 }
 

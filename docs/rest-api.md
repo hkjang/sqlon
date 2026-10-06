@@ -31,6 +31,7 @@ REST와 MCP 도구(`put_dataset` 등)는 **동일한 서버 코드**를 호출�
 
 | 엔드포인트 | 설명 |
 | --- | --- |
+| `GET /api/console/summary` | 콘솔 배지용 요약 — 미확인·무음 아닌 예방 경보 건수(심각도별), DBA에게는 승인 대기 변경계획 수 |
 | `GET /api/early-warning` | 예방 경보 현황(예측·발생 중·스키마 이력·무음·채널 상태) |
 | `POST /api/early-warning/alerts/{id}/ack` | 경보 확인 |
 | `POST /api/early-warning/silences` · `DELETE /api/early-warning/silences/{id}` | 무음 추가·해제 |

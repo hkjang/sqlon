@@ -4,7 +4,7 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sqlon DB 연결 관리 · 쿼리 실행</title>
+<title>DB 연결 · sqlon</title>
 <style>
   :root {
     --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
@@ -15,24 +15,24 @@
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
          font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
-  header { background:#101a2e; color:#e8eefc; padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; position:sticky; top:0; z-index:20; }
+  header { background:var(--inverse-bg); color:var(--inverse-text); padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; position:sticky; top:0; z-index:20; }
   header h1 { font-size:16px; margin:0 10px 0 0; }
   header .grow { flex:1; }
-  header input { background:#1d2b47; border:1px solid #35507f; color:#e8eefc; border-radius:6px; padding:6px 10px; width:220px; }
-  .chip { display:inline-block; padding:2px 10px; border-radius:20px; font-size:12px; background:#243654; color:#cfe0ff; }
-  .chip.err { background:#5b1d1d; color:#ffc9c9; }
+  header input { background:var(--inverse-2); border:1px solid var(--inverse-border); color:var(--inverse-text); border-radius:6px; padding:6px 10px; width:220px; }
+  .chip { display:inline-block; padding:2px 10px; border-radius:20px; font-size:12px; background:var(--inverse-2); color:var(--inverse-text); }
+  .chip.err { background:var(--danger-bg); color:var(--danger); border-color:var(--danger-border); }
   .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px; padding:6px 12px; cursor:pointer; font-size:13px; white-space:nowrap; }
   .btn:hover { border-color:var(--blue); color:var(--blue); }
-  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
-  .btn.primary:hover { opacity:.9; color:#fff; }
-  .btn.danger { color:var(--red); border-color:#efc4c4; }
+  .btn.primary { background:var(--accent-solid); border-color:var(--blue); color:var(--on-accent); }
+  .btn.primary:hover { opacity:.9; color:var(--on-accent); }
+  .btn.danger { color:var(--red); border-color:var(--danger-border); }
   .btn.danger:hover { background:var(--red-soft); }
   .btn:disabled { opacity:.4; cursor:not-allowed; }
   main { max-width:1600px; margin:0 auto; padding:14px 20px 80px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:14px; }
   details.guide > summary { cursor:pointer; font-weight:700; }
   details.guide ul { margin:8px 0 2px; padding-left:20px; color:var(--sub); font-size:13px; }
-  code, .mono { background:#eef1f5; border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
+  code, .mono { background:var(--surface-3); border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
   table.t { width:100%; border-collapse:collapse; font-size:13px; }
   table.t th { text-align:left; color:var(--sub); font-weight:600; padding:7px 9px; border-bottom:2px solid var(--line); }
   table.t td { padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
@@ -40,7 +40,7 @@
   .b.ok { background:var(--green-soft); color:var(--green); }
   .b.bad { background:var(--red-soft); color:var(--red); }
   .b.warn { background:var(--amber-soft); color:var(--amber); }
-  .b.gray { background:#eef1f5; color:var(--sub); }
+  .b.gray { background:var(--surface-3); color:var(--sub); }
   .cols2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   @media (max-width:1000px){ .cols2 { grid-template-columns:1fr; } }
   form.pform label { display:block; font-size:12.5px; color:var(--sub); margin:8px 0 3px; }
@@ -49,30 +49,32 @@
   textarea#sqlBox { width:100%; min-height:140px; font-family:var(--mono); font-size:13px; border:1px solid var(--line); border-radius:8px; padding:10px; resize:vertical; }
   .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:10px 0; }
   .result { border-radius:8px; padding:11px 14px; margin-top:8px; font-size:13px; display:none; white-space:pre-wrap; word-break:break-all; }
-  .result.ok { display:block; background:var(--green-soft); border:1px solid #bfe4cc; }
-  .result.bad{ display:block; background:var(--red-soft); border:1px solid #efc4c4; }
-  .result.info{ display:block; background:var(--blue-soft); border:1px solid #c4d6f7; }
+  .result.ok { display:block; background:var(--green-soft); border:1px solid var(--ok-border); }
+  .result.bad{ display:block; background:var(--red-soft); border:1px solid var(--danger-border); }
+  .result.info{ display:block; background:var(--blue-soft); border:1px solid var(--accent-border); }
   .gridwrap { overflow:auto; border:1px solid var(--line); border-radius:10px; max-height:45vh; margin-top:10px; }
   table.rs { border-collapse:collapse; font-size:12.5px; min-width:100%; }
-  table.rs th { position:sticky; top:0; background:#eef2f8; padding:6px 9px; text-align:left; font-family:var(--mono); font-size:12px; border-bottom:1px solid var(--line); }
+  table.rs th { position:sticky; top:0; background:var(--surface-3); padding:6px 9px; text-align:left; font-family:var(--mono); font-size:12px; border-bottom:1px solid var(--line); }
   table.rs td { padding:5px 9px; border-bottom:1px solid var(--line); border-right:1px solid var(--line); font-family:var(--mono); font-size:12px; white-space:pre-wrap; max-width:360px; word-break:break-all; }
   .mini { font-size:12px; color:var(--sub); }
-  #toast { position:fixed; right:18px; bottom:18px; background:#101a2e; color:#e8eefc; border-radius:10px; padding:12px 18px; font-size:13px; display:none; max-width:480px; z-index:50; box-shadow:0 6px 24px rgba(0,0,0,.25); }
+  #toast { position:fixed; right:18px; bottom:18px; background:var(--inverse-bg); color:var(--inverse-text); border-radius:10px; padding:12px 18px; font-size:13px; display:none; max-width:480px; z-index:50; box-shadow:0 6px 24px rgba(0,0,0,.25); }
   h2 { font-size:15px; margin:0 0 10px; }
-  .profile-hero{background:linear-gradient(135deg,#10203c,#1d4f91);color:#fff;border:0;padding:22px;box-shadow:0 12px 34px rgba(20,55,105,.16)}
-  .profile-hero h2{font-size:21px;margin-bottom:5px}.profile-hero p{margin:0;color:#cbdcf5}.profile-hero .btn{font-weight:700}
-  .form-shell{background:#fbfcff;border:1px solid #cbd8eb!important;border-radius:14px;padding:0!important;overflow:hidden}.form-head{padding:18px 20px;background:#f0f5fd;border-bottom:1px solid #d7e1ef;display:flex;gap:12px;align-items:center}.form-head h2{font-size:18px;margin:0}.form-body{padding:20px}
-  .flow{display:grid;grid-template-columns:repeat(4,1fr);margin-bottom:20px}.flow-step{padding:9px 10px;border-bottom:3px solid #dce3ed;color:var(--sub);font-size:12px}.flow-step b{display:inline-grid;place-items:center;width:22px;height:22px;margin-right:6px;border-radius:50%;background:#e3e8f0}.flow-step.active{border-color:var(--blue);color:var(--blue);font-weight:700}.flow-step.active b{background:var(--blue);color:#fff}
-  .engine-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:7px 0 16px}.engine-card{position:relative;border:1px solid var(--line);background:#fff;border-radius:11px;padding:13px;cursor:pointer;transition:.15s}.engine-card:hover{transform:translateY(-1px);border-color:#91afe0}.engine-card.selected{border:2px solid var(--blue);background:#f4f8ff;padding:12px;box-shadow:0 4px 15px rgba(37,99,235,.1)}.engine-card input{position:absolute;opacity:0}.engine-card b{display:block;font-size:14px}.engine-card span{font-size:11.5px;color:var(--sub)}
-  .field-section{background:#fff;border:1px solid var(--line);border-radius:11px;padding:15px;margin-bottom:12px}.field-section h3{font-size:13px;margin:0 0 5px}.field-section>p{font-size:12px;color:var(--sub);margin:0 0 10px}.field-hint{font-size:11.5px;color:var(--sub);margin-top:4px}.form-actions{position:sticky;bottom:0;background:rgba(255,255,255,.96);border-top:1px solid var(--line);padding:12px 20px;margin:18px -20px -20px;display:flex;align-items:center;gap:8px;backdrop-filter:blur(6px)}
-  .diagnostic{margin-top:7px;border-left:3px solid var(--red);padding:7px 10px;background:#fff6f6;border-radius:0 7px 7px 0}.diagnostic b{display:block}.diagnostic ul{margin:5px 0 0;padding-left:18px}
+  .profile-hero{background:linear-gradient(135deg,var(--inverse-bg),var(--accent-solid));color:var(--on-accent);border:0;padding:22px;box-shadow:0 12px 34px rgba(20,55,105,.16)}
+  .profile-hero h2{font-size:21px;margin-bottom:5px}.profile-hero p{margin:0;color:var(--inverse-text)}.profile-hero .btn{font-weight:700}
+  .form-shell{background:var(--surface-2);border:1px solid var(--border-strong)!important;border-radius:14px;padding:0!important;overflow:hidden}.form-head{padding:18px 20px;background:var(--surface-2);border-bottom:1px solid var(--accent-border);display:flex;gap:12px;align-items:center}.form-head h2{font-size:18px;margin:0}.form-body{padding:20px}
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);margin-bottom:20px}.flow-step{padding:9px 10px;border-bottom:3px solid var(--accent-border);color:var(--sub);font-size:12px}.flow-step b{display:inline-grid;place-items:center;width:22px;height:22px;margin-right:6px;border-radius:50%;background:var(--surface-3)}.flow-step.active{border-color:var(--blue);color:var(--blue);font-weight:700}.flow-step.active b{background:var(--accent-solid);color:var(--on-accent)}
+  .engine-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:7px 0 16px}.engine-card{position:relative;border:1px solid var(--line);background:var(--surface);border-radius:11px;padding:13px;cursor:pointer;transition:.15s}.engine-card:hover{transform:translateY(-1px);border-color:var(--accent-border)}.engine-card.selected{border:2px solid var(--blue);background:var(--surface-2);padding:12px;box-shadow:0 4px 15px rgba(37,99,235,.1)}.engine-card input{position:absolute;opacity:0}.engine-card b{display:block;font-size:14px}.engine-card span{font-size:11.5px;color:var(--sub)}
+  .field-section{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:15px;margin-bottom:12px}.field-section h3{font-size:13px;margin:0 0 5px}.field-section>p{font-size:12px;color:var(--sub);margin:0 0 10px}.field-hint{font-size:11.5px;color:var(--sub);margin-top:4px}.form-actions{position:sticky;bottom:0;background:rgba(255,255,255,.96);border-top:1px solid var(--line);padding:12px 20px;margin:18px -20px -20px;display:flex;align-items:center;gap:8px;backdrop-filter:blur(6px)}
+  .diagnostic{margin-top:7px;border-left:3px solid var(--red);padding:7px 10px;background:var(--danger-bg);border-radius:0 7px 7px 0}.diagnostic b{display:block}.diagnostic ul{margin:5px 0 0;padding-left:18px}
   @media(max-width:760px){.engine-grid,.flow{grid-template-columns:1fr}.flow-step{display:none}.flow-step.active{display:block}.form-body{padding:14px}.form-actions{margin-left:-14px;margin-right:-14px}.profile-hero .toolbar{align-items:flex-start}}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 
 <header>
-  <h1>🔌 DB 연결 관리 · 쿼리 실행</h1>
+  <h1>DB 연결</h1>
   <span id="driverChip"></span>
   <span class="grow"></span>
   <input id="adminToken" type="password" placeholder="관리 토큰 (미설정 시 비워두기)">
@@ -163,7 +165,7 @@
             </div>
             <label>추가 차단 키워드 (콤마 구분, 기본 차단 목록에 추가됨)</label>
             <input id="f_denied" placeholder="예: DBLINK, EXTERNAL">
-            <label style="margin-top:6px">🛢 DBA 자격증명 (선택 — DBA 콘솔/도구 활성화용, 쓰기 가능 계정)</label>
+            <label style="margin-top:6px">DBA 자격증명 (선택 — DBA 콘솔/도구 활성화용, 쓰기 가능 계정)</label>
             <div class="grid">
               <label class="chk" style="grid-column:1/-1"><input type="checkbox" id="f_dba_enabled"> DBA 작업 활성화 (dba.enabled)</label>
               <input id="f_dba_user" placeholder="DBA 계정 (예: postgres)">
@@ -215,24 +217,24 @@
       <button class="btn" onclick="qMeta()">컬럼 메타</button>
       <button class="btn primary" onclick="qRun(true)">③ 미리보기</button>
       <button class="btn primary" onclick="qRun(false)">④ 실행</button>
-      <button class="btn" onclick="qSubmitAsync()" title="장기 쿼리를 백그라운드로 제출하고 폴링합니다">⏳ 비동기 실행</button>
-      <button class="btn" onclick="copySQL()">📋 SQL 복사</button>
+      <button class="btn" onclick="qSubmitAsync()" title="장기 쿼리를 백그라운드로 제출하고 폴링합니다">비동기 실행</button>
+      <button class="btn" onclick="copySQL()">SQL 복사</button>
       <span class="grow" style="flex:1"></span>
-      <button class="btn" onclick="openIndexSimulator()">🔍 인덱스 시뮬레이터</button>
-      <button class="btn" onclick="findUnusedIndexes()">🗑 미사용 인덱스</button>
-      <button class="btn" onclick="findRedundantIndexes()">🧬 중복·잉여 인덱스</button>
-      <button class="btn" onclick="auditConfig()">⚙ 설정 튬닝 감사</button>
+      <button class="btn" onclick="openIndexSimulator()">인덱스 시뮬레이터</button>
+      <button class="btn" onclick="findUnusedIndexes()">미사용 인덱스</button>
+      <button class="btn" onclick="findRedundantIndexes()">중복·잉여 인덱스</button>
+      <button class="btn" onclick="auditConfig()">설정 튬닝 감사</button>
       <span class="mini">Ctrl/⌘+Enter=미리보기</span>
       <span class="mini" id="qStat"></span>
     </div>
     <div id="qResult" class="result"></div>
     <div class="gridwrap" id="rsWrap" style="display:none"><table class="rs"><thead id="rsHead"></thead><tbody id="rsBody"></tbody></table></div>
     <div id="rsTools" style="display:none; margin-top:8px">
-      <button class="btn" onclick="copyResults()">📋 결과 복사 (TSV)</button>
+      <button class="btn" onclick="copyResults()">결과 복사 (TSV)</button>
       <button class="btn" onclick="downloadCSV()">⬇ CSV 다운로드</button>
     </div>
     <div id="jobsWrap" style="display:none; margin-top:12px">
-      <div class="mini" style="font-weight:700; margin-bottom:4px">⏳ 비동기 잡</div>
+      <div class="mini" style="font-weight:700; margin-bottom:4px">비동기 잡</div>
       <table class="t"><thead><tr><th>Job</th><th>SQL</th><th>상태</th><th style="width:150px">작업</th></tr></thead>
       <tbody id="jobRows"></tbody></table>
     </div>
@@ -250,7 +252,7 @@
 
   <div class="card" id="grantsCard" style="display:none">
     <div class="toolbar" style="justify-content:space-between">
-      <h2 style="margin:0">🔐 프로파일 권한 — <span id="grantsProfile" class="mono"></span></h2>
+      <h2 style="margin:0">프로파일 권한 — <span id="grantsProfile" class="mono"></span></h2>
       <button class="btn" onclick="$('#grantsCard').style.display='none'">닫기</button>
     </div>
     <div class="mini">소유자·관리자·manage 권한자만 편집할 수 있습니다. <b>use</b>=조회/실행, <b>manage</b>=정의 수정+권한 부여.</div>
@@ -273,14 +275,14 @@
   <!-- 인덱스 시뮬레이터 카드 -->
   <div class="card" id="indexSimCard" style="display:none">
     <div class="toolbar" style="justify-content:space-between">
-      <h2 style="margin:0">🔍 감상 인덱스 성능 시뮬레이터</h2>
+      <h2 style="margin:0">감상 인덱스 성능 시뮬레이터</h2>
       <button class="btn" onclick="$('#indexSimCard').style.display='none'">닫기</button>
     </div>
     <div class="mini" style="margin-bottom:10px">실제 테이블에 인덱스를 생성하지 않고, 감상 인덱스가 SQL 성능(Cost)에 미치는 영향을 시뮬레이텘합니다. (PostgreSQL의 경우 hypopg 확장 기능 지원 시 실측 계획 반영)</div>
     <div class="toolbar">
       <input id="simTable" placeholder="대상 테이블명 (예: orders)" style="min-width:200px; padding:6px;">
       <input id="simColumns" placeholder="인덱스 컬럼 목록 (콤마 구분, 예: user_id, status)" style="min-width:320px; padding:6px;">
-      <button class="btn primary" onclick="runIndexSimulation()">⚡ 시뮬레이션 실행</button>
+      <button class="btn primary" onclick="runIndexSimulation()">시뮬레이션 실행</button>
     </div>
     <div id="simResult" class="result"></div>
   </div>
@@ -288,7 +290,7 @@
   <!-- 미사용 인덱스 카드 -->
   <div class="card" id="unusedIndexesCard" style="display:none">
     <div class="toolbar" style="justify-content:space-between">
-      <h2 style="margin:0">🗑 미사용 인덱스 정리 도우미</h2>
+      <h2 style="margin:0">미사용 인덱스 정리 도우미</h2>
       <button class="btn" onclick="$('#unusedIndexesCard').style.display='none'">닫기</button>
     </div>
     <div class="mini" style="margin-bottom:10px">조회(Read) 쿠리에서 사용되지 않고 쓰기(CUD) 성능만 떨어트리는 미사용 인덱스들을 찾아 정리 스크립트를 제안합니다.</div>
@@ -302,7 +304,7 @@
   <!-- 중복·잉여 인덱스 카드 -->
   <div class="card" id="redundantIndexesCard" style="display:none">
     <div class="toolbar" style="justify-content:space-between">
-      <h2 style="margin:0">🧬 중복·잉여 인덱스 정리 도우미</h2>
+      <h2 style="margin:0">중복·잉여 인덱스 정리 도우미</h2>
       <button class="btn" onclick="$('#redundantIndexesCard').style.display='none'">닫기</button>
     </div>
     <div class="mini" style="margin-bottom:10px">같은 테이블에서 <b>컬럼이 완전히 같은 중복(duplicate)</b> 인덱스와, <b>더 넓은 인덱스의 선두 접두</b>에 해당해 이미 커버되는 <b>잉여(prefix)</b> 인덱스를 찾습니다. 쓰기·저장 오버헤드만 늘리고 읽기 이득이 없습니다. UNIQUE 인덱스는 유일성 보장 때문에 제외하며, DROP은 반드시 변경 관리 승인 흐름으로 수행하세요.</div>
@@ -315,14 +317,14 @@
   <!-- 설정 Audit 카드 -->
   <div class="card" id="configAuditCard" style="display:none">
     <div class="toolbar" style="justify-content:space-between">
-      <h2 style="margin:0">⚙ 설정 튬닝 감사 & 가읽드</h2>
+      <h2 style="margin:0">설정 튬닝 감사 & 가읽드</h2>
       <button class="btn" onclick="$('#configAuditCard').style.display='none'">닫기</button>
     </div>
     <div class="mini" style="margin-bottom:10px">현재 덼이터베이스의 메멘리·커넥션 설정 변수들을 시스템 스팩 대비 분석하여 최적의 촬천값을 제안합니다.</div>
     <div class="toolbar">
       <label class="mini">시스템 RAM 스팩 (GB)&nbsp;
         <input id="auditRAM" type="number" value="8" style="width:70px; padding:6px;"></label>
-      <button class="btn primary" onclick="runConfigAudit()">⚙ 설정 진단 실행</button>
+      <button class="btn primary" onclick="runConfigAudit()">설정 진단 실행</button>
     </div>
     <div id="auditSummary" class="result info" style="display:none"></div>
     <table class="t" id="auditTable" style="display:none; margin-top:10px;">
@@ -376,10 +378,10 @@ async function refreshProfiles() {
     ? '<tr><td colspan="6" class="mini">등록된 프로파일이 없습니다 — [＋ 프로파일 추가]로 시작하세요.</td></tr>'
     : renderProfileGroups(PROFILES);
   const sel = $('#qProfile');
-  const last = localStorage.getItem('jasqlLastProfile');
+  const last = localStorage.getItem('sqlonObserveProfile');
   sel.innerHTML = PROFILES.map(p => '<option value="' + esc(p.id) + '"' + (p.id === last ? ' selected' : '') + '>' + esc(p.id) + (p.name ? ' — ' + esc(p.name) : '') + '</option>').join('')
     || '<option value="">프로파일 없음</option>';
-  sel.onchange = () => localStorage.setItem('jasqlLastProfile', sel.value);
+  sel.onchange = () => localStorage.setItem('sqlonObserveProfile', sel.value);
 }
 function profileRow(p) {
   const isAdmin = window.AUTH && window.AUTH.user && window.AUTH.user.role === 'admin';
@@ -403,7 +405,7 @@ function profileRow(p) {
     '</td></tr>';
 }
 function groupHeader(title, hint) {
-  return '<tr><td colspan="6" style="background:#f2f6ff;border-top:2px solid var(--line)">' +
+  return '<tr><td colspan="6" style="background:var(--surface-2);border-top:2px solid var(--line)">' +
     '<b>' + esc(title) + '</b>' + (hint ? ' <span class="mini">— ' + esc(hint) + '</span>' : '') + '</td></tr>';
 }
 function renderProfileGroups(list) {
@@ -664,7 +666,7 @@ function renderExplainTree(lp) {
     const children = steps.filter(s => s.parent_id === step.id);
     let childHTML = "";
     if (children.length > 0) {
-      childHTML = "<div style=\"margin-left: 24px; border-left: 2px dashed #cbd5e1; padding-left: 12px; margin-top: 4px;\">" +
+      childHTML = "<div style=\"margin-left: 24px; border-left: 2px dashed var(--border-strong); padding-left: 12px; margin-top: 4px;\">" +
         children.map(buildNodeHTML).join("") +
         "</div>";
     }
@@ -676,22 +678,22 @@ function renderExplainTree(lp) {
     else if (op.includes("sort") || op.includes("group") || op.includes("hash")) icon = "🔀";
     
     let isHighCost = step.cost > 50000;
-    let badgeStyle = isHighCost ? "background: #fecaca; color: #b91c1c; font-weight: bold;" : "background: #e2e8f0; color: #475569;";
+    let badgeStyle = isHighCost ? "background: var(--danger-bg); color: var(--danger); font-weight: bold;" : "background: var(--surface-3); color: var(--text-2);";
     
     return "<div style=\"margin-bottom: 10px; font-family: var(--mono); font-size: 13px;\">" +
-      "<div>" + icon + " <b style=\"color: #1e293b;\">" + esc(step.operation) + "</b>" +
-      (step.options ? " (<span style=\"color: #4f46e5;\">" + esc(step.options) + "</span>)" : "") +
-      (step.object_name ? " on <span style=\"color: #0891b2;\">" + esc(step.object_name) + "</span>" : "") +
+      "<div>" + icon + " <b style=\"color: var(--text);\">" + esc(step.operation) + "</b>" +
+      (step.options ? " (<span style=\"color: var(--accent);\">" + esc(step.options) + "</span>)" : "") +
+      (step.object_name ? " on <span style=\"color: var(--info);\">" + esc(step.object_name) + "</span>" : "") +
       " <span style=\"font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; " + badgeStyle + "\">Cost: " + step.cost + "</span>" +
-      (step.cardinality ? " <span style=\"font-size: 11px; color: #64748b;\">(Est. " + step.cardinality + " rows)</span>" : "") +
+      (step.cardinality ? " <span style=\"font-size: 11px; color: var(--muted);\">(Est. " + step.cardinality + " rows)</span>" : "") +
       "</div>" +
-      (step.filter_predicates ? "<div style=\"font-size: 11.5px; color: #94a3b8; margin-left: 24px;\">Filter: <code>" + esc(step.filter_predicates) + "</code></div>" : "") +
+      (step.filter_predicates ? "<div style=\"font-size: 11.5px; color: var(--faint); margin-left: 24px;\">Filter: <code>" + esc(step.filter_predicates) + "</code></div>" : "") +
       childHTML +
       "</div>";
   }
   
-  return "<div style=\"background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-top: 10px;\">" +
-    "<h4 style=\"margin: 0 0 10px 0; color: #334155; font-size: 14px;\">🌳 실행 계획 트리 시각화</h4>" +
+  return "<div style=\"background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-top: 10px;\">" +
+    "<h4 style=\"margin: 0 0 10px 0; color: var(--text-2); font-size: 14px;\">🌳 실행 계획 트리 시각화</h4>" +
     rootSteps.map(buildNodeHTML).join("") +
     "</div>";
 }
@@ -768,7 +770,7 @@ async function runIndexSimulation() {
       '<div style="margin-top: 10px; font-weight: bold; color: var(--blue);">' + esc(r.message) + '</div>';
       
     if (r.plan_steps && r.plan_steps.length > 0) {
-      html += '<div style="margin-top: 10px;"><b>시뮬레이션 계획 단계:</b><pre style="background: #eef1f5; padding: 10px; border-radius: 6px; font-family: var(--mono); font-size: 12px; overflow: auto;">' + 
+      html += '<div style="margin-top: 10px;"><b>시뮬레이션 계획 단계:</b><pre style="background: var(--surface-3); padding: 10px; border-radius: 6px; font-family: var(--mono); font-size: 12px; overflow: auto;">' + 
         r.plan_steps.map(esc).join('\n') + '</pre></div>';
     }
     

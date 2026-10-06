@@ -3,37 +3,39 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
-<title>SQLON 변경 관리</title>
+<title>변경 관리 · sqlon</title>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--line:#dce4ee;--ink:#172033;--sub:#607086;--blue:#2563eb;--ok:#15803d;--warn:#a16207;--bad:#b91c1c;--mono:ui-monospace,'Cascadia Code',Consolas,monospace}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif}
-header{padding:13px 26px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}
-select,input,textarea,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff;font:inherit}button{cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}button.danger{background:var(--bad);border-color:var(--bad);color:#fff}button.mini{padding:3px 9px;font-size:12px}button:disabled{opacity:.45;cursor:not-allowed}
+header{padding:13px 26px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}h1{font-size:19px;margin:0}header .grow{flex:1}
+select,input,textarea,button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--surface);font:inherit}button{cursor:pointer}button.primary{background:var(--accent-solid);border-color:var(--blue);color:var(--on-accent);font-weight:700}button.danger{background:var(--danger-solid);border-color:var(--bad);color:var(--on-accent)}button.mini{padding:3px 9px;font-size:12px}button:disabled{opacity:.45;cursor:not-allowed}
 main{max-width:1500px;margin:auto;padding:20px 26px 60px}
-.notice{padding:11px 14px;background:#eef4ff;border:1px solid #c4d5f5;border-radius:10px;margin-bottom:14px;font-size:13px;color:#1d3f7a}
-.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:#fff8df;border:1px solid #efd486;color:#74580b}.message.error{background:#fff0f0;border-color:#efb0b0;color:#991b1b}.message.ok{background:#f0fdf4;border-color:#b7e4c3;color:#166534}
+.notice{padding:11px 14px;background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:10px;margin-bottom:14px;font-size:13px;color:var(--accent-strong)}
+.message{padding:11px 13px;margin-bottom:12px;border-radius:9px;background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn-strong)}.message.error{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-strong)}.message.ok{background:var(--ok-bg);border-color:var(--ok-border);color:var(--ok-strong)}
 .cards{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:14px}.card,.panel{background:var(--card);border:1px solid var(--line);border-radius:11px}.card{padding:14px}.card small{display:block;color:var(--sub)}.card b{font-size:24px}.bad b{color:var(--bad)}.warn b{color:var(--warn)}.ok b{color:var(--ok)}
 .panel{margin-bottom:14px;overflow:hidden}.panel h2{font-size:15px;margin:0;padding:13px 15px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}.panel h2 .grow{flex:1}
-.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap;vertical-align:top}th{font-size:12px;color:#536176;background:#f8fafc}
+.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;vertical-align:top}th{font-size:12px;color:var(--text-2);background:var(--surface-2)}
 .muted{color:var(--sub);font-size:12px}.empty{padding:32px;text-align:center;color:var(--sub)}
-.badge{display:inline-block;padding:2px 8px;border-radius:10px;background:#eef2f7;font-size:11.5px;font-weight:700}
-.st-draft{background:#eef2f7;color:#475569}.st-review{background:#fef3c7;color:#854d0e}.st-approved{background:#dbeafe;color:#1d4ed8}.st-run{background:#ede9fe;color:#6d28d9}.st-done{background:#dcfce7;color:#166534}.st-fail{background:#fee2e2;color:#991b1b}.st-cancel{background:#f1f5f9;color:#64748b}
-.rk-low{background:#f1f5f9;color:#475569}.rk-medium{background:#e0f2fe;color:#075985}.rk-high{background:#fef3c7;color:#854d0e}.rk-critical{background:#fee2e2;color:#991b1b}.rk-emergency{background:#fae8ff;color:#86198f}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;background:var(--surface-3);font-size:11.5px;font-weight:700}
+.st-draft{background:var(--surface-3);color:var(--text-2)}.st-review{background:var(--warn-bg);color:var(--warn-strong)}.st-approved{background:var(--accent-bg);color:var(--accent)}.st-run{background:var(--purple-bg);color:var(--purple)}.st-done{background:var(--ok-bg);color:var(--ok-strong)}.st-fail{background:var(--danger-bg);color:var(--danger-strong)}.st-cancel{background:var(--surface-3);color:var(--muted)}
+.rk-low{background:var(--surface-3);color:var(--text-2)}.rk-medium{background:var(--accent-bg);color:var(--accent-strong)}.rk-high{background:var(--warn-bg);color:var(--warn-strong)}.rk-critical{background:var(--danger-bg);color:var(--danger-strong)}.rk-emergency{background:var(--purple-bg);color:var(--purple-strong)}
 .form{padding:15px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:11px;margin-bottom:11px}label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--sub)}label.f input,label.f select{width:100%}
-.step{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:#fafcff}.step h3{margin:0 0 8px;font-size:13px;display:flex;align-items:center}.step h3 .grow{flex:1}
+.step{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--surface-2)}.step h3{margin:0 0 8px;font-size:13px;display:flex;align-items:center}.step h3 .grow{flex:1}
 .step textarea{width:100%;min-height:44px;font-family:var(--mono);font-size:12.5px;resize:vertical}.steplabel{font-size:11.5px;color:var(--sub);margin:6px 0 3px}
 .modal{position:fixed;inset:0;background:rgba(13,18,28,.55);display:none;align-items:flex-start;justify-content:center;padding:30px 16px;z-index:60;overflow:auto}.modal.open{display:flex}
-.mpanel{width:min(960px,100%);background:#fff;border-radius:14px;box-shadow:0 30px 70px rgba(0,0,0,.3)}
-.mhead{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:16px 20px;display:flex;align-items:center;gap:12px;border-radius:14px 14px 0 0}.mhead h2{margin:0;font-size:17px}.mhead .x{margin-left:auto;border:0;background:#f1f3f6;border-radius:50%;width:32px;height:32px;font-size:18px}
+.mpanel{width:min(960px,100%);background:var(--surface);border-radius:14px;box-shadow:0 30px 70px rgba(0,0,0,.3)}
+.mhead{position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--line);padding:16px 20px;display:flex;align-items:center;gap:12px;border-radius:14px 14px 0 0}.mhead h2{margin:0;font-size:17px}.mhead .x{margin-left:auto;border:0;background:var(--surface-3);border-radius:50%;width:32px;height:32px;font-size:18px}
 .mbody{padding:18px 20px}.kv{display:grid;grid-template-columns:130px 1fr;gap:6px 12px;font-size:13px;margin-bottom:14px}.kv dt{color:var(--sub)}.kv dd{margin:0;word-break:break-word}
-.sqlbox{font-family:var(--mono);font-size:12.5px;background:#f7f9fc;border:1px solid var(--line);border-radius:8px;padding:9px 11px;white-space:pre-wrap;word-break:break-word;margin:3px 0 8px}
-.sqlbox.comp{background:#fff7f5;border-color:#f3cdc4}
+.sqlbox{font-family:var(--mono);font-size:12.5px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:9px 11px;white-space:pre-wrap;word-break:break-word;margin:3px 0 8px}
+.sqlbox.comp{background:var(--danger-bg);border-color:var(--danger-border)}
 .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:14px 20px;border-top:1px solid var(--line)}
 @media(max-width:950px){.cards{grid-template-columns:repeat(3,1fr)}main{padding:15px}.kv{grid-template-columns:1fr}}
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
-<header><h1>변경 관리</h1><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><button class="primary" id="refresh">새로고침</button><button id="newToggle">➕ 변경계획 작성</button><span class="grow"></span><span class="muted" id="fresh">조회 전</span></header>
+<header><h1>변경 관리</h1><input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드)"><button class="primary" id="refresh">새로고침</button><button id="newToggle">+ 변경계획 작성</button><span class="grow"></span><span class="muted" id="fresh">조회 전</span></header>
 <main>
   <div class="notice">모든 쓰기 작업은 <b>변경계획 → 제출 → 승인 → 실행 → 검증</b> 흐름을 따릅니다. 각 단계에는 실행 문장과 함께 <b>검증 문장·보상(롤백) 문장</b>이 필수이며, 중간 이상 위험은 승인 없이 실행할 수 없습니다. 실행·롤백을 포함한 모든 결정은 감사 로그에 기록됩니다.</div>
   <div id="messages"></div>
@@ -108,7 +110,7 @@ function rkBadge(r){const m=RISKS[r]||[r,'rk-low'];return '<span class="badge '+
 
 let plans=[],profiles=[];
 async function loadProfiles(){try{const b=await call('GET','/api/db-profiles');profiles=b.profiles||[];$('#fProfile').innerHTML=profiles.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.id)+(p.name?' — '+esc(p.name):'')+' · '+esc(p.type)+'</option>').join('')||'<option value="">프로파일 없음</option>'}catch(e){/* 목록 화면은 프로파일 없이도 동작 */}}
-async function load(){$('#fresh').textContent='조회 중…';try{const b=await call('GET','/api/changes');plans=b.data||[];render();$('#fresh').textContent='최신 조회 '+when(b.collected_at)}catch(e){note('변경계획 조회 실패: '+e.message,'error');$('#fresh').textContent='조회 실패'}}
+async function load(){$('#fresh').textContent='조회 중…';try{const b=await call('GET','/api/changes');plans=b.data||[];render();if(window.JASQL&&JASQL.refreshBadges)JASQL.refreshBadges();$('#fresh').textContent='최신 조회 '+when(b.collected_at)}catch(e){note('변경계획 조회 실패: '+e.message,'error');$('#fresh').textContent='조회 실패'}}
 function render(){
   const c={review:0,approved:0,running:0,failed:0,done:0};
   plans.forEach(p=>{if(p.state==='review_required')c.review++;else if(p.state==='approved'||p.state==='scheduled')c.approved++;else if(p.state==='executing'||p.state==='verifying'||p.state==='rolling_back')c.running++;else if(p.state==='failed'||p.state==='rollback_required')c.failed++;else if(p.state==='completed')c.done++});
@@ -178,7 +180,7 @@ function stepRow(i){
       '<button class="mini" type="button" data-tpl-gen>생성</button>'+
     '</div>'+
     '<div class="steplabel">실행 문장 (command) <button class="mini" type="button" data-predict style="margin-left:6px">⚠ 영향 예측</button></div><textarea data-k="command" placeholder="예: CREATE INDEX CONCURRENTLY idx_orders_created ON public.orders(created_at)"></textarea>'+
-    '<div data-impact class="mini" style="display:none;margin:4px 0 2px;padding:7px 9px;border-radius:7px;background:#f6f8fc;border:1px solid #dbe4f0"></div>'+
+    '<div data-impact class="mini" style="display:none;margin:4px 0 2px;padding:7px 9px;border-radius:7px;background:var(--surface-2);border:1px solid var(--accent-border)"></div>'+
     '<div class="steplabel">사후 검증 (verification) — 읽기 전용 풀로 실행</div><textarea data-k="verification" placeholder="예: SELECT 1 FROM pg_indexes WHERE indexname=\'idx_orders_created\'"></textarea>'+
     '<div class="steplabel">보상(롤백) 문장 (compensation)</div><textarea data-k="compensation" placeholder="예: DROP INDEX IF EXISTS idx_orders_created"></textarea>';
   div.querySelector('[data-del]').onclick=()=>{div.remove();renumber()};

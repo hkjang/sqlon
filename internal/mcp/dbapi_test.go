@@ -159,7 +159,7 @@ func TestDBAPITokenEnforcement(t *testing.T) {
 	}
 	// db.html page served
 	rec := doReq(t, mux, "GET", "/admin/db", "", nil)
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "DB 연결 관리") ||
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "<h1>DB 연결") ||
 		!strings.Contains(rec.Body.String(), "godror · OCI/Instant Client") ||
 		!strings.Contains(rec.Body.String(), "Diagnostics Pack") {
 		t.Fatalf("/admin/db: %d", rec.Code)

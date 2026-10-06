@@ -4,7 +4,7 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sqlon 데이터셋 테이블 편집기</title>
+<title>테이블 편집 · sqlon</title>
 <style>
   :root {
     --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
@@ -15,33 +15,33 @@
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
          font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
-  header { background:#101a2e; color:#e8eefc; padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; position:sticky; top:0; z-index:20; }
+  header { background:var(--inverse-bg); color:var(--inverse-text); padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; position:sticky; top:0; z-index:20; }
   header h1 { font-size:16px; margin:0 10px 0 0; }
   header .grow { flex:1; }
-  header select, header input { background:#1d2b47; border:1px solid #35507f; color:#e8eefc; border-radius:6px; padding:6px 10px; }
+  header select, header input { background:var(--inverse-2); border:1px solid var(--inverse-border); color:var(--inverse-text); border-radius:6px; padding:6px 10px; }
   header select { min-width:220px; }
   .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px; padding:6px 12px; cursor:pointer; font-size:13px; white-space:nowrap; }
   .btn:hover { border-color:var(--blue); color:var(--blue); }
-  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
-  .btn.primary:hover { opacity:.9; color:#fff; }
-  .btn.danger { color:var(--red); border-color:#efc4c4; }
+  .btn.primary { background:var(--accent-solid); border-color:var(--blue); color:var(--on-accent); }
+  .btn.primary:hover { opacity:.9; color:var(--on-accent); }
+  .btn.danger { color:var(--red); border-color:var(--danger-border); }
   .btn.danger:hover { background:var(--red-soft); }
   .btn:disabled { opacity:.4; cursor:not-allowed; }
   main { max-width:1700px; margin:0 auto; padding:14px 20px 80px; }
   .hero { display:grid; grid-template-columns:1fr auto; gap:20px; align-items:center; padding:20px 22px;
-    background:linear-gradient(135deg,#fff 45%,#edf3ff); }
+    background:linear-gradient(135deg,var(--surface) 45%,var(--accent-bg)); }
   .hero h2 { margin:0 0 5px; font-size:20px; } .hero p { margin:0; color:var(--sub); }
   .steps { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-  .step { padding:7px 11px; border:1px solid var(--line); border-radius:20px; color:var(--sub); background:#fff; font-size:12px; }
-  .step.on { border-color:#9db9f6; background:var(--blue-soft); color:var(--blue); font-weight:700; }
+  .step { padding:7px 11px; border:1px solid var(--line); border-radius:20px; color:var(--sub); background:var(--surface); font-size:12px; }
+  .step.on { border-color:var(--accent-border); background:var(--blue-soft); color:var(--blue); font-weight:700; }
   .dataset-info { display:grid; grid-template-columns:repeat(4,minmax(120px,1fr)); gap:10px; margin-top:12px; }
-  .metric { border:1px solid var(--line); border-radius:9px; padding:9px 12px; background:#fbfcfe; }
+  .metric { border:1px solid var(--line); border-radius:9px; padding:9px 12px; background:var(--surface-2); }
   .metric span { display:block; color:var(--sub); font-size:11px; } .metric b { font-size:14px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:14px; }
   details.guide > summary { cursor:pointer; font-weight:700; }
   details.guide ul { margin:8px 0 2px; padding-left:20px; color:var(--sub); font-size:13px; }
-  details.guide code { background:#eef1f5; border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
-  .dirty { display:none; background:var(--amber-soft); color:var(--amber); border:1px solid #f0ddb5;
+  details.guide code { background:var(--surface-3); border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
+  .dirty { display:none; background:var(--amber-soft); color:var(--amber); border:1px solid var(--warn-border);
            border-radius:8px; padding:8px 14px; margin-bottom:12px; font-size:13px; }
   .dirty.show { display:block; }
   .savebar .toolbar { position:sticky; top:58px; z-index:12; background:var(--card); padding:10px 0;
@@ -52,42 +52,44 @@
   .gridwrap { overflow:auto; border:1px solid var(--line); border-radius:10px; max-height:66vh; background:var(--card); }
   table.grid { border-collapse:separate; border-spacing:0; font-size:12.8px; min-width:100%; }
   table.grid th, table.grid td { border-bottom:1px solid var(--line); border-right:1px solid var(--line); padding:0; vertical-align:top; }
-  table.grid thead th { position:sticky; top:0; z-index:5; background:#eef2f8; padding:0; }
+  table.grid thead th { position:sticky; top:0; z-index:5; background:var(--surface-3); padding:0; }
   .colhead { display:flex; align-items:center; gap:4px; padding:6px 8px; }
   .colhead .nm { font-family:var(--mono); font-weight:700; font-size:12px; }
   .colhead .ops { visibility:hidden; display:flex; gap:2px; }
   th:hover .ops { visibility:visible; }
   .colhead button { border:0; background:none; cursor:pointer; font-size:11px; padding:1px 3px; border-radius:4px; color:var(--sub); }
   .colhead button:hover { background:var(--blue-soft); color:var(--blue); }
-  td.rowno { position:sticky; left:0; background:#f6f8fb; color:var(--sub); font-size:11px; text-align:right;
+  td.rowno { position:sticky; left:0; background:var(--surface-2); color:var(--sub); font-size:11px; text-align:right;
              padding:6px 8px; z-index:3; min-width:74px; }
   td.rowno .rops { visibility:hidden; }
   tr:hover td.rowno .rops { visibility:visible; }
   td.rowno button { border:0; background:none; cursor:pointer; font-size:12px; padding:0 2px; }
   td.cell { min-width:120px; max-width:420px; cursor:cell; }
   td.cell > .v { padding:6px 8px; white-space:pre-wrap; word-break:break-all; max-height:90px; overflow:hidden; font-family:var(--mono); font-size:12px; }
-  td.cell .t-num { color:#0e7490; } td.cell .t-bool { color:#7c3aed; } td.cell .t-null { color:#9aa5b1; font-style:italic; }
-  td.cell .t-obj { color:#b45309; }
+  td.cell .t-num { color:var(--info-strong); } td.cell .t-bool { color:var(--purple); } td.cell .t-null { color:var(--faint); font-style:italic; }
+  td.cell .t-obj { color:var(--warn); }
   td.cell.editing { outline:2px solid var(--blue); outline-offset:-2px; }
-  td.cell textarea { width:100%; min-height:60px; border:0; outline:0; resize:vertical; font-family:var(--mono); font-size:12px; padding:6px 8px; background:#fffdf3; }
-  td.cell.changed > .v { background:#fff8e6; }
-  tr.newrow td { background:#f0fff4; }
+  td.cell textarea { width:100%; min-height:60px; border:0; outline:0; resize:vertical; font-family:var(--mono); font-size:12px; padding:6px 8px; background:var(--warn-bg); }
+  td.cell.changed > .v { background:var(--warn-bg); }
+  tr.newrow td { background:var(--ok-bg); }
   .pager { display:flex; gap:8px; align-items:center; margin-top:10px; font-size:13px; color:var(--sub); }
   .result { border-radius:8px; padding:11px 14px; margin-top:10px; font-size:13px; display:none; white-space:pre-wrap; }
-  .result.ok { display:block; background:var(--green-soft); border:1px solid #bfe4cc; }
-  .result.bad{ display:block; background:var(--red-soft); border:1px solid #efc4c4; }
-  .result.info{ display:block; background:var(--blue-soft); border:1px solid #c4d6f7; }
-  .schemabox { font-size:12px; color:var(--sub); font-family:var(--mono); background:#f6f8fb; border-radius:8px; padding:8px 12px; margin-top:8px; white-space:pre-wrap; word-break:break-all; }
+  .result.ok { display:block; background:var(--green-soft); border:1px solid var(--ok-border); }
+  .result.bad{ display:block; background:var(--red-soft); border:1px solid var(--danger-border); }
+  .result.info{ display:block; background:var(--blue-soft); border:1px solid var(--accent-border); }
+  .schemabox { font-size:12px; color:var(--sub); font-family:var(--mono); background:var(--surface-2); border-radius:8px; padding:8px 12px; margin-top:8px; white-space:pre-wrap; word-break:break-all; }
   .empty { color:var(--sub); text-align:center; padding:50px 0; }
-  #toast { position:fixed; right:18px; bottom:18px; background:#101a2e; color:#e8eefc; border-radius:10px;
+  #toast { position:fixed; right:18px; bottom:18px; background:var(--inverse-bg); color:var(--inverse-text); border-radius:10px;
     padding:12px 18px; font-size:13px; display:none; max-width:480px; z-index:50; box-shadow:0 6px 24px rgba(0,0,0,.25); }
   @media(max-width:760px){ main{padding:10px 10px 70px}.hero{grid-template-columns:1fr}.steps{justify-content:flex-start}.dataset-info{grid-template-columns:1fr 1fr}header select{min-width:150px;flex:1}.savebar .toolbar{top:104px}.toolbar input[type=search]{min-width:100%;order:9} }
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 
 <header>
-  <h1>📋 데이터셋 테이블 편집기</h1>
+  <h1>테이블 편집</h1>
   <select id="dsSelect"><option value="">데이터셋 선택…</option></select>
   <button class="btn" onclick="loadDataset()">불러오기</button>
   <span class="grow"></span>
@@ -108,7 +110,7 @@
 
   <div class="card savebar" id="gridCard">
     <div class="toolbar">
-      <button class="btn primary" id="saveBtn" onclick="save()" disabled>💾 저장 (백업 후 반영)</button>
+      <button class="btn primary" id="saveBtn" onclick="save()" disabled>저장 (백업 후 반영)</button>
       <button class="btn" id="addRowBtn" onclick="addRow()" disabled>＋ 행 추가</button>
       <button class="btn" id="addColBtn" onclick="addColumn()" disabled>＋ 컬럼 추가</button>
       <button class="btn" id="revertBtn" onclick="loadDataset()" disabled>다시 불러오기</button>

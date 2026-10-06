@@ -4,19 +4,19 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sqlon MCP 키 관리</title>
+<title>MCP 키 · sqlon</title>
 <style>
   :root { --bg:#f5f7fa; --card:#fff; --ink:#1c2430; --sub:#5b6b7f; --line:#dde4ec;
     --blue:#2563eb; --green:#15803d; --green-soft:#e6f6ec; --red:#b91c1c; --red-soft:#fdeaea;
     --amber:#b45309; --amber-soft:#fdf3e2; --mono:ui-monospace,Consolas,monospace; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.55 -apple-system,'Malgun Gothic','Noto Sans KR',sans-serif; }
-  header { background:#101a2e; color:#e8eefc; padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  header { background:var(--inverse-bg); color:var(--inverse-text); padding:12px 20px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
   header h1 { font-size:16px; margin:0 10px 0 0; } header .grow { flex:1; }
   .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:7px; padding:6px 12px; cursor:pointer; font-size:13px; text-decoration:none; display:inline-block; }
   .btn:hover { border-color:var(--blue); color:var(--blue); }
-  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
-  .btn.danger { color:var(--red); border-color:#efc4c4; }
+  .btn.primary { background:var(--accent-solid); border-color:var(--blue); color:var(--on-accent); }
+  .btn.danger { color:var(--red); border-color:var(--danger-border); }
   main { max-width:1200px; margin:0 auto; padding:16px 20px 60px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:14px; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
@@ -27,18 +27,20 @@
   .b.revoked { background:var(--red-soft); color:var(--red); }
   .b.expired { background:var(--amber-soft); color:var(--amber); }
   input, select { border:1px solid var(--line); border-radius:7px; padding:6px 9px; font-size:13px; }
-  .newkey { background:#0f1729; color:#8ef0b6; border-radius:8px; padding:14px; font-family:var(--mono); font-size:13px;
+  .newkey { background:var(--inverse-bg); color:var(--ok); border-radius:8px; padding:14px; font-family:var(--mono); font-size:13px;
             word-break:break-all; margin-top:10px; display:none; }
   .result { border-radius:8px; padding:10px 13px; margin-top:8px; font-size:13px; display:none; }
-  .result.bad { display:block; background:var(--red-soft); border:1px solid #efc4c4; }
+  .result.bad { display:block; background:var(--red-soft); border:1px solid var(--danger-border); }
   .mini { font-size:12px; color:var(--sub); }
-  code { background:#eef1f5; border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
-  #userchip { font-size:12px; color:#cfe0ff; }
+  code { background:var(--surface-3); border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:12px; }
+  #userchip { font-size:12px; color:var(--inverse-text); }
 </style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
 </head>
 <body>
 <header>
-  <h1>🔑 MCP 키 관리</h1>
+  <h1>MCP 키</h1>
   <span class="grow"></span>
 </header>
 <main>
