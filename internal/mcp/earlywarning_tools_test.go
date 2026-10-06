@@ -399,6 +399,9 @@ func TestChatActionCallbackActsOnlyWithAValidToken(t *testing.T) {
 	if code, text := post(silence); code != 200 || !strings.Contains(text, "멈췄습니다") || len(s.EarlyWarning.Board([]dbconn.Profile{{ID: "orders-prod"}}).Silences) != 1 {
 		t.Fatalf("silence: %d %s", code, text)
 	}
+	if code, text := post(silence); code != 200 || !strings.Contains(text, "이미") || len(s.EarlyWarning.Board([]dbconn.Profile{{ID: "orders-prod"}}).Silences) != 1 {
+		t.Fatalf("a second click must not stack another silence: %d %s", code, text)
+	}
 	_, fix := tokenFor("maint_bloat", "fix")
 	code, text := post(fix)
 	if code != 200 || !strings.Contains(text, "변경계획 초안") || !strings.Contains(text, "실행되지 않습니다") {

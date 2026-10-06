@@ -138,6 +138,9 @@ func SetDisplayLocation(name string) error {
 	return nil
 }
 
+// DisplayLocation is the time zone for times shown to people (SQLON_ALERT_TZ).
+func DisplayLocation() *time.Location { return displayLocation() }
+
 func displayLocation() *time.Location {
 	if loc := displayLoc.Load(); loc != nil {
 		return loc

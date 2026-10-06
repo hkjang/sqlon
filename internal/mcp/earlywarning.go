@@ -637,12 +637,16 @@ func (s *Server) chatAction(r *http.Request, alertID, action, actor string) stri
 		audit(map[string]any{})
 		return "✅ 확인했습니다 — " + alert.Title + " (해소되거나 더 심각해질 때까지 재알림·당직 호출을 멈춥니다)"
 	case earlywarning.ActionSilence:
-		sil, err := s.EarlyWarning.AddSilence(earlywarning.Silence{ProfileID: alert.ProfileID, Rule: alert.Rule, Reason: "채팅에서 2시간 무음 (" + actor + ")", CreatedBy: actor}, 2*time.Hour)
+		sil, created, err := s.EarlyWarning.EnsureSilence(earlywarning.Silence{ProfileID: alert.ProfileID, Rule: alert.Rule, Reason: "채팅에서 2시간 무음 (" + actor + ")", CreatedBy: actor}, 2*time.Hour)
 		if err != nil {
 			return "무음 실패: " + err.Error()
 		}
+		until := sil.EndsAt.In(earlywarning.DisplayLocation()).Format("15:04")
+		if !created {
+			return "🔕 " + alert.ProfileID + " 의 " + alert.Rule + " 알림은 이미 " + until + "까지 무음입니다 (" + sil.CreatedBy + ")."
+		}
 		audit(map[string]any{"silence": sil.ID})
-		return "🔕 " + alert.ProfileID + " 의 " + alert.Rule + " 알림을 " + sil.EndsAt.In(time.Local).Format("15:04") + "까지 멈췄습니다. 경보는 콘솔에 계속 표시됩니다."
+		return "🔕 " + alert.ProfileID + " 의 " + alert.Rule + " 알림을 " + until + "까지 멈췄습니다. 경보는 콘솔에 계속 표시됩니다."
 	case earlywarning.ActionFix:
 		if alert.State != earlywarning.StateFiring {
 			return "이미 해소된 경보입니다: " + alert.Title

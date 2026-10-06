@@ -49,12 +49,38 @@ func (e *Engine) AddSilence(s Silence, d time.Duration) (Silence, error) {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return e.addSilenceLocked(s, d)
+}
+
+func (e *Engine) addSilenceLocked(s Silence, d time.Duration) (Silence, error) {
 	now := e.now()
 	s.ID = "sil-" + strings.TrimPrefix(newAlertID(), "ew-")
 	s.CreatedAt, s.EndsAt = now, now.Add(d)
 	s.Reason, s.Rule, s.ProfileID = strings.TrimSpace(s.Reason), strings.TrimSpace(s.Rule), strings.TrimSpace(s.ProfileID)
 	e.st.Silences = append(e.st.Silences, s)
 	return s, e.saveStateLocked()
+}
+
+// EnsureSilence is AddSilence unless a silence for exactly this database and
+// rule is already active — a repeated chat click — which it returns instead
+// (created is false).
+func (e *Engine) EnsureSilence(s Silence, d time.Duration) (Silence, bool, error) {
+	if d <= 0 || d > maxSilence {
+		return Silence{}, false, errors.New("duration must be between 1m and 168h")
+	}
+	if strings.TrimSpace(s.Reason) == "" {
+		return Silence{}, false, errors.New("reason is required")
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	now := e.now()
+	for _, x := range e.st.Silences {
+		if x.ProfileID == strings.TrimSpace(s.ProfileID) && x.Rule == strings.TrimSpace(s.Rule) && now.Before(x.EndsAt) {
+			return x, false, nil
+		}
+	}
+	created, err := e.addSilenceLocked(s, d)
+	return created, err == nil, err
 }
 
 // EndSilence ends a silence now; held-back notifications go out next cycle.
