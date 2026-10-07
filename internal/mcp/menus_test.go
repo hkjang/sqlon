@@ -346,3 +346,22 @@ func TestMenuFileIsValidatedAndReloaded(t *testing.T) {
 		t.Fatalf("repair not recorded: %+v", h)
 	}
 }
+
+// v0.7.0 wrote menus.json without revision or history; it must keep working.
+func TestMenuFileFromV070StillLoads(t *testing.T) {
+	s, mux, adminTok, aliceTok := newAuthServer(t)
+	if err := os.MkdirAll(filepath.Dir(s.menuConfigPath()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	v070 := `{"menus":{"openmetadata":{"enabled":false},"ask":{"roles":["admin","dba"]}},"updated_at":"2026-10-07T10:14:22+09:00","updated_by":"admin"}`
+	if err := os.WriteFile(s.menuConfigPath(), []byte(v070), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if h := strings.Join(hiddenFor(t, mux, withCookie(aliceTok)), ","); h != "ask,openmetadata" {
+		t.Fatalf("v0.7.0 file: alice hidden = %q", h)
+	}
+	out := putMenus(t, mux, `{"revision":0,"menus":{"openmetadata":{"enabled":false}}}`, withCookie(adminTok))
+	if out["revision"].(float64) != 1 {
+		t.Fatalf("first save on a v0.7.0 file: revision %v", out["revision"])
+	}
+}
