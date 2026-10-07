@@ -224,6 +224,20 @@ var openAPISpec = `{
         "responses": { "200": {"description":"{alerts:{critical,warning,info}, changes?:{awaiting_approval}}"} }
       }
     },
+    "/api/console/menus": {
+      "get": {
+        "tags": ["admin"], "summary": "콘솔 메뉴 켜기·끄기 설정",
+        "description": "메뉴마다 켜짐 여부, 볼 수 있는 역할(roles), 메뉴 기본 권한이 허용하는 역할(allowed_roles), 잠김(locked) 여부와 마지막 변경자를 돌려줍니다. 로그인 모드에서는 admin 전용, 단독 모드에서는 읽기 공개입니다.",
+        "security": [{"SessionCookie":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"{auth_enabled, roles[], menus[{key,path,rule,locked,enabled,roles[],roles_limited,allowed_roles[]}], updated_at, updated_by, file, load_error?}"}, "403": {"description":"admin 역할 필요"} }
+      },
+      "put": {
+        "tags": ["admin"], "summary": "콘솔 메뉴 켜기·끄기 저장",
+        "description": "{\"menus\":{\"<key>\":{\"enabled\":false}|{\"roles\":[\"admin\",\"dba\"]}}} — 보낸 내용이 전체 설정을 대체합니다(빠진 메뉴는 켜짐). 끈 메뉴는 사이드바·빠른 이동에서 사라지고 그 화면 주소는 열 수 있는 첫 화면으로 돌려보냅니다. roles 는 로그인 모드에서만 적용되며 메뉴 기본 권한보다 넓힐 수 없습니다. menus(메뉴 관리)는 끄거나 좁힐 수 없습니다. REST API·MCP 권한은 바뀌지 않습니다. 감사 로그에 admin:console_menus_update 로 남습니다.",
+        "security": [{"SessionCookie":[]},{"AdminToken":[]}],
+        "responses": { "200": {"description":"GET 과 같은 형태 + hidden_for_you[]"}, "400": {"description":"알 수 없는 메뉴, 허용되지 않은 역할, 빈 역할, 잠긴 메뉴"}, "401": {"description":"관리 토큰 필요(단독 모드)"}, "403": {"description":"admin 역할 필요"} }
+      }
+    },
     "/api/early-warning": {
       "get": {
         "tags": ["early-warning"], "summary": "예방 경보 현황",

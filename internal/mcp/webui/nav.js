@@ -60,6 +60,7 @@
     external: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
     x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     enter: '<path d="M9 10 4 15l5 5"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/>',
+    toggle: '<rect x="2" y="6" width="20" height="12" rx="6"/><circle cx="16" cy="12" r="3"/>',
     token: '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
   };
   function icon(name, cls) {
@@ -68,6 +69,10 @@
 
   // ------------------------------------------------------- information map
   // show: always | auth (meta DB) | admin | dba (dba/admin, or standalone)
+  //       | manage (admin, or standalone)
+  // On top of `show`, an admin can switch menus off or narrow them to roles
+  // (메뉴 관리); /auth/me lists what that hides as `hidden_menus`. The server
+  // mirrors this map in internal/mcp/menus.go and refuses hidden pages.
   var GROUPS = [
     { id: 'monitor', title: '모니터링', items: [
       { key: 'fleet', href: '/', icon: 'dashboard', label: '운영 현황', show: 'always', hint: '전체 DB 상태·위험 순위' },
@@ -104,6 +109,7 @@
       { key: 'db', href: '/admin/db', icon: 'database', label: 'DB 연결', show: 'always', hint: '프로파일 등록·쿼리 콘솔' },
       { key: 'users', href: '/admin/users', icon: 'users', label: '사용자', show: 'admin', hint: '계정·역할' },
       { key: 'settings', href: '/admin/settings', icon: 'sliders', label: '서버 설정', show: 'admin', hint: '토큰·Origin·SSO' },
+      { key: 'menus', href: '/admin/menus', icon: 'toggle', label: '메뉴 관리', show: 'manage', hint: '메뉴 켜기·끄기·역할별 표시' },
       { key: 'keys', href: '/admin/keys', icon: 'key', label: 'MCP 키', show: 'auth', hint: 'API 키 발급' },
     ]},
   ];
@@ -135,6 +141,7 @@
     maintenance: '## 예방 점검\n\n오류 없이 잠복하다 장애를 일으키는 위험을 미리 찾습니다 — 트랜잭션 ID **wraparound**, 테이블 **블로트**, WAL을 붙잡는 **복제 슬롯**, 실패하는 **WAL 아카이브**, VACUUM을 막는 **장기 트랜잭션** 등.\n\n- 위험은 치명적 → 경고 순으로 정렬됩니다. 탭으로 걸러 보세요.\n- 같은 점검 결과가 **예방 경보**로 이어져 알림이 갑니다.\n- 조치는 반드시 **변경 관리**의 승인 흐름으로 수행합니다. 이 화면은 읽기 전용입니다.',
     compliance: '## 컴플라이언스\n\n읽기 전용 진단 결과를 ISMS-P · PCI-DSS · 개인정보보호법 통제 항목에 매핑한 **참고 리포트**입니다. 공식 인증 심사를 대체하지 않습니다.\n\n- 항목마다 통과 / 미준수 / 수동 확인으로 표시하고 근거를 함께 보여줍니다.\n- **리포트 저장/인쇄**로 감사 자료를 만들 수 있습니다.\n- 미준수 항목의 조치는 변경 관리로 수행하세요.',
     settings: '## 서버 설정 (관리자)\n\n마스터 토큰·허용 Origin·Keycloak SSO를 메타 DB에 저장하고 즉시 적용합니다.',
+    menus: '## 메뉴 관리 (관리자)\n\n콘솔 메뉴를 켜고 끄거나, 메뉴를 볼 수 있는 역할을 좁힙니다. 저장하면 재시작 없이 바로 적용됩니다.\n\n- **끈 메뉴**는 모든 사람의 사이드바와 빠른 이동(Ctrl+K)에서 사라지고, 화면 주소로 열어도 열 수 있는 첫 화면으로 돌아가며 이유를 안내합니다.\n- **역할**(로그인 모드): 체크한 역할에게만 보입니다. 메뉴의 기본 권한보다 넓힐 수는 없습니다(예: 사용자 관리는 관리자 전용).\n- **메뉴 관리**는 끌 수 없습니다 — 되돌릴 길이 사라지지 않도록.\n- 위쪽 숫자는 저장 전에도 각 역할이 보게 될 메뉴 수를 미리 보여줍니다.\n\n> 메뉴 설정은 콘솔 화면만 바꿉니다. REST API와 MCP 도구 권한은 역할과 MCP 키로 통제됩니다.\n\n설정은 `<data>/operations/console/menus.json` 에 저장되고 변경은 감사 로그(`admin:console_menus_update`)에 남습니다.',
   };
 
   // ---------------------------------------------------------------- utils
@@ -305,11 +312,23 @@
 
   // ---------------------------------------------------------------- sidebar
   var visible = []; // flattened items the user may open, for the palette
+  var shellMe = null;
   function canShow(rule, me) {
     var authed = !!(me && me.auth_enabled);
     var role = (authed && me.authenticated && me.user && me.user.role) || '';
     if (rule === 'dba') return role === 'admin' || role === 'dba' || !authed;
+    if (rule === 'manage') return role === 'admin' || !authed;
     return rule === 'always' || (rule === 'auth' && authed) || (rule === 'admin' && role === 'admin');
+  }
+  // switched off in 메뉴 관리 (for everyone, or for this user's role)
+  function isHidden(key, me) { return ((me && me.hidden_menus) || []).indexOf(key) >= 0; }
+  function menuLabel(key) {
+    for (var i = 0; i < GROUPS.length; i++) {
+      for (var j = 0; j < GROUPS[i].items.length; j++) {
+        if (GROUPS[i].items[j].key === key) return GROUPS[i].items[j].label;
+      }
+    }
+    return key;
   }
   function currentGroup() {
     for (var i = 0; i < GROUPS.length; i++) {
@@ -334,7 +353,7 @@
       '<nav>';
     visible = [];
     GROUPS.forEach(function (g) {
-      var items = g.items.filter(function (it) { return canShow(it.show, me); });
+      var items = g.items.filter(function (it) { return canShow(it.show, me) && !isHidden(it.key, me); });
       if (!items.length) return;
       var open = (curGroup && curGroup.id === g.id) || openSet.indexOf(g.id) >= 0;
       html += '<div class="jgrp' + (open ? '' : ' closed') + '" data-grp="' + g.id + '">' +
@@ -406,6 +425,37 @@
     applyTheme();
   }
   function closeMobile() { document.body.classList.remove('jsb-open'); }
+
+  // Redraw the sidebar after the menu switches change (메뉴 관리 saves).
+  function rebuildNav(hidden) {
+    if (!shellMe) return;
+    shellMe.hidden_menus = hidden || [];
+    document.querySelectorAll('body > .jsb, body > .ui-skip, body > .jsb-toggle, body > .jsb-scrim').forEach(function (n) { n.remove(); });
+    buildSidebar(shellMe);
+    refreshBadges();
+  }
+
+  // A hidden page sends the viewer to the first page they can open with
+  // ?menu_off=<key>; say which page was refused and why, then tidy the URL.
+  function menuOffNotice() {
+    var m = location.search.match(/[?&]menu_off=([^&#]+)/);
+    if (!m) return;
+    var label = menuLabel(decodeURIComponent(m[1]));
+    var main = document.querySelector('main');
+    if (main) {
+      var box = el('div', 'ui-notice', icon('toggle') + '<div><b>‘' + esc(label) + '’ 화면은 꺼져 있습니다.</b>' +
+        '<span>관리자가 메뉴 관리에서 이 메뉴를 껐거나 볼 수 있는 역할에서 뺐습니다. 열 수 있는 첫 화면으로 이동했습니다.</span></div>' +
+        '<button type="button" class="ui-notice-x" aria-label="안내 닫기">' + icon('x') + '</button>');
+      box.setAttribute('role', 'status');
+      box.querySelector('button').onclick = function () { box.remove(); };
+      main.insertBefore(box, main.firstChild);
+    }
+    try {
+      var u = new URL(location.href);
+      u.searchParams.delete('menu_off');
+      history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+    } catch (e) { /* old browsers keep the query */ }
+  }
 
   // ------------------------------------------------------------ badges
   var baseTitle = '';
@@ -502,7 +552,7 @@
         '<div class="jmhead"><b>' + esc(name) + '</b><div class="jmsub">' + esc(u.email || u.username) + ' · ' + esc(u.role) + '</div></div>' +
         '<button class="jmitem" role="menuitem" data-act="profile">' + icon('user') + '개인정보 변경</button>' +
         (isLocal ? '<button class="jmitem" role="menuitem" data-act="password">' + icon('lock') + '비밀번호 변경</button>' : '') +
-        '<button class="jmitem" role="menuitem" data-act="keys">' + icon('key') + 'MCP 키 관리</button>' +
+        (isHidden('keys', me) ? '' : '<button class="jmitem" role="menuitem" data-act="keys">' + icon('key') + 'MCP 키 관리</button>') +
         '<button class="jmitem" role="menuitem" data-act="theme" data-theme-label></button>' +
         '<div class="jmsep"></div>' +
         '<button class="jmitem danger" role="menuitem" data-act="logout">' + icon('logout') + '로그아웃</button>' +
@@ -631,11 +681,41 @@
       for (var i = 0; i < muts.length; i++) {
         if (muts[i].addedNodes.length) {
           pending = true;
-          requestAnimationFrame(function () { pending = false; wrapTables(); });
+          requestAnimationFrame(function () { pending = false; wrapTables(); hideOffLinks(); });
           return;
         }
       }
     }).observe(document.body, { childList: true, subtree: true });
+  }
+
+  // ------------------------------------------ links to switched-off pages
+  // Pages link to each other (a "SQL Lab" shortcut, row shortcuts). A
+  // shortcut to a page switched off for this viewer is dropped; a link inside
+  // a sentence stays, and opening it explains why the page is off.
+  function switchedOffPath(path) {
+    var known = false, open = false;
+    GROUPS.forEach(function (g) {
+      g.items.forEach(function (it) {
+        if (it.href.split('#')[0] !== path) return;
+        known = true;
+        if (!isHidden(it.key, shellMe)) open = true;
+      });
+    });
+    return known && !open;
+  }
+  function hideOffLinks() {
+    if (!shellMe || !(shellMe.hidden_menus || []).length) return;
+    document.querySelectorAll('main a[href], header a[href]').forEach(function (a) {
+      if (a.dataset.menuOff) return;
+      var u;
+      try { u = new URL(a.getAttribute('href'), location.href); } catch (e) { return; }
+      if (u.origin !== location.origin || !switchedOffPath(u.pathname)) return;
+      var rest = a.parentElement.cloneNode(true);
+      rest.querySelectorAll('a').forEach(function (x) { x.remove(); });
+      if (/[^\s·|,/]/.test(rest.textContent)) return; // part of a sentence
+      a.dataset.menuOff = '1';
+      a.style.display = 'none';
+    });
   }
 
   // ------------------------------------------------------ first run
@@ -647,7 +727,9 @@
       if (!d || (d.profiles || []).length) return;
       var main = document.querySelector('main');
       if (!main || main.querySelector('.ui-firstrun')) return;
-      var box = el('div', 'ui-firstrun', icon('database') + '<div><b>아직 등록된 데이터베이스가 없습니다.</b><span>DB 연결에서 읽기 전용 계정으로 첫 DB를 등록하면 이 화면이 채워집니다.</span></div><a class="btn primary" href="/admin/db">DB 연결하기</a>');
+      var box = isHidden('db', shellMe)
+        ? el('div', 'ui-firstrun', icon('database') + '<div><b>아직 등록된 데이터베이스가 없습니다.</b><span>관리자에게 DB 등록을 요청하세요. 등록되면 이 화면이 채워집니다.</span></div>')
+        : el('div', 'ui-firstrun', icon('database') + '<div><b>아직 등록된 데이터베이스가 없습니다.</b><span>DB 연결에서 읽기 전용 계정으로 첫 DB를 등록하면 이 화면이 채워집니다.</span></div><a class="btn primary" href="/admin/db">DB 연결하기</a>');
       main.insertBefore(box, main.firstChild);
     }).catch(function () { /* hint only */ });
   }
@@ -725,6 +807,8 @@
     palette: openPalette,
     icon: icon,
     refreshBadges: refreshBadges,
+    menu: GROUPS,
+    rebuildNav: rebuildNav,
     async mount(opts) {
       opts = opts || {};
       this.page = opts.page || null;
@@ -740,11 +824,14 @@
         return;
       }
       window.AUTH = me.auth_enabled && me.authenticated ? me : null;
+      shellMe = me;
       buildSidebar(me);
       decorateHeader(me);
       watchTables();
       tidyFresh();
       firstRunHint();
+      menuOffNotice();
+      hideOffLinks();
       foldableHeroes();
       rememberVisit(this.page);
       refreshBadges();

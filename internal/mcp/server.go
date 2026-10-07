@@ -94,6 +94,11 @@ type Server struct {
 	// (prepare/validate/execute with a profile), fingerprint-invalidated.
 	wsMu    sync.Mutex
 	wsCache map[string]wsCacheEntry
+	// console menu switches (menus.go), read from disk on first use
+	menuMu      sync.RWMutex
+	menuCfg     menuConfig
+	menuLoaded  bool
+	menuLoadErr error
 }
 
 // opDir returns the fixed operational data dir (falls back to the active

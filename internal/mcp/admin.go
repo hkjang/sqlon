@@ -27,6 +27,7 @@ var webuiFS embed.FS
 // (put_dataset / remove_dataset / reload_catalog), so behavior — validation,
 // backup, hot-swap, rollback — is identical on both surfaces.
 func (s *Server) registerAdmin(mux *http.ServeMux) {
+	s.registerMenus(mux)
 	// static UI
 	mux.HandleFunc("GET /{$}", s.guardPage(s.serveWebUI("webui/fleet.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /welcome", s.serveWebUI("webui/landing.html", "text/html; charset=utf-8"))

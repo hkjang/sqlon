@@ -52,8 +52,8 @@ GitHub Release에서 도커 이미지 파일 하나와 체크섬을 받습니다
 
 | 배포 파일 | 불러온 이미지 | 대상 DB 엔진 | 특징 |
 | :--- | :--- | :--- | :--- |
-| `sqlon-v0.6.1.tar.gz` | `sqlon:v0.6.1` | Oracle, PostgreSQL, MySQL, MariaDB | Oracle Linux 9 slim + Instant Client 번들 (~140 MB) |
-| `sqlon-v0.6.1.tar.gz.sha256` | | | 반입 후 무결성 확인용 |
+| `sqlon-v0.7.0.tar.gz` | `sqlon:v0.7.0` | Oracle, PostgreSQL, MySQL, MariaDB | Oracle Linux 9 slim + Instant Client 번들 (~140 MB) |
+| `sqlon-v0.7.0.tar.gz.sha256` | | | 반입 후 무결성 확인용 |
 
 ---
 
@@ -68,20 +68,20 @@ sequenceDiagram
     Admin->>File: 인터넷 환경에서 tar.gz 및 .sha256 다운로드
     Admin->>File: SHA256 해시 검증
     Admin->>Docker: 오프라인망 서버로 파일 이관 (USB / SFTP)
-    Docker->>Docker: docker load -i sqlon-v0.6.1.tar.gz
+    Docker->>Docker: docker load -i sqlon-v0.7.0.tar.gz
     Docker->>Docker: docker run (볼륨 마운트 & 환경변수 설정)
 ```
 
 #### Step 1. 파일 검증 및 이관
 ```bash
 # SHA256 해시 검증
-sha256sum -c sqlon-v0.6.1.tar.gz.sha256
+sha256sum -c sqlon-v0.7.0.tar.gz.sha256
 ```
 
 #### Step 2. 도커 이미지 로드 (Load)
 ```bash
-docker load -i sqlon-v0.6.1.tar.gz
-# Loaded image: sqlon:v0.6.1
+docker load -i sqlon-v0.7.0.tar.gz
+# Loaded image: sqlon:v0.7.0
 ```
 
 #### Step 3. 컨테이너 기동 (Run)
@@ -98,7 +98,7 @@ docker run -d \
   -p 6767:6767 \
   -e SQLON_ADMIN_TOKEN="SecureMasterToken2026!" \
   -v /opt/sqlon/data:/app/data/sqlon \
-  sqlon:v0.6.1
+  sqlon:v0.7.0
 ```
 
 ---
@@ -166,6 +166,21 @@ GRANT CREATE SESSION TO sqlon_ro;
 GRANT SELECT ANY TABLE TO sqlon_ro;
 ```
 
+### 3.4 메뉴 관리 (`/admin/menus`)
+
+조직에서 쓰지 않는 기능을 감추거나 일부 화면을 특정 역할에게만 보이게 할 때 씁니다. 저장하면 재시작 없이 모든 사용자에게 바로 적용됩니다.
+
+* **켜기·끄기**: 메뉴마다, 또는 그룹 단위로 끕니다. 끈 메뉴는 사이드바·빠른 이동(Ctrl+K)·다른 화면의 바로가기에서 사라집니다.
+* **역할** (로그인 모드): 체크한 역할(관리자·DBA·사용자)에게만 보입니다. 메뉴의 기본 권한보다 넓힐 수는 없습니다 — 예를 들어 사용자·서버 설정은 관리자 전용, 변경 관리·DBA 콘솔은 DBA 이상입니다.
+* **주소로 열어도 막힘**: 꺼진 화면 주소는 서버가 그 사람이 열 수 있는 첫 화면으로 돌려보내고 "꺼져 있습니다" 안내를 띄웁니다. 열 수 있는 화면이 하나도 없으면 안내 페이지(403)를 보여줍니다.
+* **메뉴 관리 자체는 끌 수 없습니다** — 되돌릴 길이 사라지지 않도록.
+* 화면 위쪽 숫자는 저장 전에도 각 역할이 보게 될 메뉴 수를 보여줍니다. 0이 되면 빨간색으로 표시됩니다.
+* **단독 모드**(메타 DB 없음)에는 역할이 없어 켜기·끄기만 적용되고, 저장에는 관리 토큰(`-admin-token`)이 필요합니다.
+
+> 메뉴 설정은 **콘솔 화면만** 바꿉니다. REST API와 MCP 도구 권한은 역할과 MCP 키로 통제됩니다. 기능을 실제로 막아야 한다면 역할과 키를 조정하세요.
+
+설정은 데이터 디렉토리의 `operations/console/menus.json` 에 저장되어 볼륨과 함께 유지되고, 변경은 감사 로그에 `admin:console_menus_update` 로 기록됩니다. 파일이 깨져 읽지 못하면 모든 메뉴가 켜진 상태로 동작하고 메뉴 관리 화면에 오류를 표시합니다. API: `GET/PUT /api/console/menus`.
+
 ---
 
 ## 4. 메타데이터 동기화 및 관측성(Observability)
@@ -210,7 +225,7 @@ SQLON은 시스템 상태 점검 및 관측성 엔드포인트를 제공합니�
 | 발생 장애 | 원인 | 문제 해결 절차 |
 | :--- | :--- | :--- |
 | `DB Connection Failure (DNS)` | Docker 컨테이너 내 `localhost` 지정 오류 | `localhost`는 컨테이너 자신을 의미하므로 호스트 IP 또는 `host.docker.internal` 사용 |
-| `Oracle driver is not included in this binary` | 단독 바이너리나 `Dockerfile` 경량 빌드로 Oracle DB에 연결 시도 | 릴리즈 도커 이미지 `sqlon:v0.6.1` 로 재배포 |
+| `Oracle driver is not included in this binary` | 단독 바이너리나 `Dockerfile` 경량 빌드로 Oracle DB에 연결 시도 | 릴리즈 도커 이미지 `sqlon:v0.7.0` 로 재배포 |
 | `cannot write /app/data/sqlon as uid 10001` | 마운트한 호스트 디렉토리를 컨테이너 사용자가 쓸 수 없음 | `chown -R 10001:10001 <호스트 디렉토리>` 후 재기동 |
 | `HTTP 401 Unauthorized` | 마스터 토큰 누락 또는 불일치 | `SQLON_ADMIN_TOKEN` 값과 API 헤더 토큰 일치 여부 확인 |
 | `MetaDB Disk Full` | 감사 로그 누적에 따른 디스크 부족 | 마운트 볼륨 디스크 용량 증설 및 오래된 감사 로그 아카이빙 |

@@ -9,7 +9,7 @@ The existing metadata-grounded NL2SQL flow remains available as **SQL Lab**;
 the product is being transitioned to fleet observation, diagnosis, and
 approval-gated change control across PostgreSQL, MySQL, MariaDB, and Oracle.
 
-The release Docker image (`sqlon:v0.6.1`) bundles Oracle Instant Client and
+The release Docker image (`sqlon:v0.7.0`) bundles Oracle Instant Client and
 godror alongside the pure-Go PostgreSQL/MySQL/MariaDB drivers, so one image
 serves every engine. The standalone binaries are built without CGO and cover
 PostgreSQL/MySQL/MariaDB; Oracle needs the image or a `-tags oracle` build.
@@ -79,7 +79,7 @@ This combination allowed Codex to accelerate implementation while GPT-5.6 suppor
 | --- | --- |
 | 로컬 HTTP MCP + 운영 콘솔 | `go run ./cmd/sqlon -transport http -addr 127.0.0.1:6767` |
 | 로컬 stdio MCP | `go run ./cmd/sqlon -transport stdio` |
-| 컨테이너 (Oracle 포함 전 엔진) | `docker build -f Dockerfile.oracle -t sqlon:v0.6.1 .` |
+| 컨테이너 (Oracle 포함 전 엔진) | `docker build -f Dockerfile.oracle -t sqlon:v0.7.0 .` |
 | 통합 테스트 DB 3종 기동 | `docker compose -f deploy/test/docker-compose.yml up -d` |
 | 통합 테스트 (pg+mysql+mariadb) | `go test -tags integration ./test/integration -v` |
 
@@ -201,16 +201,16 @@ go build -o ./bin/sqlon ./cmd/sqlon
 받습니다. Oracle Instant Client·godror 와 PostgreSQL/MySQL/MariaDB 드라이버가 모두 들어 있습니다.
 
 ```sh
-sha256sum -c sqlon-v0.6.1.tar.gz.sha256
-docker load -i sqlon-v0.6.1.tar.gz        # Loaded image: sqlon:v0.6.1
+sha256sum -c sqlon-v0.7.0.tar.gz.sha256
+docker load -i sqlon-v0.7.0.tar.gz        # Loaded image: sqlon:v0.7.0
 docker run -d --name sqlon -p 6767:6767 \
   -v sqlon-data:/app/data/sqlon \
   -e SQLON_ADMIN_TOKEN=change-me \
   -e PG_PROD_PW=... \
-  sqlon:v0.6.1
+  sqlon:v0.7.0
 ```
 
-- 직접 빌드: `docker build -f Dockerfile.oracle -t sqlon:v0.6.1 .` (`Dockerfile` 은 Oracle 없는 경량 로컬 빌드)
+- 직접 빌드: `docker build -f Dockerfile.oracle -t sqlon:v0.7.0 .` (`Dockerfile` 은 Oracle 없는 경량 로컬 빌드)
 - 호스트 디렉터리를 데이터로 쓰려면 먼저 `chown -R 10001:10001 <dir>`. 비어 있으면 첫 기동 때 기본 메타데이터로 채웁니다.
 - 릴리즈 절차와 이미지 검증 항목: [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)
 
@@ -573,6 +573,8 @@ HTTP 모드로 기동하면 브라우저 기반 관리 화면과 Swagger 문서�
 **Ctrl+K**(⌘K)로 어느 화면이든 이름·기능으로 찾아 열고, **?** 키로 그 화면의 가이드를 봅니다. 한 화면에서 고른 DB는
 다른 화면에서도 유지되고, 예방 경보의 미확인 긴급 건수와 승인 대기 변경계획 수가 메뉴 배지와 탭 제목에 표시됩니다.
 라이트·다크·시스템 테마와 아이콘만 보이는 좁은 메뉴를 지원하며, 모든 화면이 휴대폰 폭에서 가로 스크롤 없이 동작합니다.
+관리자는 **메뉴 관리**(`/admin/menus`)에서 메뉴를 켜고 끄거나 볼 수 있는 역할을 좁힙니다. 끈 메뉴는 사이드바·빠른 이동·바로가기에서
+사라지고 화면 주소로 열어도 서버가 열 수 있는 첫 화면으로 돌려보냅니다(REST·MCP 권한은 역할·키로 따로 통제).
 
 | 경로 | 내용 |
 | --- | --- |
@@ -583,6 +585,7 @@ HTTP 모드로 기동하면 브라우저 기반 관리 화면과 Swagger 문서�
 | `/admin/alerts` | **예방 경보** — 저장공간 예측(사용·한도·증가율·가득 차는 시점), 발생 중 경보와 확인(ack), 스키마 변경 이력, 해소 이력, 알림 채널 상태, 지금 평가·알림 테스트 ([docs/early-warning.md](docs/early-warning.md)) |
 | `/admin/dba` | **인시던트 · 진단** — 읽기 전용 DBA 진단 대시보드: 헬스 점검, 인덱스 어드바이저(CREATE INDEX 후보), 워크로드 리포트, SQL 안티패턴 린트, SQL 자연어 설명을 탭 UI로 제공(자동 실행·변경 없음, 권고용) |
 | `/admin/dba-console` | **DBA 콘솔** (`dba`/`admin` 역할 전용) — 권한 있는 쓰기 세션으로 사용자·역할, 데이터베이스, 권한(GRANT/REVOKE), 서버 설정, 세션(취소/종료), 유지보수(VACUUM/ANALYZE/REINDEX), 임의 권한 SQL을 탭 UI로 관리. 프로파일의 `dba` 자격증명 필요, 모든 변경 감사 로그 기록 |
+| `/admin/menus` | **메뉴 관리** (관리자, 단독 모드는 관리 토큰) — 메뉴별 켜기·끄기, 그룹 전체 켜기·끄기, 역할별(관리자·DBA·사용자) 표시, 저장 전 역할별 메뉴 수 미리 보기. 즉시 적용, `<data>/operations/console/menus.json` 저장, 감사 로그 기록 |
 | `/auth/login` · `/admin/users` · `/admin/keys` | **인증·사용자·MCP 키** (메타 DB 활성 시) — 로컬/Keycloak SSO 로그인, 사용자·역할 관리(admin), MCP 키 발급·회전·폐기, 프로파일별 권한(grant). 상세: [docs/auth.md](docs/auth.md) |
 | `/docs` | **Swagger UI** — REST API 문서 + Try it out (오프라인 동작, 자산 임베드) |
 | `/openapi.json` | OpenAPI 3.0 스펙 |

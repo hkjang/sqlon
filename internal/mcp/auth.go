@@ -209,8 +209,8 @@ func (s *Server) registerAuth(mux *http.ServeMux) {
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	if !s.authEnabled() {
 		writeJSON(w, http.StatusOK, map[string]any{"auth_enabled": false, "authenticated": false,
-			"version": Version,
-			"note":    "meta DB 미설정 — 단독 모드(인증 비활성)입니다. -meta-db 로 활성화하세요."})
+			"version": Version, "hidden_menus": s.hiddenMenusFor(nil),
+			"note": "meta DB 미설정 — 단독 모드(인증 비활성)입니다. -meta-db 로 활성화하세요."})
 		return
 	}
 	u, err := s.authenticate(r)
@@ -220,7 +220,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"auth_enabled": true, "authenticated": true,
-		"version": Version, "user": u, "sso_enabled": s.OIDC != nil})
+		"version": Version, "user": u, "sso_enabled": s.OIDC != nil, "hidden_menus": s.hiddenMenusFor(u)})
 }
 
 // handleUpdateProfile lets a logged-in local user edit their own display name
@@ -361,7 +361,8 @@ func (s *Server) guardPage(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // guardAdminPage additionally requires the admin role; non-admins are sent to
-// the DB console (their default landing) rather than shown an admin shell.
+// the DB console (their default landing), or to the first page the menu
+// switches leave them, rather than shown an admin shell.
 func (s *Server) guardAdminPage(next http.HandlerFunc) http.HandlerFunc {
 	return s.guard(next, true)
 }
@@ -378,9 +379,14 @@ func (s *Server) guard(next http.HandlerFunc, adminOnly bool) http.HandlerFunc {
 				return
 			}
 			if adminOnly && !u.IsAdmin() {
-				http.Redirect(w, r, "/admin/db", http.StatusFound)
+				http.Redirect(w, r, s.landingFor(u), http.StatusFound)
 				return
 			}
+			if !s.menuGate(w, r, u) {
+				return
+			}
+		} else if !s.menuGate(w, r, nil) {
+			return
 		}
 		next(w, r)
 	}

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>메뉴 관리 · sqlon</title>
+<style>
+  main { max-width: 980px; margin: 0 auto; padding: 16px 20px 60px; }
+  .intro { color: var(--text-2); font-size: 13.5px; }
+  .intro p { margin: 0 0 6px; }
+  .intro p:last-child { margin: 0; }
+  .meta-line { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+
+  .mm-bar {
+    position: sticky; top: calc(var(--header-h) + 8px); z-index: 5; /* below the sticky page header */ display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 10px 14px; margin-bottom: 14px; box-shadow: var(--shadow-sm);
+  }
+  .mm-preview { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; min-width: 0; }
+  .mm-count { font-size: 12.5px; color: var(--text-2); background: var(--surface-3); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+  .mm-count b { color: var(--text); }
+  .mm-count.zero { background: var(--danger-bg); color: var(--danger); }
+  .mm-count.zero b { color: var(--danger); }
+  .mm-actions { display: flex; gap: 8px; align-items: center; }
+  .mm-dirty { font-size: 12.5px; color: var(--warn); font-weight: 600; }
+  .mm-msg { flex-basis: 100%; font-size: 13px; display: none; }
+  .mm-msg.ok { display: block; color: var(--ok); }
+  .mm-msg.bad { display: block; color: var(--danger); }
+
+  .mm-group { padding: 0; overflow: hidden; }
+  .mm-ghead { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface-2, var(--surface)); }
+  .mm-ghead h2 { font-size: 14px; margin: 0; flex: 1; color: var(--text); text-transform: none; letter-spacing: 0; border: 0; padding: 0; }
+  .mm-gcount { font-size: 12.5px; color: var(--muted); }
+  .mm-row {
+    display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; align-items: center; gap: 6px 14px;
+    padding: 11px 16px; border-bottom: 1px solid var(--border);
+  }
+  .mm-row:last-child { border-bottom: 0; }
+  .mm-row > .ic { width: 20px; height: 20px; color: var(--muted); }
+  .mm-row.off > .ic { color: var(--faint); }
+  .mm-row.off .mm-name { color: var(--muted); }
+  .mm-name { font-weight: 600; font-size: 14px; color: var(--text); }
+  .mm-hint { font-size: 12.5px; color: var(--muted); }
+  .mm-tag { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 5px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; background: var(--surface-3); color: var(--text-2); }
+  .mm-tag.lock { background: var(--accent-bg); color: var(--accent-strong); }
+  .mm-tag.changed { background: var(--warn-bg); color: var(--warn); }
+  .mm-roles { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .mm-role {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--text-2);
+    border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px 10px 3px 7px; cursor: pointer; user-select: none;
+  }
+  .mm-role input { margin: 0; accent-color: var(--accent-solid); cursor: pointer; }
+  .mm-role.on { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-strong); }
+  .mm-role.na { border-style: dashed; color: var(--faint); cursor: not-allowed; }
+  .mm-role.na input, .mm-role.dim input { cursor: not-allowed; }
+  .mm-role.dim { opacity: .5; cursor: not-allowed; }
+  body.standalone .mm-roles { display: none; }
+  @media (max-width: 680px) {
+    main { padding: 12px 12px 48px; }
+    .mm-row { grid-template-columns: 22px minmax(0, 1fr) auto; }
+    .mm-roles { grid-column: 2 / -1; justify-content: flex-start; }
+    .mm-row .ui-switch { grid-column: 3; grid-row: 1; }
+    .mm-actions { width: 100%; }
+    .mm-actions .btn { flex: 1; }
+  }
+</style>
+<link rel="stylesheet" href="/admin/ui.css">
+<script src="/admin/theme.js" data-shell></script>
+</head>
+<body>
+<header>
+  <h1>메뉴 관리</h1>
+  <span class="grow"></span>
+  <input id="adminToken" type="password" placeholder="관리 토큰 (단독 모드에서 저장할 때)" autocomplete="off" aria-label="관리 토큰">
+</header>
+<main>
+  <section class="card intro">
+    <p>콘솔 메뉴를 <b>켜고 끄거나</b>, 메뉴를 볼 수 있는 <b>역할</b>을 좁힙니다. 저장하면 재시작 없이 바로 적용됩니다.</p>
+    <p>끈 메뉴는 사이드바와 빠른 이동에서 사라지고, 화면 주소로 열어도 열 수 있는 첫 화면으로 돌아갑니다.
+      메뉴 설정은 콘솔 화면만 바꿉니다 — REST API와 MCP 도구 권한은 역할과 MCP 키로 통제됩니다.</p>
+    <div class="meta-line" id="metaLine"></div>
+  </section>
+  <div id="loadError"></div>
+
+  <div class="mm-bar" role="region" aria-label="저장">
+    <div class="mm-preview" id="preview" aria-live="polite"></div>
+    <div class="mm-actions">
+      <span class="mm-dirty" id="dirty" hidden></span>
+      <button type="button" class="btn" id="btnAllOn" title="모든 메뉴를 켜고 역할 제한을 없앱니다">모두 켜기</button>
+      <button type="button" class="btn" id="btnRevert" disabled>되돌리기</button>
+      <button type="button" class="btn primary" id="btnSave" disabled>저장</button>
+    </div>
+    <div class="mm-msg" id="msg" role="status"></div>
+  </div>
+
+  <div id="groups"><div class="card">불러오는 중…</div></div>
+</main>
+<script src="/admin/nav.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ROLE_LABEL = { admin: '관리자', dba: 'DBA', user: '사용자' };
+const RULE_NOTE = { admin: '관리자 전용', manage: '관리자 전용', dba: 'DBA 이상', auth: '로그인 모드' };
+
+let AUTH = false, ROLES = [], SERVER = {}, state = {}, orig = {};
+
+function headers(json) {
+  const h = json ? { 'Content-Type': 'application/json' } : {};
+  const t = $('#adminToken').value;
+  if (t) h['X-Admin-Token'] = t;
+  return h;
+}
+async function api(method, path, body) {
+  const res = await fetch(path, { method, headers: headers(!!body), body });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && !AUTH) throw new Error('관리 토큰이 필요합니다 — 위쪽 [관리 토큰]에 서버의 -admin-token 값을 입력하세요.');
+  if (!res.ok) throw new Error(data.error || data.hint || 'HTTP ' + res.status);
+  return data;
+}
+
+// visible in this mode at all (before any switch)?
+function baseVisible(m) { return AUTH || (m.rule !== 'auth' && m.rule !== 'admin'); }
+function snapshot(menus) {
+  const out = {};
+  menus.forEach(m => { out[m.key] = { enabled: m.enabled, roles: (m.roles || []).slice() }; });
+  return out;
+}
+function same(a, b) {
+  return a.enabled === b.enabled && a.roles.slice().sort().join() === b.roles.slice().sort().join();
+}
+function changedKeys() { return Object.keys(state).filter(k => !same(state[k], orig[k])); }
+
+async function load() {
+  const d = await api('GET', '/api/console/menus');
+  AUTH = !!d.auth_enabled;
+  ROLES = d.roles || [];
+  document.body.classList.toggle('standalone', !AUTH);
+  SERVER = {};
+  (d.menus || []).forEach(m => { SERVER[m.key] = m; });
+  state = snapshot(d.menus || []);
+  orig = snapshot(d.menus || []);
+  $('#metaLine').textContent = (d.updated_at ? '마지막 변경 ' + new Date(d.updated_at).toLocaleString('ko-KR') + (d.updated_by ? ' · ' + d.updated_by : '') + ' · ' : '아직 바꾼 적 없음 (모든 메뉴 켜짐) · ') +
+    (AUTH ? '' : '단독 모드: 역할이 없어 켜기·끄기만 적용됩니다. ') + '저장 위치 ' + (d.file || '');
+  $('#loadError').innerHTML = d.load_error ? '<div class="card" style="border-color:var(--danger-border);background:var(--danger-bg);color:var(--danger)">설정 파일을 읽지 못해 모든 메뉴가 켜진 상태로 동작 중입니다: ' + esc(d.load_error) + '<br>저장하면 파일을 새로 씁니다.</div>' : '';
+  render();
+}
+
+function render() {
+  const groups = (JASQL.menu || []).map(g => ({ g, items: g.items.filter(it => SERVER[it.key] && baseVisible(SERVER[it.key])) })).filter(x => x.items.length);
+  $('#groups').innerHTML = groups.map(({ g, items }) => {
+    const free = items.filter(it => !SERVER[it.key].locked);
+    const on = items.filter(it => state[it.key].enabled).length;
+    const allOn = free.every(it => state[it.key].enabled), anyOn = free.some(it => state[it.key].enabled);
+    return '<section class="card mm-group" data-group="' + esc(g.id) + '">' +
+      '<div class="mm-ghead"><h2 id="g-' + esc(g.id) + '">' + esc(g.title) + '</h2><span class="mm-gcount">' + on + ' / ' + items.length + ' 켜짐</span>' +
+      (free.length ? '<input type="checkbox" role="switch" class="ui-switch" data-gswitch="' + esc(g.id) + '" aria-label="' + esc(g.title) + ' 그룹 전체 켜기"' + (allOn ? ' checked' : '') + (anyOn && !allOn ? ' data-mixed' : '') + '>' : '') +
+      '</div>' + items.map(it => row(it)).join('') + '</section>';
+  }).join('');
+  document.querySelectorAll('[data-mixed]').forEach(n => { n.indeterminate = true; });
+  bind();
+  summarize();
+}
+
+function row(it) {
+  const m = SERVER[it.key], st = state[it.key];
+  const changed = !same(st, orig[it.key]);
+  const roles = ROLES.map(r => {
+    const allowed = (m.allowed_roles || []).includes(r);
+    const checked = allowed && st.roles.includes(r);
+    const cls = 'mm-role' + (!allowed ? ' na' : checked ? ' on' : '') + (allowed && (!st.enabled || m.locked) ? ' dim' : '');
+    const title = !allowed ? '이 메뉴의 기본 권한 밖입니다' : m.locked ? '메뉴 관리는 관리자에게 항상 보입니다' : '';
+    return '<label class="' + cls + '"' + (title ? ' title="' + esc(title) + '"' : '') + '><input type="checkbox" data-role="' + r + '" data-key="' + esc(it.key) + '"' +
+      (checked ? ' checked' : '') + (!allowed || !st.enabled || m.locked ? ' disabled' : '') + '><span>' + esc(ROLE_LABEL[r] || r) + '</span></label>';
+  }).join('');
+  const tags = (m.locked ? '<span class="mm-tag lock">항상 켜짐</span>' : '') +
+    (AUTH && RULE_NOTE[m.rule] && m.rule !== 'auth' ? '<span class="mm-tag">' + esc(RULE_NOTE[m.rule]) + '</span>' : '') +
+    (changed ? '<span class="mm-tag changed">저장 안 함</span>' : '');
+  return '<div class="mm-row' + (st.enabled ? '' : ' off') + '">' + JASQL.icon(it.icon) +
+    '<div><div class="mm-name">' + esc(it.label) + tags + '</div><div class="mm-hint">' + esc(it.hint || '') + ' · <code>' + esc(m.path) + '</code></div></div>' +
+    '<div class="mm-roles" role="group" aria-label="' + esc(it.label) + ' 을(를) 볼 수 있는 역할">' + roles + '</div>' +
+    '<input type="checkbox" role="switch" class="ui-switch" data-key="' + esc(it.key) + '" aria-label="' + esc(it.label) + ' 켜기"' +
+      (st.enabled ? ' checked' : '') + (m.locked ? ' disabled' : '') + '>' +
+    '</div>';
+}
+
+function bind() {
+  document.querySelectorAll('.mm-row .ui-switch').forEach(sw => {
+    sw.onchange = () => { state[sw.dataset.key].enabled = sw.checked; rerender(sw); };
+  });
+  document.querySelectorAll('[data-gswitch]').forEach(sw => {
+    sw.onchange = () => {
+      const g = (JASQL.menu || []).find(x => x.id === sw.dataset.gswitch);
+      g.items.forEach(it => { if (SERVER[it.key] && !SERVER[it.key].locked && baseVisible(SERVER[it.key])) state[it.key].enabled = sw.checked; });
+      rerender(sw);
+    };
+  });
+  document.querySelectorAll('.mm-role input').forEach(cb => {
+    cb.onchange = () => {
+      const st = state[cb.dataset.key];
+      if (cb.checked) { if (!st.roles.includes(cb.dataset.role)) st.roles.push(cb.dataset.role); }
+      else if (st.roles.length <= 1) {
+        cb.checked = true;
+        say('bad', '역할을 모두 빼려면 대신 메뉴를 끄세요.');
+        return;
+      } else st.roles = st.roles.filter(r => r !== cb.dataset.role);
+      rerender(cb);
+    };
+  });
+}
+
+// re-render but keep keyboard focus on the control that changed
+function rerender(ctrl) {
+  const sel = ctrl.dataset.gswitch ? '[data-gswitch="' + ctrl.dataset.gswitch + '"]'
+    : ctrl.dataset.role ? 'input[data-key="' + ctrl.dataset.key + '"][data-role="' + ctrl.dataset.role + '"]'
+    : '.mm-row .ui-switch[data-key="' + ctrl.dataset.key + '"]';
+  render();
+  const n = document.querySelector(sel);
+  if (n) n.focus();
+  say('', '');
+}
+
+function summarize() {
+  const menus = Object.values(SERVER).filter(baseVisible);
+  const parts = [];
+  if (AUTH) {
+    ROLES.forEach(r => {
+      const base = menus.filter(m => (m.allowed_roles || []).includes(r));
+      const n = base.filter(m => m.locked || (state[m.key].enabled && state[m.key].roles.includes(r))).length;
+      parts.push('<span class="mm-count' + (n ? '' : ' zero') + '">' + esc(ROLE_LABEL[r] || r) + ' <b>' + n + '</b> / ' + base.length + '</span>');
+    });
+  } else {
+    const n = menus.filter(m => m.locked || state[m.key].enabled).length;
+    parts.push('<span class="mm-count">보이는 메뉴 <b>' + n + '</b> / ' + menus.length + '</span>');
+  }
+  const ch = changedKeys().length;
+  $('#preview').innerHTML = parts.join('');
+  $('#dirty').hidden = !ch;
+  $('#dirty').textContent = '저장하지 않은 변경 ' + ch + '건';
+  $('#btnSave').disabled = !ch;
+  $('#btnRevert').disabled = !ch;
+}
+
+function say(cls, text) { const m = $('#msg'); m.className = 'mm-msg' + (cls ? ' ' + cls : ''); m.textContent = text; }
+
+$('#btnRevert').onclick = () => { state = JSON.parse(JSON.stringify(orig)); render(); say('', ''); };
+$('#btnAllOn').onclick = () => {
+  Object.keys(state).forEach(k => { state[k].enabled = true; state[k].roles = (SERVER[k].allowed_roles || []).slice(); });
+  render();
+  say('', '');
+};
+$('#btnSave').onclick = async () => {
+  const menus = {};
+  Object.keys(state).forEach(k => {
+    const m = SERVER[k], st = state[k];
+    if (m.locked) return;
+    const allowed = m.allowed_roles || [];
+    const narrowed = AUTH && allowed.some(r => !st.roles.includes(r));
+    menus[k] = { enabled: st.enabled, roles: narrowed ? st.roles.slice() : null };
+  });
+  $('#btnSave').disabled = true;
+  try {
+    const d = await api('PUT', '/api/console/menus', JSON.stringify({ menus }));
+    await load();
+    if (JASQL.rebuildNav) JASQL.rebuildNav(d.hidden_for_you || []);
+    say('ok', '저장했습니다. 모든 사용자에게 바로 적용됩니다.');
+  } catch (e) {
+    say('bad', '저장하지 못했습니다: ' + e.message);
+    summarize();
+  }
+};
+window.addEventListener('beforeunload', e => { if (changedKeys().length) { e.preventDefault(); e.returnValue = ''; } });
+
+JASQL.mount({ page: 'menus', onReady: () => load().catch(e => {
+  $('#groups').innerHTML = '<div class="card">메뉴 설정을 불러오지 못했습니다: ' + esc(e.message) + '</div>';
+}) });
+</script>
+</body>
+</html>
