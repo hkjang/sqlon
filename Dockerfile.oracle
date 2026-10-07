@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
-# SQLON Oracle edition: godror/ODPI-C (CGO) plus Oracle Instant Client.
+# SQLON release image (sqlon:vX.Y.Z): godror/ODPI-C (CGO) plus Oracle Instant
+# Client, and the pure-Go PostgreSQL/MySQL/MariaDB drivers, so it serves every
+# engine. scripts/release.sh builds, saves and verifies it.
 FROM golang:1.26-bookworm AS build
 WORKDIR /src
 ARG VERSION=dev
@@ -7,21 +9,25 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
-RUN CGO_ENABLED=1 go build -tags oracle -trimpath \
-    -ldflags="-s -w -X sqlon/internal/mcp.Version=${VERSION}" \
-    -o /out/sqlon ./cmd/sqlon
+RUN LDFLAGS="-s -w -X sqlon/internal/mcp.Version=${VERSION}" \
+ && CGO_ENABLED=1 go build -tags oracle -trimpath -ldflags="$LDFLAGS" -o /out/sqlon ./cmd/sqlon \
+ && CGO_ENABLED=1 go build -tags oracle -trimpath -ldflags="$LDFLAGS" -o /out/sqlon-eval ./cmd/jamypg-eval \
+ && CGO_ENABLED=1 go build -tags oracle -trimpath -ldflags="$LDFLAGS" -o /out/sqlon-goldgen ./cmd/jamypg-goldgen
 
 FROM oraclelinux:9-slim
 RUN microdnf install -y oracle-instantclient-release-el9 \
  && microdnf install -y oracle-instantclient*-basiclite libaio curl \
  && microdnf clean all \
  && useradd --system --uid 10001 --home-dir /app --create-home sqlon
-COPY --from=build /out/sqlon /usr/local/bin/sqlon
+COPY --from=build /out/sqlon /out/sqlon-eval /out/sqlon-goldgen /usr/local/bin/
 COPY --chown=sqlon:sqlon data/metadb /app/data/sqlon
+# seed for an empty bind-mounted data dir (see scripts/docker-entrypoint.sh)
+COPY data/metadb /usr/share/sqlon/seed
+COPY --chmod=0755 scripts/docker-entrypoint.sh /usr/local/bin/sqlon-entrypoint
 WORKDIR /app
 USER sqlon
 EXPOSE 6767
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s \
   CMD curl -fsS http://127.0.0.1:6767/healthz >/dev/null || exit 1
-ENTRYPOINT ["sqlon"]
+ENTRYPOINT ["sqlon-entrypoint"]
 CMD ["-transport", "http", "-addr", "0.0.0.0:6767", "-public-mcp", "-data", "/app/data/sqlon"]

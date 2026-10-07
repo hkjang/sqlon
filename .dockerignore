@@ -4,6 +4,7 @@ dist/
 logs/
 docs/
 scripts/
+!scripts/docker-entrypoint.sh
 data/metadb/feedback/
 data/metadb/audit/
 data/metadb/backups/

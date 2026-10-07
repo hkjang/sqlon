@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
-# SQLON standard build (PostgreSQL/MySQL/MariaDB). Oracle is distributed as a
-# separate CGO-enabled sqlon-oracle image with Oracle Instant Client.
+# SQLON lightweight build (PostgreSQL/MySQL/MariaDB, no Oracle) for local use.
+# The released image, sqlon:vX.Y.Z, is built from Dockerfile.oracle.
 # Metadata (data/metadb) is baked in; mount a volume over /app/data/metadb to
 # override, and mount /app/data/metadb/feedback + audit for persistence.
 
@@ -23,10 +23,13 @@ FROM alpine:3.21
 RUN adduser -D -u 10001 sqlon
 COPY --from=build /out/sqlon /out/sqlon-eval /out/sqlon-goldgen /usr/local/bin/
 COPY --chown=sqlon:sqlon data/metadb /app/data/sqlon
+# seed for an empty bind-mounted data dir (see scripts/docker-entrypoint.sh)
+COPY data/metadb /usr/share/sqlon/seed
+COPY --chmod=0755 scripts/docker-entrypoint.sh /usr/local/bin/sqlon-entrypoint
 WORKDIR /app
 USER sqlon
 EXPOSE 6767
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
   CMD wget -qO- http://127.0.0.1:6767/healthz >/dev/null 2>&1 || exit 1
-ENTRYPOINT ["sqlon"]
+ENTRYPOINT ["sqlon-entrypoint"]
 CMD ["-transport", "http", "-addr", "0.0.0.0:6767", "-public-mcp", "-data", "/app/data/sqlon"]
