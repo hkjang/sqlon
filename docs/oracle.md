@@ -4,8 +4,8 @@ SQLON은 Oracle 실행 경로를 표준판과 분리합니다.
 
 | 배포판 | 빌드 | Oracle |
 | --- | --- | --- |
-| `sqlon-standard` | `CGO_ENABLED=0` | 프로파일 검증과 정책만 제공, 연결 시 명확한 미지원 오류 |
-| `sqlon-oracle` | `CGO_ENABLED=1 -tags oracle` | godror/OCI 연결 지원 |
+| 단독 바이너리, `Dockerfile` 경량 빌드 | `CGO_ENABLED=0` | 프로파일 검증과 정책만 제공, 연결 시 명확한 미지원 오류 |
+| 릴리즈 Docker 이미지 `sqlon:vX.Y.Z` (`Dockerfile.oracle`) | `CGO_ENABLED=1 -tags oracle` | godror/OCI 연결 지원 (PostgreSQL·MySQL·MariaDB 도 포함) |
 
 godror는 `database/sql` 드라이버이며 CGO가 필요하고, 실행 환경에는 Oracle
 Client 라이브러리가 필요합니다. 상세 요구사항은
@@ -14,7 +14,7 @@ Client 라이브러리가 필요합니다. 상세 요구사항은
 
 ```sh
 sh scripts/build-oracle.sh
-docker build -f Dockerfile.oracle -t sqlon/sqlon-oracle:dev .
+docker build -f Dockerfile.oracle -t sqlon:dev .
 ```
 
 ## 프로파일

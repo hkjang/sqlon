@@ -21,7 +21,7 @@ go test -tags integration ./test/integration -v
 # 크로스 빌드 (정적, CGO_ENABLED=0 — scripts/build.sh가 windows-amd64 /
 # linux-amd64 / linux-arm64 3종을 생성)
 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/sqlon-windows-amd64.exe ./cmd/sqlon
-docker build -t sqlon/sqlon:dev .
+docker build -f Dockerfile.oracle -t sqlon:dev .   # 릴리즈 이미지 (Oracle 포함)
 CGO_ENABLED=1 go build -tags oracle -o dist/sqlon-oracle ./cmd/sqlon
 ```
 

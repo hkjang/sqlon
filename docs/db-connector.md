@@ -14,13 +14,13 @@ godror, CGO와 Oracle Instant Client를 사용합니다:
 ## 활성화 (빌드·런타임 요건)
 
 표준판의 PostgreSQL/MySQL/MariaDB 드라이버는 순수 Go입니다. Oracle은
-`CGO_ENABLED=1 -tags oracle` 및 Instant Client가 필요한 별도 배포판입니다.
+`CGO_ENABLED=1 -tags oracle` 및 Instant Client가 필요하며, 릴리즈 Docker 이미지(`Dockerfile.oracle`)에 들어 있습니다.
 구체적인 프로파일·라이선스 정책은 [Oracle 운영 지원](oracle.md)을 참조하세요.
 
 ```sh
-docker build -t sqlon/sqlon .
+docker build -f Dockerfile.oracle -t sqlon .
 docker run -d -p 6767:6767 -v sqlon-data:/app/data/sqlon \
-  -e SQLON_ADMIN_TOKEN='...' -e PG_PROD_PW='...' sqlon/sqlon
+  -e SQLON_ADMIN_TOKEN='...' -e PG_PROD_PW='...' sqlon
 ```
 
 ## DB 프로파일

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## v0.6.1 — 2026-10-07
+
+### 배포 이미지 정리 — `sqlon:v0.6.1` 하나
+
+- 릴리즈 Docker 이미지를 하나로 합쳤습니다. 이미지 이름은 `sqlon:vX.Y.Z`, 이미지 파일은
+  `sqlon-vX.Y.Z.tar.gz` 와 `.sha256` 입니다. Oracle Instant Client·godror 와 PostgreSQL/MySQL/MariaDB
+  드라이버가 모두 들어 있어 어떤 DB든 이 이미지 하나로 운영합니다. `sqlon-eval`·`sqlon-goldgen` 도 포함합니다.
+  (이전: `sqlon/sqlon:vX`·`sqlon/sqlon-oracle:vX`, `sqlon-vX-docker.tar.gz`·`sqlon-oracle-vX-docker.tar.gz`)
+- 릴리즈 스크립트가 저장한 이미지 파일을 다시 `docker load` 해서 검사한 뒤에야 끝납니다
+  (`scripts/verify-image.sh`, 항목과 이유는 `docs/RELEASE_CHECKLIST.md`). 이번 릴리즈는 실제 Oracle
+  AI Database 26ai Free(23.26.3)에 연결해 확인했습니다.
+
+### 수정
+
+- **빈 호스트 디렉터리를 데이터로 마운트하면 기동하지 못하던 문제**: 관리자 가이드대로 `mkdir` 한
+  디렉터리를 `/app/data/sqlon` 에 붙이면 `load SQLON catalog: ... no such file` 로 바로 종료했습니다.
+  이제 비어 있으면 첫 기동 때 기본 메타데이터로 채우고, 쓸 수 없으면 `chown -R 10001:10001` 을 안내합니다.
+- **Oracle 연결 실패 안내**: 비밀번호가 틀려도(ORA-01017) "TLS/인증서 설정이 맞지 않습니다" 로
+  안내하던 것을 인증 실패로 바로잡았습니다. ORA-28000(계정 잠김)·ORA-12514(서비스 없음)·ORA-12541(리스너
+  없음)·ORA-12170(시간 초과)도 각각 분류하고, 오류 코드를 `INTERNAL` 대신 `ORA-01017` 처럼 돌려줍니다.
+- 단독 바이너리에서 Oracle 을 고르면 나오는 안내가 이제 `sqlon` Docker 이미지를 가리킵니다.
+
 ## v0.6.0 — 2026-10-06
 
 ### 콘솔 디자인·사용성 전면 개편

@@ -9,10 +9,10 @@ The existing metadata-grounded NL2SQL flow remains available as **SQL Lab**;
 the product is being transitioned to fleet observation, diagnosis, and
 approval-gated change control across PostgreSQL, MySQL, MariaDB, and Oracle.
 
-The standard image supports PostgreSQL/MySQL/MariaDB with pure Go drivers.
-Oracle profiles, capability contracts, and fail-closed SQL policy are present;
-the OCI/godror runtime is intentionally delivered in the separate
-`sqlon-oracle` build.
+The release Docker image (`sqlon:v0.6.1`) bundles Oracle Instant Client and
+godror alongside the pure-Go PostgreSQL/MySQL/MariaDB drivers, so one image
+serves every engine. The standalone binaries are built without CGO and cover
+PostgreSQL/MySQL/MariaDB; Oracle needs the image or a `-tags oracle` build.
 
 The server loads JSON metadata from a dataset directory (e.g. `data/metadb`,
 `data/sakila`), compiles it into an in-memory catalog, search index, join
@@ -79,7 +79,7 @@ This combination allowed Codex to accelerate implementation while GPT-5.6 suppor
 | --- | --- |
 | 로컬 HTTP MCP + 운영 콘솔 | `go run ./cmd/sqlon -transport http -addr 127.0.0.1:6767` |
 | 로컬 stdio MCP | `go run ./cmd/sqlon -transport stdio` |
-| 표준 컨테이너 | `docker build -t sqlon/sqlon:v0.6.0 .` |
+| 컨테이너 (Oracle 포함 전 엔진) | `docker build -f Dockerfile.oracle -t sqlon:v0.6.1 .` |
 | 통합 테스트 DB 3종 기동 | `docker compose -f deploy/test/docker-compose.yml up -d` |
 | 통합 테스트 (pg+mysql+mariadb) | `go test -tags integration ./test/integration -v` |
 
@@ -197,16 +197,22 @@ go build -o ./bin/sqlon ./cmd/sqlon
 
 ## Docker Image
 
-표준판과 Oracle판 이미지를 분리해 빌드합니다:
+릴리즈 이미지는 `sqlon:vX.Y.Z` 하나이며 릴리즈 자산 `sqlon-vX.Y.Z.tar.gz`(+ `.sha256`)로
+받습니다. Oracle Instant Client·godror 와 PostgreSQL/MySQL/MariaDB 드라이버가 모두 들어 있습니다.
 
 ```sh
-docker build -t sqlon/sqlon:v0.6.0 .
-docker build -f Dockerfile.oracle -t sqlon/sqlon-oracle:v0.1.5 .
-docker run --rm -p 6767:6767 \
+sha256sum -c sqlon-v0.6.1.tar.gz.sha256
+docker load -i sqlon-v0.6.1.tar.gz        # Loaded image: sqlon:v0.6.1
+docker run -d --name sqlon -p 6767:6767 \
+  -v sqlon-data:/app/data/sqlon \
   -e SQLON_ADMIN_TOKEN=change-me \
   -e PG_PROD_PW=... \
-  sqlon/sqlon:v0.6.0
+  sqlon:v0.6.1
 ```
+
+- 직접 빌드: `docker build -f Dockerfile.oracle -t sqlon:v0.6.1 .` (`Dockerfile` 은 Oracle 없는 경량 로컬 빌드)
+- 호스트 디렉터리를 데이터로 쓰려면 먼저 `chown -R 10001:10001 <dir>`. 비어 있으면 첫 기동 때 기본 메타데이터로 채웁니다.
+- 릴리즈 절차와 이미지 검증 항목: [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)
 
 DB 프로파일은 `/admin/db` 또는 DB profile REST/MCP API로 구성한 뒤
 `run_sql_safely`로 read-only 실행합니다. See

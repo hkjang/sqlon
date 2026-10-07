@@ -370,7 +370,7 @@ async function refreshProfiles() {
   PROFILES = data.profiles || [];
   const drivers = data.drivers || {};
   const enabled = Object.keys(drivers).filter(k => drivers[k]).map(k => k === 'postgres' ? 'PostgreSQL' : k === 'oracle' ? 'Oracle' : k === 'mysql' ? 'MySQL' : 'MariaDB');
-  const oracleNote = drivers.oracle ? ' · Oracle 사용 가능' : ' · Oracle는 sqlon-oracle 배포판 필요';
+  const oracleNote = drivers.oracle ? ' · Oracle 사용 가능' : ' · Oracle은 sqlon Docker 이미지 필요';
   $('#driverChip').innerHTML = data.driver_available
     ? '<span class="chip" title="' + esc(data.driver_note) + '">드라이버: ' + esc(enabled.join(' · ')) + oracleNote + '</span>'
     : '<span class="chip err" title="' + esc(data.driver_note) + '">DB 드라이버 없음 — 실행 불가</span>';
@@ -499,7 +499,7 @@ const engineCopy={
   postgres:{help:'PostgreSQL · pgx 드라이버가 내장되어 있습니다.',conn:'db.example.com:5432/appdb',hint:'형식: host:port/database 또는 postgres://host:port/database'},
   mysql:{help:'MySQL · 순수 Go 드라이버가 바이너리에 포함되어 별도 client library가 필요 없습니다.',conn:'mysql.example.com:3306/appdb',hint:'형식: host:port/database 또는 mysql://host:port/database'},
   mariadb:{help:'MariaDB · MySQL wire protocol 드라이버가 바이너리에 포함되어 별도 client library가 필요 없습니다.',conn:'mariadb.example.com:3306/appdb',hint:'형식: host:port/database 또는 mariadb://host:port/database'},
-  oracle:{help:'Oracle · godror와 Oracle Instant Client가 포함된 sqlon-oracle 배포판이 필요합니다.',conn:'db.example.com:1521/PRODPDB',hint:'Easy Connect host:port/service_name 또는 TNS descriptor를 입력하세요.'}
+  oracle:{help:'Oracle · godror와 Oracle Instant Client가 포함된 sqlon Docker 이미지가 필요합니다(단독 바이너리는 미포함).',conn:'db.example.com:1521/PRODPDB',hint:'Easy Connect host:port/service_name 또는 TNS descriptor를 입력하세요.'}
 };
 function setEngine(type){
   if(!engineCopy[type])type='postgres';

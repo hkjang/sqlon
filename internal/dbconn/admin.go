@@ -135,7 +135,7 @@ func buildAdminDSN(d Dialect, p Profile, password string) (string, error) {
 		return u.String(), nil
 	case "oracle":
 		// Oracle has no DSN read-only flag. The Oracle admin executor is linked
-		// only in sqlon-oracle builds and uses a separately approved plan.
+		// only in -tags oracle builds and uses a separately approved plan.
 		return dsn, nil
 	default: // mysql / mariadb
 		cfg, err := mysql.ParseDSN(dsn)

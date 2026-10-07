@@ -1,7 +1,11 @@
 #!/usr/bin/env sh
 # Assemble a versioned release: cross-platform binaries (mcp/eval/goldgen),
-# packaged tarballs + windows zip, docker image tar, SHA256SUMS.
+# packaged tarballs + windows zip, the offline docker image, SHA256SUMS.
 # Usage: sh scripts/release.sh v0.22.0
+# Steps and the checks behind them: docs/RELEASE_CHECKLIST.md.
+#
+# SQLON_VERIFY_ORACLE='<docker-network> <host:port/service> <user> <password>'
+# makes the image check open a real Oracle connection (see verify-image.sh).
 set -eu
 V="${1:?usage: release.sh vX.Y.Z}"
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -44,13 +48,18 @@ with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
 print("wrote", out)
 PY
 
-docker build -q --build-arg VERSION="$VER" -t "sqlon/sqlon:$V" . >/dev/null
-docker save "sqlon/sqlon:$V" | gzip > "$P/sqlon-$V-docker.tar.gz"
-echo "saved standard docker image"
+# The docker image is the deliverable for offline sites: sqlon:vX.Y.Z, saved
+# as sqlon-vX.Y.Z.tar.gz with a .sha256 sidecar. It is the Oracle build
+# (godror + Instant Client), which also links the PostgreSQL/MySQL/MariaDB
+# drivers, so one image serves every engine.
+IMG="sqlon:$V"; TAR="sqlon-$V.tar.gz"
+docker build -q -f Dockerfile.oracle --build-arg VERSION="$VER" -t "$IMG" . >/dev/null
+docker save "$IMG" | gzip > "$P/$TAR"
+( cd "$P" && sha256sum "$TAR" > "$TAR.sha256" )
+echo "saved docker image $IMG -> $P/$TAR"
 
-docker build -q -f Dockerfile.oracle --build-arg VERSION="$VER" -t "sqlon/sqlon-oracle:$V" . >/dev/null
-docker save "sqlon/sqlon-oracle:$V" | gzip > "$P/sqlon-oracle-$V-docker.tar.gz"
-echo "saved oracle docker image"
+# load the saved tarball and exercise it before anything is published
+sh scripts/verify-image.sh "$P/$TAR" "$IMG" 1
 
 # the disk-report agent ships on its own too, for DB hosts that only need it
 cp scripts/sqlon-disk-report.sh "$P/sqlon-disk-report.sh"

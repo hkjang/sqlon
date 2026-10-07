@@ -4,7 +4,9 @@
 
 ### 오프라인망 (Docker, 권장)
 
-릴리즈 자산 `sqlon-<ver>-docker.tar.gz` 반입 → 검증 → 로드 → 실행.
+릴리즈 자산 `sqlon-v<ver>.tar.gz` 와 `.sha256` 반입 → `sha256sum -c` → `docker load -i`
+(→ `sqlon:v<ver>`) → 실행. 이미지 하나에 Oracle Instant Client 와 PostgreSQL·MySQL·MariaDB
+드라이버가 모두 들어 있습니다.
 상세 절차는 릴리즈의 `DEPLOY-OFFLINE.md` 참조.
 
 ```sh
@@ -12,7 +14,7 @@ docker run -d --name sqlon --restart unless-stopped \
   -p 6767:6767 \
   -v sqlon-data:/app/data/sqlon \
   -e SQLON_ADMIN_TOKEN='변경용-비밀토큰' \
-  sqlon/sqlon:<ver>
+  sqlon:v<ver>
 ```
 
 - **볼륨 필수 권장**: feedback/audit/learned_rules/backups가 재기동 후에도

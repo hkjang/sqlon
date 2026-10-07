@@ -34,9 +34,11 @@ graph TB
 ```
 
 ### 지원 데이터베이스 및 요구사항
-* **PostgreSQL**: v12 이상 지원 (Standard Alpine 빌드 포함)
-* **MySQL / MariaDB**: MySQL v8.0+, MariaDB v10.5+ 지원 (Standard Alpine 빌드 포함)
-* **Oracle**: 19c, 21c, 23c 지원 (CGO 및 Oracle Instant Client 패키징된 `sqlon-oracle` 이미지 사용)
+* **PostgreSQL**: v12 이상 지원
+* **MySQL / MariaDB**: MySQL v8.0+, MariaDB v10.5+ 지원
+* **Oracle**: 19c, 21c, 23c 지원 (Oracle Instant Client 가 들어 있는 릴리즈 Docker 이미지 `sqlon:vX.Y.Z` 사용)
+
+릴리즈 Docker 이미지 하나에 네 엔진의 드라이버가 모두 들어 있습니다. 단독 바이너리(linux/windows)는 CGO 없이 빌드되어 Oracle 연결을 포함하지 않습니다.
 
 ---
 
@@ -46,12 +48,12 @@ SQLON은 인터넷 연결이 불가능한 **오프라인망(Air-Gapped Network)*
 
 ### 2.1 도커 이미지 패키지 구성
 
-GitHub Release에서 제공하는 두 가지 도커 이미지 아카이브 중 요구되는 DB 환경에 맞춰 선택합니다.
+GitHub Release에서 도커 이미지 파일 하나와 체크섬을 받습니다.
 
-| 배포 패키지 파일명 | 파일 크기 | 대상 DB 엔진 | 특징 |
+| 배포 파일 | 불러온 이미지 | 대상 DB 엔진 | 특징 |
 | :--- | :--- | :--- | :--- |
-| `sqlon-v0.1.2-docker.tar.gz` | ~24.4 MB | PostgreSQL, MySQL, MariaDB | 경량 Alpine Linux 3.21 기반 이미지 |
-| `sqlon-oracle-v0.1.2-docker.tar.gz` | ~138.1 MB | Oracle (선택적 PG/MySQL 지원) | Oracle Linux 9 slim + Instant Client 번들 |
+| `sqlon-v0.6.1.tar.gz` | `sqlon:v0.6.1` | Oracle, PostgreSQL, MySQL, MariaDB | Oracle Linux 9 slim + Instant Client 번들 (~140 MB) |
+| `sqlon-v0.6.1.tar.gz.sha256` | | | 반입 후 무결성 확인용 |
 
 ---
 
@@ -63,33 +65,32 @@ sequenceDiagram
     participant File as Release Tarball
     participant Docker as Offline Docker Host
     
-    Admin->>File: 인터넷 환경에서 tar.gz 및 SHA256SUMS 다운로드
+    Admin->>File: 인터넷 환경에서 tar.gz 및 .sha256 다운로드
     Admin->>File: SHA256 해시 검증
     Admin->>Docker: 오프라인망 서버로 파일 이관 (USB / SFTP)
-    Docker->>Docker: docker load -i sqlon-v0.1.2-docker.tar.gz
+    Docker->>Docker: docker load -i sqlon-v0.6.1.tar.gz
     Docker->>Docker: docker run (볼륨 마운트 & 환경변수 설정)
 ```
 
 #### Step 1. 파일 검증 및 이관
 ```bash
 # SHA256 해시 검증
-sha256sum -c SHA256SUMS.txt
+sha256sum -c sqlon-v0.6.1.tar.gz.sha256
 ```
 
 #### Step 2. 도커 이미지 로드 (Load)
 ```bash
-# 표준판 로드
-docker load -i sqlon-v0.1.2-docker.tar.gz
-
-# Oracle판 로드 시
-docker load -i sqlon-oracle-v0.1.2-docker.tar.gz
+docker load -i sqlon-v0.6.1.tar.gz
+# Loaded image: sqlon:v0.6.1
 ```
 
 #### Step 3. 컨테이너 기동 (Run)
 메타데이터 지속성 및 감사 로그 보관을 위해 호스트 디렉토리를 마운트합니다.
+컨테이너는 uid 10001 로 실행되므로 디렉토리 소유자를 맞춰야 합니다. 빈 디렉토리는 첫 기동 때 기본 메타데이터로 채워집니다.
 
 ```bash
 mkdir -p /opt/sqlon/data /opt/sqlon/logs
+chown -R 10001:10001 /opt/sqlon/data
 
 docker run -d \
   --name sqlon-app \
@@ -97,7 +98,7 @@ docker run -d \
   -p 6767:6767 \
   -e SQLON_ADMIN_TOKEN="SecureMasterToken2026!" \
   -v /opt/sqlon/data:/app/data/sqlon \
-  sqlon/sqlon:v0.1.2
+  sqlon:v0.6.1
 ```
 
 ---
@@ -209,6 +210,7 @@ SQLON은 시스템 상태 점검 및 관측성 엔드포인트를 제공합니�
 | 발생 장애 | 원인 | 문제 해결 절차 |
 | :--- | :--- | :--- |
 | `DB Connection Failure (DNS)` | Docker 컨테이너 내 `localhost` 지정 오류 | `localhost`는 컨테이너 자신을 의미하므로 호스트 IP 또는 `host.docker.internal` 사용 |
-| `Oracle Library Error (libclntsh.so)` | Standard 이미지를 Oracle DB에 연결 시도 | `sqlon-oracle:v0.1.2` 도커 이미지로 재배포 |
+| `Oracle driver is not included in this binary` | 단독 바이너리나 `Dockerfile` 경량 빌드로 Oracle DB에 연결 시도 | 릴리즈 도커 이미지 `sqlon:v0.6.1` 로 재배포 |
+| `cannot write /app/data/sqlon as uid 10001` | 마운트한 호스트 디렉토리를 컨테이너 사용자가 쓸 수 없음 | `chown -R 10001:10001 <호스트 디렉토리>` 후 재기동 |
 | `HTTP 401 Unauthorized` | 마스터 토큰 누락 또는 불일치 | `SQLON_ADMIN_TOKEN` 값과 API 헤더 토큰 일치 여부 확인 |
 | `MetaDB Disk Full` | 감사 로그 누적에 따른 디스크 부족 | 마운트 볼륨 디스크 용량 증설 및 오래된 감사 로그 아카이빙 |

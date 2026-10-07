@@ -26,7 +26,7 @@ func driverAvailableFor(d Dialect) bool {
 
 func driverUnavailableError(d Dialect) error {
 	if d.Name() == "oracle" {
-		return fmt.Errorf("Oracle driver is not included in sqlon-standard; use the CGO-enabled sqlon-oracle build (-tags oracle) with Oracle Instant Client")
+		return fmt.Errorf("Oracle driver is not included in this binary; use the sqlon Docker image (godror + Oracle Instant Client) or build with CGO_ENABLED=1 -tags oracle")
 	}
 	return fmt.Errorf("database driver %q for %s is not compiled in", d.DriverName(), d.Name())
 }

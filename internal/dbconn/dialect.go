@@ -54,7 +54,7 @@ func DialectFor(typ string) (Dialect, error) {
 // ---- Oracle ----
 
 // oracleDialect deliberately contains no driver import. The standard build
-// recognizes and validates Oracle profiles, while the sqlon-oracle build links
+// recognizes and validates Oracle profiles, while the -tags oracle build links
 // godror and registers its database/sql driver. This keeps the standard
 // PostgreSQL/MySQL/MariaDB artifact CGO-free.
 type oracleDialect struct{}
