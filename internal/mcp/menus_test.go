@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"sqlon/internal/meta"
 )
@@ -123,9 +125,10 @@ func TestMenuSwitchesLoginMode(t *testing.T) {
 	expectPage(t, mux, "/admin/users", alice, "/")
 	expectPage(t, mux, "/admin/users", bob, "/admin/db")
 
-	// the default landing off: sent to the first page they can open
+	// the default landing off: sent to the first page they can open, quietly
+	// (nobody asked for the root), while a page someone did ask for says why
 	putMenus(t, mux, `{"menus":{"fleet":{"enabled":false}}}`, admin)
-	expectPage(t, mux, "/", alice, "/admin/alerts?menu_off=fleet")
+	expectPage(t, mux, "/", alice, "/admin/alerts")
 
 	// the switches survive a restart, and the file holds only decisions
 	s.menuLoaded = false
@@ -133,7 +136,11 @@ func TestMenuSwitchesLoginMode(t *testing.T) {
 		t.Fatalf("after reload alice hidden = %s", h)
 	}
 	raw, err := os.ReadFile(s.menuConfigPath())
-	if err != nil || !strings.Contains(string(raw), `"fleet"`) || strings.Contains(string(raw), `"ask"`) || !strings.Contains(string(raw), `"updated_by": "admin"`) {
+	var file menuConfig
+	if err == nil {
+		err = json.Unmarshal(raw, &file)
+	}
+	if err != nil || len(file.Menus) != 1 || !file.Menus["fleet"].off() || file.UpdatedBy != "admin" {
 		t.Fatalf("menus.json: %v %s", err, raw)
 	}
 
@@ -151,7 +158,8 @@ func TestMenuSwitchesLoginMode(t *testing.T) {
 	if rec.Code != 403 || !strings.Contains(rec.Body.String(), "열 수 있는 화면이 없습니다") {
 		t.Fatalf("alice with no menus: %d %s", rec.Code, rec.Body.String())
 	}
-	expectPage(t, mux, "/", admin, "/admin/menus?menu_off=fleet") // 메뉴 관리 is never switched off
+	expectPage(t, mux, "/", admin, "/admin/menus") // 메뉴 관리 is never switched off
+	expectPage(t, mux, "/admin/sessions", admin, "/admin/menus?menu_off=sessions")
 }
 
 func TestMenuSwitchesRejectBadRequests(t *testing.T) {
@@ -210,5 +218,131 @@ func TestNormalizeMenusKeepsOnlyDecisions(t *testing.T) {
 	want := `{"ask":{"roles":["admin","user"]},"keys":{"roles":["admin","dba"]},"stats":{"enabled":false,"roles":["admin"]}}`
 	if string(b) != want {
 		t.Fatalf("normalized = %s\nwant        %s", b, want)
+	}
+}
+
+// Two admins editing at once: the second save names the revision it started
+// from and is refused instead of silently undoing the first.
+func TestMenuSaveRefusesAStaleRevision(t *testing.T) {
+	_, mux, adminTok, _ := newAuthServer(t)
+	admin := withCookie(adminTok)
+	var got struct {
+		Revision int `json:"revision"`
+	}
+	_ = json.Unmarshal(doReq(t, mux, "GET", "/api/console/menus", "", admin).Body.Bytes(), &got)
+	if got.Revision != 0 {
+		t.Fatalf("fresh revision = %d", got.Revision)
+	}
+	out := putMenus(t, mux, `{"revision":0,"menus":{"openmetadata":{"enabled":false}}}`, admin)
+	if out["revision"].(float64) != 1 {
+		t.Fatalf("revision after a save = %v", out["revision"])
+	}
+	rec := doReq(t, mux, "PUT", "/api/console/menus", `{"revision":0,"menus":{"ask":{"roles":["admin"]}}}`, admin)
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "먼저 저장했습니다") || !strings.Contains(rec.Body.String(), `"revision":1`) {
+		t.Fatalf("stale save: %d %s", rec.Code, rec.Body.String())
+	}
+	// the stale save changed nothing
+	var now struct {
+		Menus []menuView `json:"menus"`
+	}
+	_ = json.Unmarshal(doReq(t, mux, "GET", "/api/console/menus", "", admin).Body.Bytes(), &now)
+	for _, m := range now.Menus {
+		if m.Key == "ask" && m.RolesLimited {
+			t.Fatal("a refused save was applied")
+		}
+	}
+	// a save that changes nothing is not a new revision
+	out = putMenus(t, mux, `{"revision":1,"menus":{"openmetadata":{"enabled":false}}}`, admin)
+	if out["unchanged"] != true || out["revision"].(float64) != 1 {
+		t.Fatalf("no-op save: %v", out)
+	}
+	// omitting the revision is an explicit "save regardless"
+	if out := putMenus(t, mux, `{"menus":{}}`, admin); out["revision"].(float64) != 2 {
+		t.Fatalf("save without revision: %v", out["revision"])
+	}
+}
+
+// The page lists what each save changed, and the audit log records the change
+// rather than the resulting state.
+func TestMenuHistoryRecordsChanges(t *testing.T) {
+	s, mux, adminTok, _ := newAuthServer(t)
+	admin := withCookie(adminTok)
+	putMenus(t, mux, `{"menus":{"openmetadata":{"enabled":false},"ask":{"roles":["admin","dba"]}}}`, admin)
+	putMenus(t, mux, `{"menus":{"ask":{"roles":["admin","dba"]}}}`, admin)
+	var got struct {
+		History []menuHistoryEntry `json:"history"`
+	}
+	_ = json.Unmarshal(doReq(t, mux, "GET", "/api/console/menus", "", admin).Body.Bytes(), &got)
+	b, _ := json.Marshal(got.History)
+	h := got.History
+	if len(h) != 2 || h[0].Revision != 2 || h[0].By != "admin" || h[0].At == "" ||
+		!strings.Contains(string(b), `"changes":[{"key":"openmetadata","from":{"enabled":false},"to":{}}]`) ||
+		!strings.Contains(string(b), `"changes":[{"key":"ask","from":{},"to":{"roles":["admin","dba"]}},{"key":"openmetadata","from":{},"to":{"enabled":false}}]`) {
+		t.Fatalf("history = %s", b)
+	}
+	audit, _ := filepath.Glob(filepath.Join(s.opDir(), "audit", "audit-*.jsonl"))
+	if len(audit) == 0 {
+		t.Fatal("no audit file")
+	}
+	raw, _ := os.ReadFile(audit[0])
+	if !strings.Contains(string(raw), "rev 1: ask roles all→admin+dba; openmetadata on→off by admin") ||
+		!strings.Contains(string(raw), "rev 2: openmetadata off→on by admin") {
+		t.Fatalf("audit lines:\n%s", raw)
+	}
+	// history is bounded; the audit log keeps the rest
+	for i := 0; i < menuHistoryKeep+5; i++ {
+		body := `{"menus":{}}`
+		if i%2 == 0 {
+			body = `{"menus":{"stats":{"enabled":false}}}`
+		}
+		putMenus(t, mux, body, admin)
+	}
+	if h := s.menus().History; len(h) != menuHistoryKeep || h[0].Revision != menuHistoryKeep+7 {
+		t.Fatalf("history kept %d, newest rev %d", len(h), h[0].Revision)
+	}
+}
+
+// A hand-edited or restored file is picked up without a restart, and one that
+// breaks the rules is ignored (every menu on) with the reason on the page.
+func TestMenuFileIsValidatedAndReloaded(t *testing.T) {
+	s, mux, adminTok, aliceTok := newAuthServer(t)
+	admin, alice := withCookie(adminTok), withCookie(aliceTok)
+	if h := hiddenFor(t, mux, alice); len(h) != 0 {
+		t.Fatalf("hidden = %v", h)
+	}
+	write := func(body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(s.menuConfigPath()), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(s.menuConfigPath(), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		s.menuChecked = time.Time{} // skip the once-a-second throttle
+	}
+	write(`{"revision":4,"menus":{"ask":{"roles":["admin","dba"]}}}`)
+	if h := strings.Join(hiddenFor(t, mux, alice), ","); h != "ask" {
+		t.Fatalf("after an outside edit alice hidden = %q", h)
+	}
+	// "users" is a typo for "user": it would hide SQL Lab from every role
+	write(`{"revision":5,"menus":{"ask":{"roles":["users"]}}}`)
+	if h := hiddenFor(t, mux, alice); len(h) != 0 {
+		t.Fatalf("an invalid file must leave every menu on, hidden = %v", h)
+	}
+	rec := doReq(t, mux, "GET", "/api/console/menus", "", admin)
+	body := rec.Body.String()
+	if !strings.Contains(body, `"load_error"`) || !strings.Contains(body, "users 역할에게 열 수 없습니다") || strings.Contains(body, s.opDir()) || !strings.Contains(body, `"revision":5`) {
+		t.Fatalf("menus with a bad file: %s", body)
+	}
+	// saving from the page repairs the file, even with nothing else changed
+	out := putMenus(t, mux, `{"revision":5,"menus":{}}`, admin)
+	if out["unchanged"] == true || out["revision"].(float64) != 6 {
+		t.Fatalf("repair save: %v", out)
+	}
+	if strings.Contains(doReq(t, mux, "GET", "/api/console/menus", "", admin).Body.String(), "load_error") {
+		t.Fatal("load_error survives a save")
+	}
+	if h := s.menus().History; len(h) == 0 || !h[0].Repaired {
+		t.Fatalf("repair not recorded: %+v", h)
 	}
 }

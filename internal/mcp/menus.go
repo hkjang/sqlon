@@ -96,37 +96,84 @@ type menuOverride struct {
 	Roles   []string `json:"roles,omitempty"`   // nil = every allowed role
 }
 
+func (o menuOverride) off() bool { return o.Enabled != nil && !*o.Enabled }
+
+func (o menuOverride) same(p menuOverride) bool {
+	return o.off() == p.off() && slices.Equal(o.Roles, p.Roles)
+}
+
+// menuChange is one menu's decision before and after a save; the empty
+// override means the default (on, every allowed role).
+type menuChange struct {
+	Key  string       `json:"key"`
+	From menuOverride `json:"from"`
+	To   menuOverride `json:"to"`
+}
+
+type menuHistoryEntry struct {
+	Revision int          `json:"revision"`
+	At       string       `json:"at"`
+	By       string       `json:"by"`
+	Changes  []menuChange `json:"changes"`
+	// Repaired marks a save that rewrote an unreadable or invalid file.
+	Repaired bool `json:"repaired,omitempty"`
+}
+
+// menuHistoryKeep is how many saves the menu page lists; the audit log keeps
+// every one.
+const menuHistoryKeep = 30
+
 type menuConfig struct {
+	// Revision counts saves. A save names the revision it was made from, so
+	// two admins editing at once cannot silently overwrite each other.
+	Revision  int                     `json:"revision"`
 	Menus     map[string]menuOverride `json:"menus"`
 	UpdatedAt string                  `json:"updated_at,omitempty"`
 	UpdatedBy string                  `json:"updated_by,omitempty"`
+	History   []menuHistoryEntry      `json:"history,omitempty"` // newest first
 }
+
+// menuStorage is shown to admins instead of the absolute path, which would
+// tell anyone who can reach a standalone server where its data lives.
+const menuStorage = "<data>/operations/console/menus.json"
 
 func (s *Server) menuConfigPath() string {
 	return filepath.Join(s.opDir(), "operations", "console", "menus.json")
 }
 
-// menus returns the current switches, reading the file on first use. A file
-// that cannot be read leaves every menu on (a broken file must not lock the
-// console) and the error is reported on the menu page.
+// menus returns the current switches. The file is re-read when it changes on
+// disk (a restored backup, a hand edit), checked at most once a second. A
+// file that cannot be read or does not validate leaves every menu on — a
+// broken file must not lock people out — and the error shows on the menu page.
 func (s *Server) menus() menuConfig {
 	s.menuMu.RLock()
-	if s.menuLoaded {
-		cfg := s.menuCfg
-		s.menuMu.RUnlock()
+	fresh := s.menuLoaded && time.Since(s.menuChecked) < time.Second
+	cfg := s.menuCfg
+	s.menuMu.RUnlock()
+	if fresh {
 		return cfg
 	}
-	s.menuMu.RUnlock()
 	s.menuMu.Lock()
 	defer s.menuMu.Unlock()
-	if !s.menuLoaded {
-		s.menuCfg, s.menuLoadErr = readMenuConfig(s.menuConfigPath())
-		if s.menuLoadErr != nil {
-			log.Printf("console menus: %v (every menu stays on)", s.menuLoadErr)
-		}
-		s.menuLoaded = true
-	}
+	s.refreshMenusLocked()
 	return s.menuCfg
+}
+
+func (s *Server) refreshMenusLocked() {
+	s.menuChecked = time.Now()
+	path := s.menuConfigPath()
+	var stamp string
+	if st, err := os.Stat(path); err == nil {
+		stamp = fmt.Sprintf("%d/%d", st.ModTime().UnixNano(), st.Size())
+	}
+	if s.menuLoaded && stamp == s.menuStamp {
+		return
+	}
+	cfg, err := readMenuConfig(path)
+	if err != nil && (s.menuLoadErr == nil || s.menuLoadErr.Error() != err.Error()) {
+		log.Printf("console menus: %v (every menu stays on)", err)
+	}
+	s.menuCfg, s.menuLoadErr, s.menuStamp, s.menuLoaded = cfg, err, stamp, true
 }
 
 func readMenuConfig(path string) (menuConfig, error) {
@@ -142,9 +189,14 @@ func readMenuConfig(path string) (menuConfig, error) {
 	if err := json.Unmarshal(b, &got); err != nil {
 		return cfg, fmt.Errorf("%s: %w", path, err)
 	}
-	if got.Menus == nil {
-		got.Menus = map[string]menuOverride{}
+	// a hand edit is held to the same rules as a save: a typo in a role name
+	// would otherwise hide the menu from everyone
+	menus, err := normalizeMenus(got.Menus)
+	if err != nil {
+		cfg.Revision, cfg.History = got.Revision, got.History
+		return cfg, fmt.Errorf("%s: %w", path, err)
 	}
+	got.Menus = menus
 	return got, nil
 }
 
@@ -173,7 +225,7 @@ func (s *Server) switchedOff(m consoleMenu, u *meta.User, cfg menuConfig) bool {
 	if !ok {
 		return false
 	}
-	if o.Enabled != nil && !*o.Enabled {
+	if o.off() {
 		return true
 	}
 	if s.authEnabled() && o.Roles != nil {
@@ -201,7 +253,9 @@ func (s *Server) hiddenMenusFor(u *meta.User) []string {
 
 // menuGate refuses a console page whose every menu is hidden from u: it sends
 // the viewer to the first page they can open, naming the refused menu so the
-// shell can say why, or answers 403 when nothing is left to open.
+// shell can say why, or answers 403 when nothing is left to open. The root is
+// the default landing rather than a page anyone asked for, so leaving it says
+// nothing.
 func (s *Server) menuGate(w http.ResponseWriter, r *http.Request, u *meta.User) bool {
 	cfg := s.menus()
 	var refused string
@@ -221,7 +275,11 @@ func (s *Server) menuGate(w http.ResponseWriter, r *http.Request, u *meta.User) 
 	}
 	for _, m := range consoleMenus {
 		if m.Path != r.URL.Path && s.menuVisible(m, u, cfg) {
-			http.Redirect(w, r, m.Path+"?menu_off="+url.QueryEscape(refused), http.StatusFound)
+			to := m.Path
+			if r.URL.Path != "/" {
+				to += "?menu_off=" + url.QueryEscape(refused)
+			}
+			http.Redirect(w, r, to, http.StatusFound)
 			return false
 		}
 	}
@@ -277,26 +335,30 @@ func (s *Server) menuViews() map[string]any {
 		v := menuView{Key: m.Key, Path: m.Path, Rule: m.Rule, Locked: m.Locked, Enabled: true,
 			Roles: m.allowedRoles(), AllowedRoles: m.allowedRoles()}
 		if o, ok := cfg.Menus[m.Key]; ok && !m.Locked {
-			if o.Enabled != nil {
-				v.Enabled = *o.Enabled
-			}
+			v.Enabled = !o.off()
 			if o.Roles != nil {
 				v.Roles, v.RolesLimited = o.Roles, true
 			}
 		}
 		views = append(views, v)
 	}
+	history := cfg.History
+	if history == nil {
+		history = []menuHistoryEntry{}
+	}
 	out := map[string]any{
 		"auth_enabled": s.authEnabled(),
 		"roles":        consoleRoles,
 		"menus":        views,
+		"revision":     cfg.Revision,
 		"updated_at":   cfg.UpdatedAt,
 		"updated_by":   cfg.UpdatedBy,
-		"file":         s.menuConfigPath(),
+		"history":      history,
+		"storage":      menuStorage,
 	}
 	s.menuMu.RLock()
 	if s.menuLoadErr != nil {
-		out["load_error"] = s.menuLoadErr.Error()
+		out["load_error"] = strings.ReplaceAll(s.menuLoadErr.Error(), s.menuConfigPath(), menuStorage)
 	}
 	s.menuMu.RUnlock()
 	return out
@@ -311,8 +373,7 @@ func normalizeMenus(in map[string]menuOverride) (map[string]menuOverride, error)
 		if !ok {
 			return nil, fmt.Errorf("알 수 없는 메뉴: %q", key)
 		}
-		off := o.Enabled != nil && !*o.Enabled
-		if m.Locked && (off || o.Roles != nil) {
+		if m.Locked && (o.off() || o.Roles != nil) {
 			return nil, fmt.Errorf("%q 메뉴는 끄거나 역할을 좁힐 수 없습니다 (메뉴 설정으로 돌아올 길이 사라집니다)", key)
 		}
 		var roles []string
@@ -336,11 +397,11 @@ func normalizeMenus(in map[string]menuOverride) (map[string]menuOverride, error)
 				roles = nil // every allowed role = no narrowing
 			}
 		}
-		if !off && roles == nil {
+		if !o.off() && roles == nil {
 			continue
 		}
 		n := menuOverride{Roles: roles}
-		if off {
+		if o.off() {
 			f := false
 			n.Enabled = &f
 		}
@@ -358,6 +419,46 @@ func roleOrder(r string) int {
 	return len(consoleRoles)
 }
 
+// diffMenus lists, in menu order, the menus whose decision differs.
+func diffMenus(from, to map[string]menuOverride) []menuChange {
+	var out []menuChange
+	for _, m := range consoleMenus {
+		a, b := from[m.Key], to[m.Key]
+		if !a.same(b) {
+			out = append(out, menuChange{Key: m.Key, From: a, To: b})
+		}
+	}
+	return out
+}
+
+// describeChanges is the audit-log line: "openmetadata on→off; ask roles all→admin+dba".
+func describeChanges(changes []menuChange) string {
+	roles := func(o menuOverride) string {
+		if o.Roles == nil {
+			return "all"
+		}
+		return strings.Join(o.Roles, "+")
+	}
+	onoff := func(o menuOverride) string {
+		if o.off() {
+			return "off"
+		}
+		return "on"
+	}
+	parts := make([]string, 0, len(changes))
+	for _, c := range changes {
+		var p []string
+		if c.From.off() != c.To.off() {
+			p = append(p, onoff(c.From)+"→"+onoff(c.To))
+		}
+		if !slices.Equal(c.From.Roles, c.To.Roles) {
+			p = append(p, "roles "+roles(c.From)+"→"+roles(c.To))
+		}
+		parts = append(parts, c.Key+" "+strings.Join(p, " "))
+	}
+	return strings.Join(parts, "; ")
+}
+
 func (s *Server) registerMenus(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/menus", s.guardAdminPage(s.serveWebUI("webui/menus.html", "text/html; charset=utf-8")))
 	mux.HandleFunc("GET /api/console/menus", func(w http.ResponseWriter, r *http.Request) {
@@ -371,7 +472,10 @@ func (s *Server) registerMenus(mux *http.ServeMux) {
 			return
 		}
 		var req struct {
-			Menus map[string]menuOverride `json:"menus"`
+			// Revision is the revision the edit started from. Omitted = save
+			// regardless (scripts that own the whole setting).
+			Revision *int                    `json:"revision"`
+			Menus    map[string]menuOverride `json:"menus"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 			writeAPIError(w, http.StatusBadRequest, err)
@@ -382,58 +486,65 @@ func (s *Server) registerMenus(mux *http.ServeMux) {
 			writeAPIError(w, http.StatusBadRequest, err)
 			return
 		}
+		var u *meta.User
 		by := "admin-token"
 		if s.authEnabled() {
-			if u, err := s.authenticate(r); err == nil {
+			if u, err = s.authenticate(r); err == nil {
 				by = actorName(u)
 			}
 		}
-		next := menuConfig{Menus: menus, UpdatedAt: time.Now().Format(time.RFC3339), UpdatedBy: by}
+
 		s.menuMu.Lock()
+		s.refreshMenusLocked()
+		cur := s.menuCfg
+		if req.Revision != nil && *req.Revision != cur.Revision {
+			s.menuMu.Unlock()
+			out := s.menuViews()
+			out["error"] = fmt.Sprintf("다른 관리자(%s)가 %s에 먼저 저장했습니다. 최신 설정을 불러와 다시 저장하세요.", cur.UpdatedBy, cur.UpdatedAt)
+			out["conflict"] = true
+			writeJSON(w, http.StatusConflict, out)
+			return
+		}
+		changes := diffMenus(cur.Menus, menus)
+		repair := s.menuLoadErr != nil // a save rewrites a broken file even if nothing changed
+		if len(changes) == 0 && !repair {
+			s.menuMu.Unlock()
+			out := s.menuViews()
+			out["unchanged"] = true
+			out["hidden_for_you"] = s.hiddenMenusFor(u)
+			writeJSON(w, http.StatusOK, out)
+			return
+		}
+		now := time.Now().Format(time.RFC3339)
+		next := menuConfig{Revision: cur.Revision + 1, Menus: menus, UpdatedAt: now, UpdatedBy: by}
+		if changes == nil {
+			changes = []menuChange{}
+		}
+		next.History = append([]menuHistoryEntry{{Revision: next.Revision, At: now, By: by, Changes: changes, Repaired: repair}}, cur.History...)
+		if len(next.History) > menuHistoryKeep {
+			next.History = next.History[:menuHistoryKeep]
+		}
 		err = writeJSONFileAtomic(s.menuConfigPath(), next)
 		if err == nil {
 			s.menuCfg, s.menuLoadErr, s.menuLoaded = next, nil, true
+			if st, serr := os.Stat(s.menuConfigPath()); serr == nil {
+				s.menuStamp = fmt.Sprintf("%d/%d", st.ModTime().UnixNano(), st.Size())
+			}
 		}
 		s.menuMu.Unlock()
-		s.adminAudit(r, "console_menus_update", describeMenus(menus)+" by "+by, err)
+		what := describeChanges(changes)
+		if repair {
+			what = strings.TrimSuffix("repaired the settings file; "+what, "; ")
+		}
+		s.adminAudit(r, "console_menus_update", fmt.Sprintf("rev %d: %s by %s", next.Revision, what, by), err)
 		if err != nil {
 			writeAPIError(w, http.StatusInternalServerError, err)
 			return
 		}
 		out := s.menuViews()
-		var u *meta.User
-		if s.authEnabled() {
-			u, _ = s.authenticate(r)
-		}
 		out["hidden_for_you"] = s.hiddenMenusFor(u)
 		writeJSON(w, http.StatusOK, out)
 	})
-}
-
-func describeMenus(menus map[string]menuOverride) string {
-	if len(menus) == 0 {
-		return "all menus on"
-	}
-	var off, narrowed []string
-	for _, m := range consoleMenus {
-		o, ok := menus[m.Key]
-		if !ok {
-			continue
-		}
-		if o.Enabled != nil && !*o.Enabled {
-			off = append(off, m.Key)
-		} else if o.Roles != nil {
-			narrowed = append(narrowed, m.Key+"="+strings.Join(o.Roles, "+"))
-		}
-	}
-	parts := []string{}
-	if len(off) > 0 {
-		parts = append(parts, "off: "+strings.Join(off, ","))
-	}
-	if len(narrowed) > 0 {
-		parts = append(parts, "roles: "+strings.Join(narrowed, ","))
-	}
-	return strings.Join(parts, "; ")
 }
 
 func writeJSONFileAtomic(path string, v any) error {

@@ -99,6 +99,8 @@ type Server struct {
 	menuCfg     menuConfig
 	menuLoaded  bool
 	menuLoadErr error
+	menuStamp   string    // mtime/size of the file menuCfg came from
+	menuChecked time.Time // last look at the file
 }
 
 // opDir returns the fixed operational data dir (falls back to the active
