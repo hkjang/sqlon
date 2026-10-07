@@ -33,7 +33,7 @@ REST와 MCP 도구(`put_dataset` 등)는 **동일한 서버 코드**를 호출�
 | --- | --- |
 | `GET /api/console/summary` | 콘솔 배지용 요약 — 미확인·무음 아닌 예방 경보 건수(심각도별), DBA에게는 승인 대기 변경계획 수 |
 | `GET /api/console/menus` | 콘솔 메뉴 켜기·끄기 설정(메뉴별 켜짐·역할·허용 역할·잠김) — 로그인 모드는 admin 전용 |
-| `PUT /api/console/menus` | 메뉴 설정 저장 `{"menus":{"<key>":{"enabled":false}\|{"roles":["admin","dba"]}}}` — 보낸 내용이 전체를 대체, 즉시 적용. admin(단독 모드는 관리 토큰) |
+| `PUT /api/console/menus` | 메뉴 설정 저장 `{"revision":N,"menus":{"<key>":{"enabled":false}\|{"roles":["admin","dba"]}}}` — 보낸 내용이 전체를 대체, 즉시 적용. `revision` 이 현재와 다르면(다른 관리자가 먼저 저장) 409 와 최신 설정. admin(단독 모드는 관리 토큰) |
 | `GET /api/early-warning` | 예방 경보 현황(예측·발생 중·스키마 이력·무음·채널 상태) |
 | `POST /api/early-warning/alerts/{id}/ack` | 경보 확인 |
 | `POST /api/early-warning/silences` · `DELETE /api/early-warning/silences/{id}` | 무음 추가·해제 |

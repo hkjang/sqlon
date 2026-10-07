@@ -9,7 +9,7 @@ The existing metadata-grounded NL2SQL flow remains available as **SQL Lab**;
 the product is being transitioned to fleet observation, diagnosis, and
 approval-gated change control across PostgreSQL, MySQL, MariaDB, and Oracle.
 
-The release Docker image (`sqlon:v0.7.0`) bundles Oracle Instant Client and
+The release Docker image (`sqlon:v0.7.1`) bundles Oracle Instant Client and
 godror alongside the pure-Go PostgreSQL/MySQL/MariaDB drivers, so one image
 serves every engine. The standalone binaries are built without CGO and cover
 PostgreSQL/MySQL/MariaDB; Oracle needs the image or a `-tags oracle` build.
@@ -79,7 +79,7 @@ This combination allowed Codex to accelerate implementation while GPT-5.6 suppor
 | --- | --- |
 | 로컬 HTTP MCP + 운영 콘솔 | `go run ./cmd/sqlon -transport http -addr 127.0.0.1:6767` |
 | 로컬 stdio MCP | `go run ./cmd/sqlon -transport stdio` |
-| 컨테이너 (Oracle 포함 전 엔진) | `docker build -f Dockerfile.oracle -t sqlon:v0.7.0 .` |
+| 컨테이너 (Oracle 포함 전 엔진) | `docker build -f Dockerfile.oracle -t sqlon:v0.7.1 .` |
 | 통합 테스트 DB 3종 기동 | `docker compose -f deploy/test/docker-compose.yml up -d` |
 | 통합 테스트 (pg+mysql+mariadb) | `go test -tags integration ./test/integration -v` |
 
@@ -201,16 +201,16 @@ go build -o ./bin/sqlon ./cmd/sqlon
 받습니다. Oracle Instant Client·godror 와 PostgreSQL/MySQL/MariaDB 드라이버가 모두 들어 있습니다.
 
 ```sh
-sha256sum -c sqlon-v0.7.0.tar.gz.sha256
-docker load -i sqlon-v0.7.0.tar.gz        # Loaded image: sqlon:v0.7.0
+sha256sum -c sqlon-v0.7.1.tar.gz.sha256
+docker load -i sqlon-v0.7.1.tar.gz        # Loaded image: sqlon:v0.7.1
 docker run -d --name sqlon -p 6767:6767 \
   -v sqlon-data:/app/data/sqlon \
   -e SQLON_ADMIN_TOKEN=change-me \
   -e PG_PROD_PW=... \
-  sqlon:v0.7.0
+  sqlon:v0.7.1
 ```
 
-- 직접 빌드: `docker build -f Dockerfile.oracle -t sqlon:v0.7.0 .` (`Dockerfile` 은 Oracle 없는 경량 로컬 빌드)
+- 직접 빌드: `docker build -f Dockerfile.oracle -t sqlon:v0.7.1 .` (`Dockerfile` 은 Oracle 없는 경량 로컬 빌드)
 - 호스트 디렉터리를 데이터로 쓰려면 먼저 `chown -R 10001:10001 <dir>`. 비어 있으면 첫 기동 때 기본 메타데이터로 채웁니다.
 - 릴리즈 절차와 이미지 검증 항목: [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)
 

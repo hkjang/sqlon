@@ -25,6 +25,28 @@ docker build -f Dockerfile.oracle -t sqlon:dev .   # 릴리즈 이미지 (Oracle
 CGO_ENABLED=1 go build -tags oracle -o dist/sqlon-oracle ./cmd/sqlon
 ```
 
+### 콘솔 브라우저 검사 (`test/ui`)
+
+Go 테스트가 닿지 않는 화면 동작(스위치·역할로 보기·동시 편집·키보드·휴대폰 폭·다크·명도 대비)은
+실제 브라우저로 확인합니다. 콘솔 화면을 고쳤다면 돌리세요.
+
+```sh
+# 로그인 모드 서버 (메타 DB 필요)
+docker run -d --name sqlon-ui-meta -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=meta -p 127.0.0.1:55481:5432 postgres:16-alpine
+go build -o /tmp/sqlon ./cmd/sqlon && cp -r data/metadb /tmp/sqlon-data
+/tmp/sqlon -transport http -addr 127.0.0.1:6791 -data /tmp/sqlon-data \
+  -meta-db 'postgres://postgres:pw@127.0.0.1:55481/meta?sslmode=disable' -bootstrap-admin 'admin:AdminPass123' &
+# (선택) 단독 모드 서버
+/tmp/sqlon -transport http -addr 127.0.0.1:6792 -data /tmp/sqlon-data2 -admin-token tok &
+
+SQLON_URL=http://127.0.0.1:6791 SQLON_ADMIN=admin:AdminPass123 \
+SQLON_STANDALONE_URL=http://127.0.0.1:6792 SQLON_STANDALONE_TOKEN=tok \
+PLAYWRIGHT=<playwright 모듈 경로> SHOTS=/tmp/sqlon-shots node test/ui/menus.cjs
+```
+
+검사용 DBA·사용자 계정은 없으면 만들고, 시작할 때와 끝날 때 메뉴 설정을 모두 켠 상태로 되돌리므로
+몇 번이든 다시 돌릴 수 있습니다. 바이너리에 화면이 내장되므로 화면을 고칠 때마다 다시 빌드·재시작하세요.
+
 Go 1.25+ (ServeMux 메서드/와일드카드 패턴, `atomic.Pointer` 사용).
 통합 테스트는 `integration`, Oracle판 드라이버는 `oracle` 빌드 태그를
 사용합니다. 표준판은 `CGO_ENABLED=0`을 유지합니다.
