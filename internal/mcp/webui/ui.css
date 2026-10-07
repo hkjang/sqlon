@@ -87,11 +87,14 @@
   --critical: var(--danger-strong);
   --unk: var(--faint);
   --jsb-w: var(--sidebar-w);
+  /* an off switch's track: 3:1 against the card (WCAG 1.4.11) */
+  --switch-off: #7d8a9e;
 }
 
 /* ---------- tokens: dark ---------- */
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --switch-off: #64748b;
   --bg: #0b1120;
   --surface: #111827;
   --surface-2: #151e2e;
@@ -635,7 +638,7 @@ main:focus { outline: none; }
 input[type=checkbox].ui-switch {
   appearance: none; -webkit-appearance: none; flex: none; position: relative; margin: 0;
   width: 38px; height: 22px; border-radius: 11px; cursor: pointer;
-  background: var(--border-strong); transition: background .15s;
+  background: var(--switch-off); transition: background .15s;
 }
 input[type=checkbox].ui-switch::after {
   content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
@@ -643,5 +646,14 @@ input[type=checkbox].ui-switch::after {
 }
 input[type=checkbox].ui-switch:checked { background: var(--accent-solid); }
 input[type=checkbox].ui-switch:checked::after { transform: translateX(16px); }
+/* some on, some off (a group): half track, knob in the middle */
+input[type=checkbox].ui-switch:indeterminate { background: linear-gradient(90deg, var(--accent-solid) 50%, var(--switch-off) 50%); }
+input[type=checkbox].ui-switch:indeterminate::after { transform: translateX(8px); }
 input[type=checkbox].ui-switch:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 input[type=checkbox].ui-switch:disabled { cursor: not-allowed; opacity: .55; }
+
+/* text for screen readers only */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}

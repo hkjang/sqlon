@@ -141,7 +141,7 @@
     maintenance: '## 예방 점검\n\n오류 없이 잠복하다 장애를 일으키는 위험을 미리 찾습니다 — 트랜잭션 ID **wraparound**, 테이블 **블로트**, WAL을 붙잡는 **복제 슬롯**, 실패하는 **WAL 아카이브**, VACUUM을 막는 **장기 트랜잭션** 등.\n\n- 위험은 치명적 → 경고 순으로 정렬됩니다. 탭으로 걸러 보세요.\n- 같은 점검 결과가 **예방 경보**로 이어져 알림이 갑니다.\n- 조치는 반드시 **변경 관리**의 승인 흐름으로 수행합니다. 이 화면은 읽기 전용입니다.',
     compliance: '## 컴플라이언스\n\n읽기 전용 진단 결과를 ISMS-P · PCI-DSS · 개인정보보호법 통제 항목에 매핑한 **참고 리포트**입니다. 공식 인증 심사를 대체하지 않습니다.\n\n- 항목마다 통과 / 미준수 / 수동 확인으로 표시하고 근거를 함께 보여줍니다.\n- **리포트 저장/인쇄**로 감사 자료를 만들 수 있습니다.\n- 미준수 항목의 조치는 변경 관리로 수행하세요.',
     settings: '## 서버 설정 (관리자)\n\n마스터 토큰·허용 Origin·Keycloak SSO를 메타 DB에 저장하고 즉시 적용합니다.',
-    menus: '## 메뉴 관리 (관리자)\n\n콘솔 메뉴를 켜고 끄거나, 메뉴를 볼 수 있는 역할을 좁힙니다. 저장하면 재시작 없이 바로 적용됩니다.\n\n- **끈 메뉴**는 모든 사람의 사이드바와 빠른 이동(Ctrl+K)에서 사라지고, 화면 주소로 열어도 열 수 있는 첫 화면으로 돌아가며 이유를 안내합니다.\n- **역할**(로그인 모드): 체크한 역할에게만 보입니다. 메뉴의 기본 권한보다 넓힐 수는 없습니다(예: 사용자 관리는 관리자 전용).\n- **메뉴 관리**는 끌 수 없습니다 — 되돌릴 길이 사라지지 않도록.\n- 위쪽 숫자는 저장 전에도 각 역할이 보게 될 메뉴 수를 미리 보여줍니다.\n\n> 메뉴 설정은 콘솔 화면만 바꿉니다. REST API와 MCP 도구 권한은 역할과 MCP 키로 통제됩니다.\n\n설정은 `<data>/operations/console/menus.json` 에 저장되고 변경은 감사 로그(`admin:console_menus_update`)에 남습니다.',
+    menus: '## 메뉴 관리 (관리자)\n\n콘솔 메뉴를 켜고 끄거나, 메뉴를 볼 수 있는 역할을 좁힙니다. 저장하면 재시작 없이 모든 사용자에게 바로 적용됩니다.\n\n- **끈 메뉴**는 모든 사람의 사이드바·빠른 이동(Ctrl+K)·다른 화면의 바로가기에서 사라지고, 화면 주소로 열어도 열 수 있는 첫 화면으로 돌아가며 이유를 안내합니다.\n- **역할**(로그인 모드): 체크한 역할에게만 보입니다. 메뉴의 기본 권한보다 넓힐 수는 없습니다(예: 사용자 관리는 관리자 전용).\n- **역할로 보기**: 위쪽 역할 숫자를 누르면 그 역할에게 안 보이는 메뉴를 표시합니다. 숫자는 저장 전 상태를 미리 보여주며, 0이 되면 경고합니다.\n- **동시 편집**: 다른 관리자가 먼저 저장했다면 그 설정을 불러와 내 변경을 그 위에 다시 얹고, 같은 메뉴를 둘 다 바꿨으면 알려줍니다. 확인 후 다시 저장하세요.\n- **최근 변경**: 누가 언제 무엇을 바꿨는지 아래에 남습니다(전체 기록은 감사 로그 `admin:console_menus_update`).\n- **메뉴 관리**는 끌 수 없습니다 — 되돌릴 길이 사라지지 않도록. 저장: 저장 버튼 또는 Ctrl+S.\n\n> 메뉴 설정은 콘솔 화면만 바꿉니다. REST API와 MCP 도구 권한은 역할과 MCP 키로 통제됩니다.\n\n설정은 `<data>/operations/console/menus.json` 에 저장됩니다. 파일을 고치거나 백업에서 복구하면 재시작 없이 반영되고, 규칙에 맞지 않으면 모든 메뉴를 켠 채 이 화면에 이유를 표시합니다.',
   };
 
   // ---------------------------------------------------------------- utils
@@ -462,12 +462,13 @@
   function refreshBadges() {
     fetch('/api/console/summary', { headers: tokenHeaders(false) }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
       if (!d) return;
-      var a = d.alerts || {};
+      // a switched-off menu sends no signal: no badge, no "(긴급 N)" title
+      var a = isHidden('alerts', shellMe) ? {} : (d.alerts || {});
       if (!baseTitle) baseTitle = document.title.replace(/^\(긴급 \d+\) /, '');
       document.title = (a.critical ? '(긴급 ' + a.critical + ') ' : '') + baseTitle;
       setBadge('alerts', a.critical ? a.critical : a.warning, a.critical ? 'bad' : 'warn',
         (a.critical ? '긴급 ' + a.critical + '건' : '') + (a.critical && a.warning ? ' · ' : '') + (a.warning ? '경고 ' + a.warning + '건' : '') + ' — 확인되지 않음');
-      var c = d.changes || {};
+      var c = isHidden('changes', shellMe) ? {} : (d.changes || {});
       setBadge('changes', c.awaiting_approval, 'info', '승인 대기 ' + (c.awaiting_approval || 0) + '건');
     }).catch(function () { /* badges are a hint; never break the page */ });
   }
