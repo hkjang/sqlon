@@ -63,7 +63,7 @@ docker run -d --name sqlon-relcheck-ora --network sqlon-relcheck \
 ## 4. 공개
 
 ```sh
-gh release create vX.Y.Z --title "SQLON vX.Y.Z" --notes-file notes.md \
+gh release create vX.Y.Z --title "SQLON vX.Y.Z Release" --notes-file notes.md \
   dist/vX.Y.Z/pkg/sqlon-vX.Y.Z.tar.gz dist/vX.Y.Z/pkg/sqlon-vX.Y.Z.tar.gz.sha256 \
   dist/vX.Y.Z/pkg/sqlon-vX.Y.Z-linux-amd64.tar.gz dist/vX.Y.Z/pkg/sqlon-vX.Y.Z-linux-arm64.tar.gz \
   dist/vX.Y.Z/pkg/sqlon-vX.Y.Z-windows-amd64.zip dist/vX.Y.Z/pkg/sqlon-disk-report.sh \
