@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- GitHub Actions CI 워크플로(`.github/workflows/ci.yml`)를 추가했습니다.
+  push(main)와 pull_request 에서 `go mod download` → `go build ./...` →
+  `go vet ./...` → `go test ./... -count=1` → `sh scripts/build.sh` 를
+  go.mod 에 적힌 Go 버전 위로 실행합니다.
+
 ## v0.7.1 — 2026-10-08
 
 ### 메뉴 관리 다듬기 — 여럿이 써도, 파일을 고쳐도 믿을 수 있게
